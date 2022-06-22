@@ -6,6 +6,8 @@ import (
 	"net"
 	"strconv"
 	"time"
+
+	"github.com/nats-io/nats.go"
 )
 
 // Option is a function on the options for a connection.
@@ -29,8 +31,11 @@ type Conn struct {
 	opts                 Options
 	ConnId               string
 	AccessToken          string
+	tcpConn              *net.Conn
 	pingQuitChan         chan struct{}
 	refreshTokenQuitChan chan struct{}
+	brokerManager        *nats.Conn
+	brokerConn           nats.JetStream
 }
 
 func GetDefaultOptions() Options {
@@ -91,35 +96,43 @@ func (opts Options) Connect() (*Conn, error) {
 	}
 
 	// connect to TcpPort using username, token and connectionID
-	address := opts.Host + ":" + strconv.Itoa(opts.TcpPort)
-	tcpConn, err := net.Dial("tcp", address)
+	c.setupTcpConn()
+	c.setupDataConn()
+
+	return &c, nil
+}
+
+func (c *Conn) setupTcpConn() error {
+	opts := &c.opts
+	url := opts.Host + ":" + strconv.Itoa(opts.TcpPort)
+	tcpConn, err := net.Dial("tcp", url)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
+	c.tcpConn = &tcpConn
 	connectMsg, err := json.Marshal(connectReq{
 		Username:  opts.Username,
 		ConnToken: opts.ConnectionToken,
 		ConnId:    "",
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	_, err = tcpConn.Write(connectMsg)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	b := make([]byte, 1024)
 	mLen, err := tcpConn.Read(b)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	var resp connectResp
 	json.Unmarshal(b[:mLen], &resp)
-	fmt.Println("Received:", resp)
 
 	c.ConnId = resp.ConnId
 	c.AccessToken = resp.AccessToken
@@ -129,7 +142,7 @@ func (opts Options) Connect() (*Conn, error) {
 			ResendAccessToken: true,
 		})
 		if err != nil {
-			return nil, err
+			return err
 		}
 		c.refreshTokenQuitChan = heartBeat(tcpConn, resp.AccessTokenExpiry, refreshReq)
 	}
@@ -139,12 +152,34 @@ func (opts Options) Connect() (*Conn, error) {
 			Ping: true,
 		})
 		if err != nil {
-			return nil, err
+			return err
 		}
 		c.pingQuitChan = heartBeat(tcpConn, resp.PingInterval, ping)
 	}
 
-	return &c, nil
+	return nil
+}
+
+func (c *Conn) setupDataConn() error {
+	opts := &c.opts
+	var err error
+
+	url := "nats://" + opts.Host + ":" + strconv.Itoa(opts.DataPort)
+	natsOpts := nats.Options{
+		Url:            url,
+		AllowReconnect: opts.Reconnect,
+		MaxReconnect:   opts.MaxReconnect,
+		ReconnectWait:  time.Duration(opts.ReconnectIntervalMillis),
+		Timeout:        time.Duration(opts.TimeoutMillis),
+		Token:          opts.ConnectionToken,
+	}
+	c.brokerManager, err = natsOpts.Connect()
+	if err != nil {
+		return err
+	}
+	c.brokerConn, err = c.brokerManager.JetStream()
+
+	return nil
 }
 
 func heartBeat(tcpConn net.Conn, interval int, msg []byte) chan struct{} {
