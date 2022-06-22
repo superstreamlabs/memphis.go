@@ -20,4 +20,6 @@ func TestConnect(t *testing.T) {
 	}
 
 	fmt.Println(got)
+	for {
+	}
 }

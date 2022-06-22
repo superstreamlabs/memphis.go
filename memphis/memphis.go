@@ -1,60 +1,71 @@
 package memphis
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
-	"encoding/json"
+	"time"
 )
 
 // Option is a function on the options for a connection.
 type Option func(*Options) error
 
 type Options struct {
-	Host string
-	ManagementPort int
-	TcpPort int
-	DataPort int
-	Username string
-	ConnectionToken string
-	Reconnect bool
-	MaxReconnect int
-	ReconnectIntervalMilis int
-	TimeoutMilis int
+	Host                    string
+	ManagementPort          int
+	TcpPort                 int
+	DataPort                int
+	Username                string
+	ConnectionToken         string
+	Reconnect               bool
+	MaxReconnect            int
+	ReconnectIntervalMillis int
+	TimeoutMillis           int
 }
 
 type Conn struct {
-	connected bool
-	opts Options
-	ConnId string
+	connected            bool
+	opts                 Options
+	ConnId               string
+	AccessToken          string
+	pingQuitChan         chan struct{}
+	refreshTokenQuitChan chan struct{}
 }
-
 
 func GetDefaultOptions() Options {
 	return Options{
-		ManagementPort: 5555,
-		TcpPort: 6666,
-		DataPort: 7766,
-		Username: "",
-		ConnectionToken: "",
-		Reconnect: true,
-		MaxReconnect: 3,
-		ReconnectIntervalMilis: 200,
-		TimeoutMilis: 15000,
+		ManagementPort:          5555,
+		TcpPort:                 6666,
+		DataPort:                7766,
+		Username:                "",
+		ConnectionToken:         "",
+		Reconnect:               true,
+		MaxReconnect:            3,
+		ReconnectIntervalMillis: 200,
+		TimeoutMillis:           15000,
 	}
 }
 
 type connectReq struct {
-	Username string `json:"username"`
+	Username  string `json:"username"`
 	ConnToken string `json:"broker_creds"`
-	ConnId string `json:"connection_id"`
+	ConnId    string `json:"connection_id"`
 }
 
 type connectResp struct {
-	ConnId string `json:"connection_id"`
-	AccessToken string `json:"access_token"`
-	AccessTokenExpiry int `json:"access_token_exp"`
-	PingInterval int `json:"ping_interval_ms"`
+	ConnId            string `json:"connection_id"`
+	AccessToken       string `json:"access_token"`
+	AccessTokenExpiry int    `json:"access_token_exp"`
+	PingInterval      int    `json:"ping_interval_ms"`
+}
+
+type refreshAccessTokenReq struct {
+	ResendAccessToken bool `json:"resend_access_token"`
+}
+
+type pingReq struct {
+	Ping bool `json:"ping"`
 }
 
 func Connect(host string, options ...Option) (*Conn, error) {
@@ -73,11 +84,10 @@ func Connect(host string, options ...Option) (*Conn, error) {
 	return opts.Connect()
 }
 
-
 func (opts Options) Connect() (*Conn, error) {
 	c := Conn{
 		connected: false,
-		opts: opts,
+		opts:      opts,
 	}
 
 	// connect to TcpPort using username, token and connectionID
@@ -88,9 +98,9 @@ func (opts Options) Connect() (*Conn, error) {
 	}
 
 	connectMsg, err := json.Marshal(connectReq{
-		Username: opts.Username,
+		Username:  opts.Username,
 		ConnToken: opts.ConnectionToken,
-		ConnId: "",
+		ConnId:    "",
 	})
 	if err != nil {
 		return nil, err
@@ -112,11 +122,63 @@ func (opts Options) Connect() (*Conn, error) {
 	fmt.Println("Received:", resp)
 
 	c.ConnId = resp.ConnId
+	c.AccessToken = resp.AccessToken
+
+	if resp.AccessTokenExpiry != 0 {
+		refreshReq, err := json.Marshal(refreshAccessTokenReq{
+			ResendAccessToken: true,
+		})
+		if err != nil {
+			return nil, err
+		}
+		c.refreshTokenQuitChan = heartBeat(tcpConn, resp.AccessTokenExpiry, refreshReq)
+	}
+
+	if resp.PingInterval != 0 {
+		ping, err := json.Marshal(pingReq{
+			Ping: true,
+		})
+		if err != nil {
+			return nil, err
+		}
+		c.pingQuitChan = heartBeat(tcpConn, resp.PingInterval, ping)
+	}
 
 	return &c, nil
 }
 
-// func Producer() {}
+func heartBeat(tcpConn net.Conn, interval int, msg []byte) chan struct{} {
+	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
+	quit := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				fmt.Println("Sending:", string(msg))
+				for n, err := tcpConn.Write(msg); n < len(msg); {
+					if err != nil {
+						panic(err)
+					}
+				}
+				fmt.Println("Sent:", string(msg))
+
+				b := make([]byte, 1024)
+				mLen, err := tcpConn.Read(b)
+				if err != nil {
+					fmt.Println("error received")
+				}
+				fmt.Println("Received:", string(b[:mLen]))
+
+			case <-quit:
+				ticker.Stop()
+				return
+			}
+		}
+	}()
+
+	return quit
+}
+
 func ManagementPort(port int) Option {
 	return func(o *Options) error {
 		o.ManagementPort = port
@@ -125,10 +187,10 @@ func ManagementPort(port int) Option {
 }
 
 func TcpPort(port int) Option {
-		return func(o *Options) error {
-			o.TcpPort = port
-			return nil
-		}
+	return func(o *Options) error {
+		o.TcpPort = port
+		return nil
+	}
 }
 
 func DataPort(port int) Option {
@@ -152,14 +214,12 @@ func ConnectionToken(token string) Option {
 	}
 }
 
-
 func Reconnect(reconnect bool) Option {
 	return func(o *Options) error {
 		o.Reconnect = reconnect
 		return nil
 	}
 }
-
 
 func MaxReconnect(maxReconnect int) Option {
 	return func(o *Options) error {
@@ -168,18 +228,16 @@ func MaxReconnect(maxReconnect int) Option {
 	}
 }
 
-
 func ReconnectIntervalMilis(reconnectInterval int) Option {
 	return func(o *Options) error {
-		o.ReconnectIntervalMilis = reconnectInterval
+		o.ReconnectIntervalMillis = reconnectInterval
 		return nil
 	}
 }
 
-
-func TimeoutMilis(timeout int) Option {
+func TimeoutMillis(timeout int) Option {
 	return func(o *Options) error {
-		o.TimeoutMilis = timeout
+		o.TimeoutMillis = timeout
 		return nil
 	}
 }
