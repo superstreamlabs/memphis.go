@@ -23,3 +23,17 @@ func TestConnect(t *testing.T) {
 	for {
 	}
 }
+
+func TestNormalizeHost(t *testing.T) {
+	if "www.google.com" != normalizeHost("http://www.google.com") {
+		t.Error()
+	}
+
+	if "www.yahoo.com" != normalizeHost("https://www.yahoo.com") {
+		t.Error()
+	}
+
+	if "http.http.http://" != normalizeHost("http://http.http.http://") {
+		t.Error()
+	}
+}

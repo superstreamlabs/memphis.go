@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -31,9 +32,9 @@ type Conn struct {
 	opts                 Options
 	ConnId               string
 	AccessToken          string
-	tcpConn              *net.Conn
-	pingQuitChan         chan struct{}
-	refreshTokenQuitChan chan struct{}
+	tcpConn              net.Conn
+	pingQuitChan         chan bool
+	refreshTokenQuitChan chan bool
 	brokerManager        *nats.Conn
 	brokerConn           nats.JetStream
 }
@@ -76,7 +77,7 @@ type pingReq struct {
 func Connect(host string, options ...Option) (*Conn, error) {
 	opts := GetDefaultOptions()
 
-	opts.Host = host
+	opts.Host = normalizeHost(host)
 
 	for _, opt := range options {
 		if opt != nil {
@@ -87,6 +88,11 @@ func Connect(host string, options ...Option) (*Conn, error) {
 	}
 
 	return opts.Connect()
+}
+
+func normalizeHost(host string) string {
+	r := regexp.MustCompile("^http(s?)://")
+	return r.ReplaceAllString(host, "")
 }
 
 func (opts Options) Connect() (*Conn, error) {
@@ -105,12 +111,13 @@ func (opts Options) Connect() (*Conn, error) {
 func (c *Conn) setupTcpConn() error {
 	opts := &c.opts
 	url := opts.Host + ":" + strconv.Itoa(opts.TcpPort)
-	tcpConn, err := net.Dial("tcp", url)
+
+	var err error
+	c.tcpConn, err = net.Dial("tcp", url)
 	if err != nil {
 		return err
 	}
 
-	c.tcpConn = &tcpConn
 	connectMsg, err := json.Marshal(connectReq{
 		Username:  opts.Username,
 		ConnToken: opts.ConnectionToken,
@@ -120,19 +127,22 @@ func (c *Conn) setupTcpConn() error {
 		return err
 	}
 
-	_, err = tcpConn.Write(connectMsg)
+	_, err = c.tcpConn.Write(connectMsg)
 	if err != nil {
 		return err
 	}
 
 	b := make([]byte, 1024)
-	mLen, err := tcpConn.Read(b)
+	mLen, err := c.tcpConn.Read(b)
 	if err != nil {
 		return err
 	}
 
 	var resp connectResp
-	json.Unmarshal(b[:mLen], &resp)
+	err = json.Unmarshal(b[:mLen], &resp)
+	if err != nil {
+		return err
+	}
 
 	c.ConnId = resp.ConnId
 	c.AccessToken = resp.AccessToken
@@ -144,7 +154,7 @@ func (c *Conn) setupTcpConn() error {
 		if err != nil {
 			return err
 		}
-		c.refreshTokenQuitChan = heartBeat(tcpConn, resp.AccessTokenExpiry, refreshReq)
+		c.refreshTokenQuitChan = heartBeat(c.tcpConn, resp.AccessTokenExpiry, refreshReq)
 	}
 
 	if resp.PingInterval != 0 {
@@ -154,7 +164,7 @@ func (c *Conn) setupTcpConn() error {
 		if err != nil {
 			return err
 		}
-		c.pingQuitChan = heartBeat(tcpConn, resp.PingInterval, ping)
+		c.pingQuitChan = heartBeat(c.tcpConn, resp.PingInterval, ping)
 	}
 
 	return nil
@@ -182,9 +192,17 @@ func (c *Conn) setupDataConn() error {
 	return nil
 }
 
-func heartBeat(tcpConn net.Conn, interval int, msg []byte) chan struct{} {
+func (c *Conn) Close() {
+	c.refreshTokenQuitChan <- true
+	c.pingQuitChan <- true
+
+	c.tcpConn.Close()
+	c.brokerManager.Close()
+}
+
+func heartBeat(tcpConn net.Conn, interval int, msg []byte) chan bool {
 	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
-	quit := make(chan struct{})
+	quit := make(chan bool)
 	go func() {
 		for {
 			select {
