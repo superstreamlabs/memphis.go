@@ -1,9 +1,13 @@
 package memphis
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"net/http"
 	"regexp"
 	"strconv"
 	"time"
@@ -102,9 +106,17 @@ func (opts Options) Connect() (*Conn, error) {
 	}
 
 	// connect to TcpPort using username, token and connectionID
-	c.setupTcpConn()
-	c.setupDataConn()
+	err := c.setupTcpConn()
+	if err != nil {
+		return nil, err
+	}
 
+	err = c.setupDataConn()
+	if err != nil {
+		return nil, err
+	}
+
+	c.connected = true
 	return &c, nil
 }
 
@@ -172,23 +184,29 @@ func (c *Conn) setupTcpConn() error {
 
 func (c *Conn) setupDataConn() error {
 	opts := &c.opts
-	var err error
 
-	url := "nats://" + opts.Host + ":" + strconv.Itoa(opts.DataPort)
+	var err error
+	url := opts.Host + ":" + strconv.Itoa(opts.DataPort)
 	natsOpts := nats.Options{
 		Url:            url,
 		AllowReconnect: opts.Reconnect,
 		MaxReconnect:   opts.MaxReconnect,
-		ReconnectWait:  time.Duration(opts.ReconnectIntervalMillis),
-		Timeout:        time.Duration(opts.TimeoutMillis),
+		ReconnectWait:  time.Duration(opts.ReconnectIntervalMillis) * time.Millisecond,
+		Timeout:        time.Duration(opts.TimeoutMillis) * time.Millisecond,
 		Token:          opts.ConnectionToken,
 	}
 	c.brokerManager, err = natsOpts.Connect()
+
 	if err != nil {
+		fmt.Print(err.Error())
 		return err
 	}
 	c.brokerConn, err = c.brokerManager.JetStream()
 
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
 	return nil
 }
 
@@ -230,6 +248,42 @@ func heartBeat(tcpConn net.Conn, interval int, msg []byte) chan bool {
 	}()
 
 	return quit
+}
+
+func (c *Conn) managementRequest(apiMethod string, apiPath string, reqStruct any) error {
+	if !c.connected {
+		return errors.New("Connection object is disconnected")
+	}
+
+	managementPort := strconv.Itoa(c.opts.ManagementPort)
+	url := "http://" + c.opts.Host + ":" + managementPort + apiPath
+	reqJson, err := json.Marshal(reqStruct)
+	if err != nil {
+		return err
+	}
+
+	reqBody := bytes.NewBuffer(reqJson)
+
+	req, err := http.NewRequest(apiMethod, url, reqBody)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+c.AccessToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+	respBody, err := ioutil.ReadAll(resp.Body)
+	fmt.Println("response", string(respBody))
+	if resp.StatusCode != 200 {
+		fmt.Println(resp.StatusCode)
+		return errors.New("bad response")
+	}
+
+	return nil
 }
 
 func ManagementPort(port int) Option {
