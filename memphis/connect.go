@@ -216,6 +216,7 @@ func (c *Conn) Close() {
 
 	c.tcpConn.Close()
 	c.brokerManager.Close()
+	c.connected = false
 }
 
 func heartBeat(tcpConn net.Conn, interval int, msg []byte) chan bool {
@@ -250,7 +251,7 @@ func heartBeat(tcpConn net.Conn, interval int, msg []byte) chan bool {
 	return quit
 }
 
-func (c *Conn) managementRequest(apiMethod string, apiPath string, reqStruct any) error {
+func (c *Conn) mgmtRequest(apiMethod string, apiPath string, reqStruct any) error {
 	if !c.connected {
 		return errors.New("Connection object is disconnected")
 	}
@@ -284,6 +285,14 @@ func (c *Conn) managementRequest(apiMethod string, apiPath string, reqStruct any
 	}
 
 	return nil
+}
+
+func (c *Conn) brokerPublish(msg *nats.Msg, opts ...nats.PubOpt) (nats.PubAckFuture, error) {
+	return c.brokerConn.PublishMsgAsync(msg, opts...)
+}
+
+func (c *Conn) brokerSubscribe(subject, durable string, opts ...nats.SubOpt) (*nats.Subscription, error) {
+	return c.brokerConn.PullSubscribe(subject, durable, opts...)
 }
 
 func ManagementPort(port int) Option {
@@ -347,4 +356,27 @@ func TimeoutMillis(timeout int) Option {
 		o.TimeoutMillis = timeout
 		return nil
 	}
+}
+
+type apiObj interface {
+	getCreationApiPath() string
+	getCreationReq() any
+
+	getDestructionApiPath() string
+	getDestructionReq() any
+}
+
+func (c *Conn) create(o apiObj) error {
+	apiPath := o.getCreationApiPath()
+	creationReq := o.getCreationReq()
+	fmt.Printf("Creation of %v, req %v", o, creationReq)
+
+	return c.mgmtRequest("POST", apiPath, creationReq)
+}
+
+func (c *Conn) destroy(o apiObj) error {
+	apiPath := o.getDestructionApiPath()
+	destructionReq := o.getDestructionReq()
+
+	return c.mgmtRequest("DELETE", apiPath, destructionReq)
 }

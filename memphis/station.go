@@ -1,5 +1,18 @@
 package memphis
 
+import "github.com/nats-io/nats.go"
+
+type Station struct {
+	Name              string
+	RetentionType     RetentionType
+	RetentionValue    int
+	StorageType       StorageType
+	Replicas          int
+	DedupEnabled      bool
+	DedupWindowMillis int
+	factory           *Factory
+}
+
 type RetentionType int
 
 const (
@@ -38,39 +51,73 @@ type RemoveStationReq struct {
 	Name string `json:"station_name"`
 }
 
-func (c *Conn) CreateStation(name string,
-	factoryName string,
+func (f *Factory) CreateStation(name string,
 	retentionType RetentionType,
 	retentionVal int,
 	storageType StorageType,
 	replicas int,
 	dedupEnabled bool,
-	dedupWindowMillis int) (Station, error) {
-	return Station{Name: name, conn: c}, c.managementRequest("POST", "/api/stations/createStation", CreateStationReq{
+	dedupWindowMillis int) (*Station, error) {
+	s := Station{
 		Name:              name,
-		FactoryName:       factoryName,
-		RetentionType:     retentionType.String(),
+		RetentionType:     retentionType,
 		RetentionValue:    retentionVal,
-		StorageType:       storageType.String(),
+		StorageType:       storageType,
 		Replicas:          replicas,
 		DedupEnabled:      dedupEnabled,
 		DedupWindowMillis: dedupWindowMillis,
-	})
-}
+		factory:           f,
+	}
 
-func (c *Conn) RemoveStation(name string) error {
-	return c.managementRequest("DELETE", "/api/stations/removeStation", RemoveStationReq{Name: name})
+	return &s, s.getConn().create(&s)
 }
 
 func (s *Station) Remove() error {
-	return s.conn.RemoveStation(s.Name)
-}
-
-type Station struct {
-	Name string
-	conn *Conn
+	return s.getConn().destroy(s)
 }
 
 func (s *Station) getSubjectName() string {
 	return s.Name + ".final"
+}
+
+func (s *Station) publish(msg *nats.Msg, opts ...nats.PubOpt) (nats.PubAckFuture, error) {
+	msg.Subject = s.getSubjectName()
+	return s.getConn().brokerPublish(msg, opts...)
+}
+
+func (s *Station) subscribe(c *Consumer, opts ...nats.SubOpt) (*nats.Subscription, error) {
+	durableName := c.ConsumerGroup
+	if durableName == "" {
+		durableName = c.Name
+	}
+	return s.getConn().brokerSubscribe(s.getSubjectName(), durableName, opts...)
+}
+
+func (s *Station) getCreationApiPath() string {
+	return "/api/stations/createStation"
+}
+
+func (s *Station) getCreationReq() any {
+	return CreateStationReq{
+		Name:              s.Name,
+		FactoryName:       s.factory.Name,
+		RetentionType:     s.RetentionType.String(),
+		RetentionValue:    s.RetentionValue,
+		StorageType:       s.StorageType.String(),
+		Replicas:          s.Replicas,
+		DedupEnabled:      s.DedupEnabled,
+		DedupWindowMillis: s.DedupWindowMillis,
+	}
+}
+
+func (s *Station) getDestructionApiPath() string {
+	return "/api/stations/removeStation"
+}
+
+func (s *Station) getDestructionReq() any {
+	return RemoveStationReq{Name: s.Name}
+}
+
+func (s *Station) getConn() *Conn {
+	return s.factory.getConn()
 }
