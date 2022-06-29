@@ -86,11 +86,7 @@ func (s *Station) publish(msg *nats.Msg, opts ...nats.PubOpt) (nats.PubAckFuture
 }
 
 func (s *Station) subscribe(c *Consumer, opts ...nats.SubOpt) (*nats.Subscription, error) {
-	durableName := c.ConsumerGroup
-	if durableName == "" {
-		durableName = c.Name
-	}
-	return s.getConn().brokerSubscribe(s.getSubjectName(), durableName, opts...)
+	return s.getConn().brokerSubscribe(s.getSubjectName(), c.ConsumerGroup, opts...)
 }
 
 func (s *Station) getCreationApiPath() string {

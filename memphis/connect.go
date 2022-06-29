@@ -227,11 +227,11 @@ func heartBeat(tcpConn net.Conn, interval int, msg []byte) chan bool {
 			select {
 			case <-ticker.C:
 				fmt.Println("Sending:", string(msg))
-				for n, err := tcpConn.Write(msg); n < len(msg); {
-					if err != nil {
-						panic(err)
-					}
+				_, err := tcpConn.Write(msg)
+				if err != nil {
+					panic(err)
 				}
+
 				fmt.Println("Sent:", string(msg))
 
 				b := make([]byte, 1024)

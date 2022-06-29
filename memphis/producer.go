@@ -57,7 +57,7 @@ func (p *Producer) getCreationReq() any {
 }
 
 func (p *Producer) getDestructionApiPath() string {
-	return "/api/producers/removeProducer"
+	return "/api/producers/destroyProducer"
 }
 
 func (p *Producer) getDestructionReq() any {
