@@ -1,7 +1,6 @@
 package memphis
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -10,14 +9,12 @@ func TestCreateProducer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
-	fmt.Println("Connection:", c)
+	defer c.Close()
 
 	f, err := c.CreateFactory("factory_name_1", "factory_description")
 	if err != nil {
 		t.Error(err)
 	}
-
 	defer f.Remove()
 
 	s, err := f.CreateStation("station_name_1", Messages, 0, Memory, 1, true, 1000)
@@ -46,10 +43,12 @@ func TestCreateProducer(t *testing.T) {
 		t.Error("Producer names has to be unique")
 	}
 
+	//This will create a station with default factory so removing our factory is not enough
 	_, err = c.CreateProducer("producer_name_a", "station_name_2")
 	if err != nil {
 		t.Error(err)
 	}
+	c.destroy(&Station{Name: "station_name_2"})
 }
 
 func TestProduce(t *testing.T) {
@@ -57,14 +56,12 @@ func TestProduce(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
-	fmt.Println("Connection:", c)
+	defer c.Close()
 
 	f, err := c.CreateFactory("factory_name_1", "factory_description")
 	if err != nil {
 		t.Error(err)
 	}
-
 	defer f.Remove()
 
 	s, err := f.CreateStation("station_name_1", Messages, 0, Memory, 1, true, 1000)
@@ -106,13 +103,14 @@ func TestRemoveProducer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
-	fmt.Println("Connection:", c)
+	defer c.Close()
 
 	f, err := c.CreateFactory("factory_name_1", "factory_description")
 	if err != nil {
 		t.Error(err)
 	}
+	defer f.Remove()
+
 	s, err := f.CreateStation("station_name_1", Messages, 0, Memory, 1, true, 1000)
 	if err != nil {
 		t.Error(err)
@@ -135,13 +133,14 @@ func TestConsume(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
-	fmt.Println("Connection:", c)
+	defer c.Close()
 
 	f, err := c.CreateFactory("factory_name_1", "factory_description")
 	if err != nil {
 		t.Error(err)
 	}
+	defer f.Remove()
+
 	s, err := f.CreateStation("station_name_1", Messages, 0, Memory, 1, true, 1000)
 	if err != nil {
 		t.Error(err)
@@ -153,13 +152,14 @@ func TestConsume(t *testing.T) {
 	}
 
 	testMessage := "Hey There!"
-	ack, err := p.Produce([]byte(testMessage), 15)
+	// ack, err := p.Produce([]byte(testMessage), 15)
+	_, err = p.Produce([]byte(testMessage), 15)
 
 	if err != nil {
 		t.Error(err)
 	}
 
-	fmt.Println("ack received? ", <-ack.Ok())
+	// fmt.Println("ack received? ", <-ack.Ok())
 
 	consumer, err := s.CreateConsumer("consumer_a", "", 1000, 10, 5000, 30000, 10)
 	res, ok := <-consumer.Puller
@@ -171,14 +171,10 @@ func TestConsume(t *testing.T) {
 		t.Error("Did not receive exact produced message")
 	}
 
-	fmt.Println("what we got from the channel:", string(res), ok)
 	err = consumer.Remove()
 	if err != nil {
 		t.Error(err)
 	}
-
-	f.Remove()
-	c.Close()
 }
 
 func TestCreateConsumer(t *testing.T) {
@@ -186,14 +182,12 @@ func TestCreateConsumer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
-	fmt.Println("Connection:", c)
+	defer c.Close()
 
 	f, err := c.CreateFactory("factory_name_1", "factory_description")
 	if err != nil {
 		t.Error(err)
 	}
-
 	defer f.Remove()
 
 	s, err := f.CreateStation("station_name_1", Messages, 0, Memory, 1, true, 1000)
@@ -232,13 +226,14 @@ func TestRemoveConsumer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
-	fmt.Println("Connection:", c)
+	defer c.Close()
 
 	f, err := c.CreateFactory("factory_name_1", "factory_description")
 	if err != nil {
 		t.Error(err)
 	}
+	defer f.Remove()
+
 	s, err := f.CreateStation("station_name_1", Messages, 0, Memory, 1, true, 1000)
 	if err != nil {
 		t.Error(err)
@@ -268,11 +263,4 @@ func TestRemoveConsumer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
-	err = f.Remove()
-	if err != nil {
-		t.Error(err)
-	}
-
-	c.Close()
 }

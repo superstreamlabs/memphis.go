@@ -1,7 +1,6 @@
 package memphis
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -10,8 +9,7 @@ func TestCreateStation(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
-	fmt.Println("Connection:", c)
+	defer c.Close()
 
 	f, err := c.CreateFactory("factory_name_1", "factory_description")
 	if err != nil {
@@ -44,6 +42,13 @@ func TestCreateStation(t *testing.T) {
 	if err == nil {
 		t.Error(err)
 	}
+
+	// this creates another factory so we need to clean it
+	_, err = c.CreateStation("station_name_3", "factory_name_2", Messages, 0, Memory, 1, true, 1000)
+	if err != nil {
+		t.Error(err)
+	}
+	defer c.destroy(&Factory{Name: "factory_name_2", Description: ""})
 }
 
 func TestRemoveStation(t *testing.T) {
@@ -51,13 +56,14 @@ func TestRemoveStation(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
-	fmt.Println("Connection:", c)
+	defer c.Close()
 
 	f, err := c.CreateFactory("factory_name_1", "factory_description")
 	if err != nil {
 		t.Error(err)
 	}
+	defer f.Remove()
+
 	s, err := f.CreateStation("station_name_1", Messages, 0, Memory, 1, true, 1000)
 	if err != nil {
 		t.Error(err)

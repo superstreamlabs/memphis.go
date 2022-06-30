@@ -1,17 +1,16 @@
 package memphis
 
 import (
-	"fmt"
 	"testing"
 )
 
 func TestConnect(t *testing.T) {
-	got, err := Connect("localhost", Username("root"), ConnectionToken("memphis"))
+	c, err := Connect("localhost", Username("root"), ConnectionToken("memphis"))
 	if err != nil {
 		t.Error()
 	}
 
-	fmt.Println(got)
+	c.Close()
 }
 
 func TestNormalizeHost(t *testing.T) {
