@@ -14,10 +14,11 @@ type Consumer struct {
 	PullIntervalMillis int
 	MaxAckTimeMillis   int
 	MaxMsgDeliveries   int
-	station            *Station
+	conn               *Conn
+	stationName        string
 	subscription       *nats.Subscription
 	Puller             chan []byte
-	pullerQuit         chan bool
+	pullerQuit         chan struct{}
 	pullerError        chan error
 }
 
@@ -36,7 +37,8 @@ type RemoveConsumerReq struct {
 	StationName string `json:"station_name"`
 }
 
-func (s *Station) CreateConsumer(name,
+func (c *Conn) CreateConsumer(name,
+	stationName,
 	consumerGroup string,
 	pullIntervalMillis,
 	batchSize,
@@ -52,22 +54,25 @@ func (s *Station) CreateConsumer(name,
 		consumerGroup = name
 	}
 
-	c := Consumer{Name: name,
+	consumer := Consumer{Name: name,
 		ConsumerGroup:      consumerGroup,
 		PullIntervalMillis: pullIntervalMillis,
 		MaxAckTimeMillis:   maxAckTimeMillis,
 		MaxMsgDeliveries:   maxMsgDeliveries,
-		station:            s}
-	err = s.getConn().create(&c)
+		conn:               c,
+		stationName:        stationName}
+
+	err = c.create(&consumer)
 	if err != nil {
 		return nil, err
 	}
 
-	c.Puller = make(chan []byte, 1024)
-	c.pullerQuit = make(chan bool, 1024)
+	consumer.Puller = make(chan []byte, 1024)
+	consumer.pullerQuit = make(chan struct{}, 1)
 
 	ackWait := time.Duration(maxAckTimeMillis) * time.Millisecond
-	c.subscription, err = s.subscribe(&c,
+	subj := getSubjectName(stationName)
+	consumer.subscription, err = c.brokerSubscribe(subj, consumerGroup,
 		nats.ManualAck(),
 		nats.AckWait(ackWait),
 		nats.MaxRequestBatch(batchMaxWaitTimeMillis),
@@ -76,8 +81,18 @@ func (s *Station) CreateConsumer(name,
 		return nil, err
 	}
 
-	c.startPuller(time.Duration(pullIntervalMillis) * time.Millisecond)
-	return &c, err
+	consumer.startPuller(time.Duration(pullIntervalMillis) * time.Millisecond)
+	return &consumer, err
+}
+
+func (s *Station) CreateConsumer(name,
+	consumerGroup string,
+	pullIntervalMillis,
+	batchSize,
+	batchMaxWaitTimeMillis,
+	maxAckTimeMillis,
+	maxMsgDeliveries int) (*Consumer, error) {
+	return s.getConn().CreateConsumer(name, s.Name, consumerGroup, pullIntervalMillis, batchSize, batchMaxWaitTimeMillis, maxAckTimeMillis, maxMsgDeliveries)
 }
 
 func (consumer *Consumer) startPuller(pullInterval time.Duration) {
@@ -104,8 +119,8 @@ func (consumer *Consumer) startPuller(pullInterval time.Duration) {
 }
 
 func (c *Consumer) Remove() error {
-	c.pullerQuit <- true
-	return c.station.getConn().destroy(c)
+	c.pullerQuit <- struct{}{}
+	return c.conn.destroy(c)
 }
 
 func validateConsumerName(name string) error {
@@ -123,8 +138,8 @@ func (c *Consumer) getCreationApiPath() string {
 func (c *Consumer) getCreationReq() any {
 	return CreateConsumerReq{
 		Name:             c.Name,
-		StationName:      c.station.Name,
-		ConnectionId:     c.station.getConn().ConnId,
+		StationName:      c.stationName,
+		ConnectionId:     c.conn.ConnId,
 		ConsumerType:     "application",
 		ConsumerGroup:    c.ConsumerGroup,
 		MaxAckTimeMillis: c.MaxAckTimeMillis,
@@ -137,5 +152,5 @@ func (p *Consumer) getDestructionApiPath() string {
 }
 
 func (p *Consumer) getDestructionReq() any {
-	return RemoveConsumerReq{Name: p.Name, StationName: p.station.Name}
+	return RemoveConsumerReq{Name: p.Name, StationName: p.stationName}
 }

@@ -10,7 +10,8 @@ type Station struct {
 	Replicas          int
 	DedupEnabled      bool
 	DedupWindowMillis int
-	factory           *Factory
+	factoryName       string
+	conn              *Conn
 }
 
 type RetentionType int
@@ -51,7 +52,12 @@ type RemoveStationReq struct {
 	Name string `json:"station_name"`
 }
 
-func (f *Factory) CreateStation(name string,
+type GetStationReq struct {
+	Name string `json:"station_name"`
+}
+
+func (c *Conn) CreateStation(name,
+	factoryName string,
 	retentionType RetentionType,
 	retentionVal int,
 	storageType StorageType,
@@ -66,18 +72,35 @@ func (f *Factory) CreateStation(name string,
 		Replicas:          replicas,
 		DedupEnabled:      dedupEnabled,
 		DedupWindowMillis: dedupWindowMillis,
-		factory:           f,
+		factoryName:       factoryName,
+		conn:              c,
 	}
 
 	return &s, s.getConn().create(&s)
 }
+
+func (f *Factory) CreateStation(name string,
+	retentionType RetentionType,
+	retentionVal int,
+	storageType StorageType,
+	replicas int,
+	dedupEnabled bool,
+	dedupWindowMillis int) (*Station, error) {
+	return f.conn.CreateStation(name, f.Name, retentionType, retentionVal, storageType, replicas, dedupEnabled, dedupWindowMillis)
+}
+
+type StationName string
 
 func (s *Station) Remove() error {
 	return s.getConn().destroy(s)
 }
 
 func (s *Station) getSubjectName() string {
-	return s.Name + ".final"
+	return getSubjectName(s.Name)
+}
+
+func getSubjectName(stationName string) string {
+	return stationName + ".final"
 }
 
 func (s *Station) publish(msg *nats.Msg, opts ...nats.PubOpt) (nats.PubAckFuture, error) {
@@ -96,7 +119,7 @@ func (s *Station) getCreationApiPath() string {
 func (s *Station) getCreationReq() any {
 	return CreateStationReq{
 		Name:              s.Name,
-		FactoryName:       s.factory.Name,
+		FactoryName:       s.factoryName,
 		RetentionType:     s.RetentionType.String(),
 		RetentionValue:    s.RetentionValue,
 		StorageType:       s.StorageType.String(),
@@ -115,5 +138,5 @@ func (s *Station) getDestructionReq() any {
 }
 
 func (s *Station) getConn() *Conn {
-	return s.factory.getConn()
+	return s.conn
 }

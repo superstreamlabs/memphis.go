@@ -9,8 +9,9 @@ import (
 )
 
 type Producer struct {
-	Name    string
-	station *Station
+	Name        string
+	stationName string
+	conn        *Conn
 }
 
 type CreateProducerReq struct {
@@ -25,13 +26,19 @@ type RemoveProducerReq struct {
 	StationName string `json:"station_name"`
 }
 
+func (c *Conn) CreateProducer(name string, stationName string) (*Producer, error) {
+	p := Producer{Name: name, stationName: stationName, conn: c}
+	return &p, c.create(&p)
+
+}
+
 func (s *Station) CreateProducer(name string) (*Producer, error) {
 	err := validateProducerName(name)
 	if err != nil {
 		return nil, err
 	}
 
-	p := Producer{Name: name, station: s}
+	p := Producer{Name: name, stationName: s.Name, conn: s.getConn()}
 	return &p, s.getConn().create(&p)
 }
 
@@ -50,8 +57,8 @@ func (p *Producer) getCreationApiPath() string {
 func (p *Producer) getCreationReq() any {
 	return CreateProducerReq{
 		Name:         p.Name,
-		StationName:  p.station.Name,
-		ConnectionId: p.station.getConn().ConnId,
+		StationName:  p.stationName,
+		ConnectionId: p.conn.ConnId,
 		ProducerType: "application",
 	}
 }
@@ -61,17 +68,18 @@ func (p *Producer) getDestructionApiPath() string {
 }
 
 func (p *Producer) getDestructionReq() any {
-	return RemoveProducerReq{Name: p.Name, StationName: p.station.Name}
+	return RemoveProducerReq{Name: p.Name, StationName: p.stationName}
 }
 
 func (p *Producer) Remove() error {
-	return p.station.getConn().destroy(p)
+	return p.conn.destroy(p)
 }
 
 func (p *Producer) Produce(message []byte, ackWaitSec int) (nats.PubAckFuture, error) {
 	natsMessage := nats.Msg{
-		Header: map[string][]string{"connectionId": {p.station.getConn().ConnId}, "producedBy": {p.Name}},
-		Data:   message,
+		Header:  map[string][]string{"connectionId": {p.conn.ConnId}, "producedBy": {p.Name}},
+		Subject: getSubjectName(p.stationName),
+		Data:    message,
 	}
-	return p.station.publish(&natsMessage, nats.StallWait(time.Second*time.Duration(ackWaitSec)))
+	return p.conn.brokerPublish(&natsMessage, nats.StallWait(time.Second*time.Duration(ackWaitSec)))
 }

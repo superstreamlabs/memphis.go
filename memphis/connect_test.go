@@ -12,8 +12,6 @@ func TestConnect(t *testing.T) {
 	}
 
 	fmt.Println(got)
-	for {
-	}
 }
 
 func TestNormalizeHost(t *testing.T) {

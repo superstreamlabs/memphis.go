@@ -78,6 +78,10 @@ type pingReq struct {
 	Ping bool `json:"ping"`
 }
 
+type errorResp struct {
+	Message string `json:"message"`
+}
+
 func Connect(host string, options ...Option) (*Conn, error) {
 	opts := GetDefaultOptions()
 
@@ -276,12 +280,17 @@ func (c *Conn) mgmtRequest(apiMethod string, apiPath string, reqStruct any) erro
 		return err
 	}
 
-	defer resp.Body.Close()
 	respBody, err := ioutil.ReadAll(resp.Body)
 	fmt.Println("response", string(respBody))
-	if resp.StatusCode != 200 {
-		fmt.Println(resp.StatusCode)
-		return errors.New("bad response")
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 { //HTTP success status code
+		var errorResp errorResp
+		err = json.Unmarshal(respBody, &errorResp)
+		if err != nil {
+			fmt.Println("Error:", err)
+			return err
+		}
+		return errors.New(errorResp.Message)
 	}
 
 	return nil
