@@ -27,19 +27,17 @@ type RemoveProducerReq struct {
 }
 
 func (c *Conn) CreateProducer(name string, stationName string) (*Producer, error) {
-	p := Producer{Name: name, stationName: stationName, conn: c}
-	return &p, c.create(&p)
-
-}
-
-func (s *Station) CreateProducer(name string) (*Producer, error) {
 	err := validateProducerName(name)
 	if err != nil {
 		return nil, err
 	}
 
-	p := Producer{Name: name, stationName: s.Name, conn: s.getConn()}
-	return &p, s.getConn().create(&p)
+	p := Producer{Name: name, stationName: stationName, conn: c}
+	return &p, c.create(&p)
+}
+
+func (s *Station) CreateProducer(name string) (*Producer, error) {
+	return s.getConn().CreateProducer(name, s.Name)
 }
 
 func validateProducerName(name string) error {

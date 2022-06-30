@@ -17,7 +17,7 @@ func TestCreateProducer(t *testing.T) {
 	}
 	defer f.Remove()
 
-	s, err := f.CreateStation("station_name_1", Messages, 0, Memory, 1, true, 1000)
+	s, err := f.CreateStation("station_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -64,7 +64,7 @@ func TestProduce(t *testing.T) {
 	}
 	defer f.Remove()
 
-	s, err := f.CreateStation("station_name_1", Messages, 0, Memory, 1, true, 1000)
+	s, err := f.CreateStation("station_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -111,7 +111,7 @@ func TestRemoveProducer(t *testing.T) {
 	}
 	defer f.Remove()
 
-	s, err := f.CreateStation("station_name_1", Messages, 0, Memory, 1, true, 1000)
+	s, err := f.CreateStation("station_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -141,7 +141,7 @@ func TestConsume(t *testing.T) {
 	}
 	defer f.Remove()
 
-	s, err := f.CreateStation("station_name_1", Messages, 0, Memory, 1, true, 1000)
+	s, err := f.CreateStation("station_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -190,7 +190,7 @@ func TestCreateConsumer(t *testing.T) {
 	}
 	defer f.Remove()
 
-	s, err := f.CreateStation("station_name_1", Messages, 0, Memory, 1, true, 1000)
+	s, err := f.CreateStation("station_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -234,7 +234,7 @@ func TestRemoveConsumer(t *testing.T) {
 	}
 	defer f.Remove()
 
-	s, err := f.CreateStation("station_name_1", Messages, 0, Memory, 1, true, 1000)
+	s, err := f.CreateStation("station_name_1")
 	if err != nil {
 		t.Error(err)
 	}

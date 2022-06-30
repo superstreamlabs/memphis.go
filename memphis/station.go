@@ -55,38 +55,65 @@ type RemoveStationReq struct {
 type GetStationReq struct {
 	Name string `json:"station_name"`
 }
+type StationOpts struct {
+	Name              string
+	FactoryName       string
+	RetentionType     RetentionType
+	RetentionVal      int
+	StorageType       StorageType
+	Replicas          int
+	DedupEnabled      bool
+	DedupWindowMillis int
+}
 
-func (c *Conn) CreateStation(name,
-	factoryName string,
-	retentionType RetentionType,
-	retentionVal int,
-	storageType StorageType,
-	replicas int,
-	dedupEnabled bool,
-	dedupWindowMillis int) (*Station, error) {
+type StationOpt func(*StationOpts) error
+
+func GetStationDefaultOptions() StationOpts {
+	return StationOpts{
+		RetentionType:     MaxMessageAgeSeconds,
+		RetentionVal:      604800,
+		StorageType:       File,
+		Replicas:          1,
+		DedupEnabled:      false,
+		DedupWindowMillis: 0,
+	}
+}
+
+func (c *Conn) CreateStation(Name, FactoryName string, opts ...StationOpt) (*Station, error) {
+	defaultOpts := GetStationDefaultOptions()
+
+	defaultOpts.Name = Name
+	defaultOpts.FactoryName = FactoryName
+
+	for _, opt := range opts {
+		if opt != nil {
+			if err := opt(&defaultOpts); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return defaultOpts.CreateStation(c)
+}
+
+func (opts *StationOpts) CreateStation(c *Conn) (*Station, error) {
 	s := Station{
-		Name:              name,
-		RetentionType:     retentionType,
-		RetentionValue:    retentionVal,
-		StorageType:       storageType,
-		Replicas:          replicas,
-		DedupEnabled:      dedupEnabled,
-		DedupWindowMillis: dedupWindowMillis,
-		factoryName:       factoryName,
+		Name:              opts.Name,
+		RetentionType:     opts.RetentionType,
+		RetentionValue:    opts.RetentionVal,
+		StorageType:       opts.StorageType,
+		Replicas:          opts.Replicas,
+		DedupEnabled:      opts.DedupEnabled,
+		DedupWindowMillis: opts.DedupWindowMillis,
+		factoryName:       opts.FactoryName,
 		conn:              c,
 	}
 
 	return &s, s.getConn().create(&s)
 }
 
-func (f *Factory) CreateStation(name string,
-	retentionType RetentionType,
-	retentionVal int,
-	storageType StorageType,
-	replicas int,
-	dedupEnabled bool,
-	dedupWindowMillis int) (*Station, error) {
-	return f.conn.CreateStation(name, f.Name, retentionType, retentionVal, storageType, replicas, dedupEnabled, dedupWindowMillis)
+func (f *Factory) CreateStation(name string, opts ...StationOpt) (*Station, error) {
+	return f.conn.CreateStation(name, f.Name, opts...)
 }
 
 type StationName string
@@ -139,4 +166,59 @@ func (s *Station) getDestructionReq() any {
 
 func (s *Station) getConn() *Conn {
 	return s.conn
+}
+
+func Name(name string) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.Name = name
+		return nil
+	}
+}
+
+func FactoryName(factoryName string) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.FactoryName = factoryName
+		return nil
+	}
+}
+
+func RetentionTypeOpt(retentionType RetentionType) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.RetentionType = retentionType
+		return nil
+	}
+}
+
+func RetentionVal(retentionVal int) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.RetentionVal = retentionVal
+		return nil
+	}
+}
+
+func StorageTypeOpt(storageType StorageType) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.StorageType = storageType
+		return nil
+	}
+}
+
+func Replicas(replicas int) StationOpt {
+	return func(opts *StationOpts) error {
+		return nil
+	}
+}
+
+func EnableDedup() StationOpt {
+	return func(opts *StationOpts) error {
+		opts.DedupEnabled = true
+		return nil
+	}
+}
+
+func DedupWindowMillis(dedupWindowMillis int) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.DedupWindowMillis = dedupWindowMillis
+		return nil
+	}
 }
