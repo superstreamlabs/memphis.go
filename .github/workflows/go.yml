@@ -1,0 +1,29 @@
+name: Go Unit Tests
+
+on:
+  push:
+    branches: ["dev-or-base"]
+  pull_request:
+    branches: [ "master", "dev-or-base"]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.18
+
+    - name: Build
+      run: go build -v ./...
+      
+
+    - name: Prepare Memphis
+      run: curl -s https://memphisdev.github.io/memphis-docker/docker-compose-dev.yml -o docker-compose.yml && docker compose -f docker-compose.yml -p memphis up
+      
+    - name: Test
+      run: go test -v ./...
