@@ -160,7 +160,7 @@ func TestConsume(t *testing.T) {
 
 	// fmt.Println("ack received? ", <-ack.Ok())
 
-	consumer, err := s.CreateConsumer("consumer_a", "", 1000, 10, 5000, 30000, 10)
+	consumer, err := s.CreateConsumer("consumer_a", ConsumerGroup(""))
 	res, ok := <-consumer.Puller
 	if !ok {
 		t.Error("chan is not ok")
@@ -194,27 +194,27 @@ func TestCreateConsumer(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, err = s.CreateConsumer("consumer_name_a", "", 1000, 10, 5000, 30000, 10)
+	_, err = s.CreateConsumer("consumer_name_a")
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = s.CreateConsumer("consumer_name_a", "", 1000, 10, 5000, 30000, 10)
+	_, err = s.CreateConsumer("consumer_name_a", ConsumerGroup("consumer_group_3"), PullIntervalMillis(1000), BatchSize(10), BatchMaxWaitTimeMillis(5000), MaxAckTimeMillis(30000), MaxMsgDeliveries(10))
 	if err == nil {
 		t.Error(err)
 	}
 
-	_, err = c.CreateConsumer("consumer_name_b", "station_name_1", "", 1000, 10, 5000, 30000, 10)
+	_, err = c.CreateConsumer("consumer_name_b", "station_name_1", ConsumerGroup("consumer_group_g"), PullIntervalMillis(1000), BatchSize(10), BatchMaxWaitTimeMillis(5000), MaxAckTimeMillis(30000), MaxMsgDeliveries(10))
 	if err != nil {
 		t.Error("Consumer names has to be unique")
 	}
 
-	_, err = c.CreateConsumer("consumer_name_b", "station_name_1", "", 1000, 10, 5000, 30000, 10)
+	_, err = c.CreateConsumer("consumer_name_b", "station_name_1")
 	if err == nil {
 		t.Error("Consumer names has to be unique")
 	}
 
-	_, err = c.CreateConsumer("consumer_name_a", "station_name_1", "", 1000, 10, 5000, 30000, 10)
+	_, err = c.CreateConsumer("consumer_name_a", "station_name_1")
 	if err == nil {
 		t.Error("Consumer names has to be unique")
 	}
@@ -243,7 +243,7 @@ func TestRemoveConsumer(t *testing.T) {
 		t.Error(err)
 	}
 
-	consumer, err := s.CreateConsumer("consumer_a", "", 1000, 10, 5000, 30000, 10)
+	consumer, err := s.CreateConsumer("consumer_a")
 	if err != nil {
 		t.Error(err)
 	}
