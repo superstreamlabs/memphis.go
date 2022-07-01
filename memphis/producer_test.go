@@ -74,7 +74,7 @@ func TestProduce(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, err = p.Produce([]byte("Hey There!"), 15)
+	err = p.Produce([]byte("Hey There!"), AckWaitSec(15))
 
 	if err != nil {
 		t.Error(err)
@@ -152,8 +152,7 @@ func TestConsume(t *testing.T) {
 	}
 
 	testMessage := "Hey There!"
-	// ack, err := p.Produce([]byte(testMessage), 15)
-	_, err = p.Produce([]byte(testMessage), 15)
+	err = p.Produce([]byte(testMessage))
 
 	if err != nil {
 		t.Error(err)

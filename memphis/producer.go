@@ -73,11 +73,58 @@ func (p *Producer) Remove() error {
 	return p.conn.destroy(p)
 }
 
-func (p *Producer) Produce(message []byte, ackWaitSec int) (nats.PubAckFuture, error) {
+type ProduceOpts struct {
+	Message    []byte
+	AckWaitSec int
+}
+
+type ProduceOpt func(*ProduceOpts) error
+
+func GetDefaultProduceOpts() ProduceOpts {
+	return ProduceOpts{AckWaitSec: 15}
+}
+
+func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
+	defaultOpts := GetDefaultProduceOpts()
+
+	defaultOpts.Message = message
+
+	for _, opt := range opts {
+		if opt != nil {
+			if err := opt(&defaultOpts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return defaultOpts.Produce(p)
+
+}
+
+func (opts *ProduceOpts) Produce(p *Producer) error {
 	natsMessage := nats.Msg{
 		Header:  map[string][]string{"connectionId": {p.conn.ConnId}, "producedBy": {p.Name}},
 		Subject: getSubjectName(p.stationName),
-		Data:    message,
+		Data:    opts.Message,
 	}
-	return p.conn.brokerPublish(&natsMessage, nats.StallWait(time.Second*time.Duration(ackWaitSec)))
+
+	stallWaitDuration := time.Second * time.Duration(opts.AckWaitSec)
+	paf, err := p.conn.brokerPublish(&natsMessage, nats.StallWait(stallWaitDuration))
+	if err != nil {
+		return err
+	}
+
+	select {
+	case <-paf.Ok():
+		return nil
+	case err = <-paf.Err():
+		return err
+	}
+}
+
+func AckWaitSec(ackWaitSec int) ProduceOpt {
+	return func(opts *ProduceOpts) error {
+		opts.AckWaitSec = ackWaitSec
+		return nil
+	}
 }
