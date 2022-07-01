@@ -1,29 +1,34 @@
-const memphis = require("memphis-dev");
+package main
 
-(async function () {
-    try {
-        await memphis.connect({
-            host: "<memphis-host>",
-            username: "<application type username>",
-            connectionToken: "<broker-token>"
-        });
+import (
+	"fmt"
+	"os"
 
-        const consumer = await memphis.consumer({
-            stationName: "<station-name>",
-            consumerName: "<consumer-name>",
-            consumerGroup: ""
-        });
+	"github.com/memphisdev/memphis.go/memphis"
+)
 
-        consumer.on("message", message => {
-            console.log(message.getData().toString());
-            message.ack();
-        });
+func main() {
+	conn, err := memphis.Connect("localhost", memphis.Username("root"), memphis.ConnectionToken("memphis"))
+	if err != nil {
+		os.Exit(1)
+	}
+	defer conn.Close()
 
-        consumer.on("error", error => {
-            console.log(error);
-        });
-    } catch (ex) {
-        console.log(ex);
-        memphis.close();
-    }
-}());
+	consumer, err := conn.CreateConsumer("consumer_name", "station_name")
+
+	if err != nil {
+		fmt.Errorf("Consumer creation failed: %v", err)
+		os.Exit(1)
+	}
+
+	for {
+		res, _ := <-consumer.Puller
+		fmt.Println(string(res))
+	}
+
+	err = consumer.Remove()
+	if err != nil {
+		fmt.Errorf("Consumer removal failed: %v", err)
+		os.Exit(1)
+	}
+}
