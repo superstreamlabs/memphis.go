@@ -11,7 +11,7 @@ func TestRemoveFactory(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1", "factory_description")
+	f, err := c.CreateFactory("factory_name_1", Description("factory_description"))
 	if err != nil {
 		t.Error(err)
 	}

@@ -11,7 +11,7 @@ func TestCreateProducer(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1", "factory_description")
+	f, err := c.CreateFactory("factory_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -58,7 +58,7 @@ func TestProduce(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1", "factory_description")
+	f, err := c.CreateFactory("factory_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -105,7 +105,7 @@ func TestRemoveProducer(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1", "factory_description")
+	f, err := c.CreateFactory("factory_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -135,7 +135,7 @@ func TestConsume(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1", "factory_description")
+	f, err := c.CreateFactory("factory_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -183,7 +183,7 @@ func TestCreateConsumer(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1", "factory_description")
+	f, err := c.CreateFactory("factory_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -227,7 +227,7 @@ func TestRemoveConsumer(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1", "factory_description")
+	f, err := c.CreateFactory("factory_name_1")
 	if err != nil {
 		t.Error(err)
 	}

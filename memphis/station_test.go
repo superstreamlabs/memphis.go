@@ -11,7 +11,7 @@ func TestCreateStation(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1", "factory_description")
+	f, err := c.CreateFactory("factory_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -58,7 +58,7 @@ func TestRemoveStation(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1", "factory_description")
+	f, err := c.CreateFactory("factory_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -82,7 +82,7 @@ func TestCreateStationWithDefaults(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1", "factory_description")
+	f, err := c.CreateFactory("factory_name_1")
 	if err != nil {
 		t.Error(err)
 	}
