@@ -5,7 +5,7 @@ import (
 )
 
 func TestCreateStation(t *testing.T) {
-	c, err := Connect("localhost", Username("root"), ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", "memphis")
 	if err != nil {
 		t.Error(err)
 	}
@@ -52,7 +52,7 @@ func TestCreateStation(t *testing.T) {
 }
 
 func TestRemoveStation(t *testing.T) {
-	c, err := Connect("localhost", Username("root"), ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", "memphis")
 	if err != nil {
 		t.Error(err)
 	}
@@ -76,7 +76,7 @@ func TestRemoveStation(t *testing.T) {
 }
 
 func TestCreateStationWithDefaults(t *testing.T) {
-	c, err := Connect("localhost", Username("root"), ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", "memphis")
 	if err != nil {
 		t.Error(err)
 	}

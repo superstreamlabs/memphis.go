@@ -1,7 +1,5 @@
 package memphis
 
-import "github.com/nats-io/nats.go"
-
 type Station struct {
 	Name              string
 	RetentionType     RetentionType
@@ -37,7 +35,7 @@ func (s StorageType) String() string {
 	return [...]string{"file", "memory"}[s]
 }
 
-type CreateStationReq struct {
+type createStationReq struct {
 	Name              string `json:"name"`
 	FactoryName       string `json:"factory_name"`
 	RetentionType     string `json:"retention_type"`
@@ -48,13 +46,10 @@ type CreateStationReq struct {
 	DedupWindowMillis int    `json:"dedup_window_in_ms"`
 }
 
-type RemoveStationReq struct {
+type removeStationReq struct {
 	Name string `json:"station_name"`
 }
 
-type GetStationReq struct {
-	Name string `json:"station_name"`
-}
 type StationOpts struct {
 	Name              string
 	FactoryName       string
@@ -109,7 +104,7 @@ func (opts *StationOpts) CreateStation(c *Conn) (*Station, error) {
 		conn:              c,
 	}
 
-	return &s, s.getConn().create(&s)
+	return &s, s.conn.create(&s)
 }
 
 func (f *Factory) CreateStation(name string, opts ...StationOpt) (*Station, error) {
@@ -119,7 +114,7 @@ func (f *Factory) CreateStation(name string, opts ...StationOpt) (*Station, erro
 type StationName string
 
 func (s *Station) Remove() error {
-	return s.getConn().destroy(s)
+	return s.conn.destroy(s)
 }
 
 func (s *Station) getSubjectName() string {
@@ -130,21 +125,12 @@ func getSubjectName(stationName string) string {
 	return stationName + ".final"
 }
 
-func (s *Station) publish(msg *nats.Msg, opts ...nats.PubOpt) (nats.PubAckFuture, error) {
-	msg.Subject = s.getSubjectName()
-	return s.getConn().brokerPublish(msg, opts...)
-}
-
-func (s *Station) subscribe(c *Consumer, opts ...nats.SubOpt) (*nats.Subscription, error) {
-	return s.getConn().brokerSubscribe(s.getSubjectName(), c.ConsumerGroup, opts...)
-}
-
 func (s *Station) getCreationApiPath() string {
 	return "/api/stations/createStation"
 }
 
 func (s *Station) getCreationReq() any {
-	return CreateStationReq{
+	return createStationReq{
 		Name:              s.Name,
 		FactoryName:       s.factoryName,
 		RetentionType:     s.RetentionType.String(),
@@ -161,11 +147,7 @@ func (s *Station) getDestructionApiPath() string {
 }
 
 func (s *Station) getDestructionReq() any {
-	return RemoveStationReq{Name: s.Name}
-}
-
-func (s *Station) getConn() *Conn {
-	return s.conn
+	return removeStationReq{Name: s.Name}
 }
 
 func Name(name string) StationOpt {

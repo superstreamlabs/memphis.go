@@ -14,19 +14,19 @@ type Producer struct {
 	conn        *Conn
 }
 
-type CreateProducerReq struct {
+type createProducerReq struct {
 	Name         string `json:"name"`
 	StationName  string `json:"station_name"`
 	ConnectionId string `json:"connection_id"`
 	ProducerType string `json:"producer_type"`
 }
 
-type RemoveProducerReq struct {
+type removeProducerReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
 }
 
-func (c *Conn) CreateProducer(name string, stationName string) (*Producer, error) {
+func (c *Conn) CreateProducer(stationName, name string) (*Producer, error) {
 	err := validateProducerName(name)
 	if err != nil {
 		return nil, err
@@ -37,7 +37,7 @@ func (c *Conn) CreateProducer(name string, stationName string) (*Producer, error
 }
 
 func (s *Station) CreateProducer(name string) (*Producer, error) {
-	return s.getConn().CreateProducer(name, s.Name)
+	return s.conn.CreateProducer(s.Name, name)
 }
 
 func validateProducerName(name string) error {
@@ -53,7 +53,7 @@ func (p *Producer) getCreationApiPath() string {
 }
 
 func (p *Producer) getCreationReq() any {
-	return CreateProducerReq{
+	return createProducerReq{
 		Name:         p.Name,
 		StationName:  p.stationName,
 		ConnectionId: p.conn.ConnId,
@@ -66,10 +66,10 @@ func (p *Producer) getDestructionApiPath() string {
 }
 
 func (p *Producer) getDestructionReq() any {
-	return RemoveProducerReq{Name: p.Name, StationName: p.stationName}
+	return removeProducerReq{Name: p.Name, StationName: p.stationName}
 }
 
-func (p *Producer) Remove() error {
+func (p *Producer) Destroy() error {
 	return p.conn.destroy(p)
 }
 

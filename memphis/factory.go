@@ -6,12 +6,12 @@ type Factory struct {
 	conn        *Conn
 }
 
-type CreateFactoryReq struct {
+type createFactoryReq struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 }
 
-type RemoveFactoryReq struct {
+type removeFactoryReq struct {
 	Name string `json:"factory_name"`
 }
 
@@ -50,7 +50,7 @@ func (opts *FactoryOpts) CreateFactory(c *Conn) (*Factory, error) {
 }
 
 func (f *Factory) Remove() error {
-	return f.getConn().destroy(f)
+	return f.conn.destroy(f)
 }
 
 func (f *Factory) getCreationApiPath() string {
@@ -58,7 +58,7 @@ func (f *Factory) getCreationApiPath() string {
 }
 
 func (f *Factory) getCreationReq() any {
-	return CreateFactoryReq{
+	return createFactoryReq{
 		Name:        f.Name,
 		Description: f.Description,
 	}
@@ -69,11 +69,7 @@ func (f *Factory) getDestructionApiPath() string {
 }
 
 func (f *Factory) getDestructionReq() any {
-	return RemoveFactoryReq{Name: f.Name}
-}
-
-func (f *Factory) getConn() *Conn {
-	return f.conn
+	return removeFactoryReq{Name: f.Name}
 }
 
 func Description(desc string) FactoryOpt {

@@ -22,7 +22,7 @@ type Consumer struct {
 	pullerError        chan error
 }
 
-type CreateConsumerReq struct {
+type createConsumerReq struct {
 	Name             string `json:"name"`
 	StationName      string `json:"station_name"`
 	ConnectionId     string `json:"connection_id"`
@@ -32,44 +32,44 @@ type CreateConsumerReq struct {
 	MaxMsgDeliveries int    `json:"max_msg_deliveries"`
 }
 
-type RemoveConsumerReq struct {
+type removeConsumerReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
 }
 
 type ConsumerOpts struct {
-	Name                   string
-	StationName            string
-	ConsumerGroup          string
-	PullIntervalMillis     int
-	BatchSize              int
-	BatchMaxWaitTimeMillis int
-	MaxAckTimeMillis       int
-	MaxMsgDeliveries       int
+	Name                     string
+	StationName              string
+	ConsumerGroup            string
+	PullIntervalMillis       int
+	BatchSize                int
+	BatchMaxTimeToWaitMillis int
+	MaxAckTimeMillis         int
+	MaxMsgDeliveries         int
 }
 
 func GetDefaultProducerOptions() ConsumerOpts {
 	return ConsumerOpts{
-		ConsumerGroup:          "",
-		PullIntervalMillis:     1000,
-		BatchSize:              10,
-		BatchMaxWaitTimeMillis: 5000,
-		MaxAckTimeMillis:       30000,
-		MaxMsgDeliveries:       10,
+		ConsumerGroup:            "",
+		PullIntervalMillis:       1000,
+		BatchSize:                10,
+		BatchMaxTimeToWaitMillis: 5000,
+		MaxAckTimeMillis:         30000,
+		MaxMsgDeliveries:         10,
 	}
 }
 
 type ConsumerOpt func(*ConsumerOpts) error
 
-func (c *Conn) CreateConsumer(name string, stationName string, opts ...ConsumerOpt) (*Consumer, error) {
+func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...ConsumerOpt) (*Consumer, error) {
 	defaultOpts := GetDefaultProducerOptions()
 
-	err := validateConsumerName(name)
+	err := validateConsumerName(consumerName)
 	if err != nil {
 		return nil, err
 	}
 
-	defaultOpts.Name = name
+	defaultOpts.Name = consumerName
 	defaultOpts.StationName = stationName
 
 	for _, opt := range opts {
@@ -110,7 +110,7 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 	consumer.subscription, err = c.brokerSubscribe(subj, opts.ConsumerGroup,
 		nats.ManualAck(),
 		nats.AckWait(ackWait),
-		nats.MaxRequestBatch(opts.BatchMaxWaitTimeMillis),
+		nats.MaxRequestBatch(opts.BatchMaxTimeToWaitMillis),
 		nats.MaxRequestBatch(opts.BatchSize))
 	if err != nil {
 		return nil, err
@@ -121,7 +121,7 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 }
 
 func (s *Station) CreateConsumer(name string, opts ...ConsumerOpt) (*Consumer, error) {
-	return s.getConn().CreateConsumer(name, s.Name, opts...)
+	return s.conn.CreateConsumer(s.Name, name, opts...)
 }
 
 func (consumer *Consumer) startPuller(pullInterval time.Duration) {
@@ -147,7 +147,7 @@ func (consumer *Consumer) startPuller(pullInterval time.Duration) {
 	}()
 }
 
-func (c *Consumer) Remove() error {
+func (c *Consumer) Destroy() error {
 	c.pullerQuit <- struct{}{}
 	return c.conn.destroy(c)
 }
@@ -165,7 +165,7 @@ func (c *Consumer) getCreationApiPath() string {
 }
 
 func (c *Consumer) getCreationReq() any {
-	return CreateConsumerReq{
+	return createConsumerReq{
 		Name:             c.Name,
 		StationName:      c.stationName,
 		ConnectionId:     c.conn.ConnId,
@@ -181,7 +181,7 @@ func (p *Consumer) getDestructionApiPath() string {
 }
 
 func (p *Consumer) getDestructionReq() any {
-	return RemoveConsumerReq{Name: p.Name, StationName: p.stationName}
+	return removeConsumerReq{Name: p.Name, StationName: p.stationName}
 }
 
 func ConsumerName(name string) ConsumerOpt {
@@ -217,7 +217,7 @@ func BatchSize(batchSize int) ConsumerOpt {
 }
 func BatchMaxWaitTimeMillis(batchMaxWaitTimeMillis int) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
-		opts.BatchMaxWaitTimeMillis = batchMaxWaitTimeMillis
+		opts.BatchMaxTimeToWaitMillis = batchMaxWaitTimeMillis
 		return nil
 	}
 }

@@ -48,8 +48,6 @@ func GetDefaultOptions() Options {
 		ManagementPort:          5555,
 		TcpPort:                 6666,
 		DataPort:                7766,
-		Username:                "",
-		ConnectionToken:         "",
 		Reconnect:               true,
 		MaxReconnect:            3,
 		ReconnectIntervalMillis: 200,
@@ -82,10 +80,12 @@ type errorResp struct {
 	Message string `json:"message"`
 }
 
-func Connect(host string, options ...Option) (*Conn, error) {
+func Connect(host, username, connectionToken string, options ...Option) (*Conn, error) {
 	opts := GetDefaultOptions()
 
 	opts.Host = normalizeHost(host)
+	opts.Username = username
+	opts.ConnectionToken = connectionToken
 
 	for _, opt := range options {
 		if opt != nil {
@@ -230,20 +230,16 @@ func heartBeat(tcpConn net.Conn, interval int, msg []byte) chan bool {
 		for {
 			select {
 			case <-ticker.C:
-				fmt.Println("Sending:", string(msg))
 				_, err := tcpConn.Write(msg)
 				if err != nil {
 					panic(err)
 				}
 
-				fmt.Println("Sent:", string(msg))
-
 				b := make([]byte, 1024)
-				mLen, err := tcpConn.Read(b)
+				_, err = tcpConn.Read(b)
 				if err != nil {
 					fmt.Println("error received")
 				}
-				fmt.Println("Received:", string(b[:mLen]))
 
 			case <-quit:
 				ticker.Stop()
@@ -281,13 +277,11 @@ func (c *Conn) mgmtRequest(apiMethod string, apiPath string, reqStruct any) erro
 	}
 
 	respBody, err := ioutil.ReadAll(resp.Body)
-	fmt.Println("response", string(respBody))
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 { //HTTP success status code
 		var errorResp errorResp
 		err = json.Unmarshal(respBody, &errorResp)
 		if err != nil {
-			fmt.Println("Error:", err)
 			return err
 		}
 		return errors.New(errorResp.Message)
@@ -321,20 +315,6 @@ func TcpPort(port int) Option {
 func DataPort(port int) Option {
 	return func(o *Options) error {
 		o.DataPort = port
-		return nil
-	}
-}
-
-func Username(username string) Option {
-	return func(o *Options) error {
-		o.Username = username
-		return nil
-	}
-}
-
-func ConnectionToken(token string) Option {
-	return func(o *Options) error {
-		o.ConnectionToken = token
 		return nil
 	}
 }
@@ -378,7 +358,6 @@ type apiObj interface {
 func (c *Conn) create(o apiObj) error {
 	apiPath := o.getCreationApiPath()
 	creationReq := o.getCreationReq()
-	fmt.Printf("Creation of %v, req %v", o, creationReq)
 
 	return c.mgmtRequest("POST", apiPath, creationReq)
 }

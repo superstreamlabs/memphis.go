@@ -5,7 +5,7 @@ import (
 )
 
 func TestCreateProducer(t *testing.T) {
-	c, err := Connect("localhost", Username("root"), ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", "memphis")
 	if err != nil {
 		t.Error(err)
 	}
@@ -33,18 +33,18 @@ func TestCreateProducer(t *testing.T) {
 		t.Error("Producer names has to be unique")
 	}
 
-	_, err = c.CreateProducer("producer_name_b", "station_name_1")
+	_, err = c.CreateProducer("station_name_1", "producer_name_b")
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = c.CreateProducer("producer_name_b", "station_name_1")
+	_, err = c.CreateProducer("station_name_1", "producer_name_b")
 	if err == nil {
 		t.Error("Producer names has to be unique")
 	}
 
 	//This will create a station with default factory so removing our factory is not enough
-	_, err = c.CreateProducer("producer_name_a", "station_name_2")
+	_, err = c.CreateProducer("station_name_2", "producer_name_a")
 	if err != nil {
 		t.Error(err)
 	}
@@ -52,7 +52,7 @@ func TestCreateProducer(t *testing.T) {
 }
 
 func TestProduce(t *testing.T) {
-	c, err := Connect("localhost", Username("root"), ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", "memphis")
 	if err != nil {
 		t.Error(err)
 	}
@@ -99,7 +99,7 @@ func TestValidateProducerName(t *testing.T) {
 }
 
 func TestRemoveProducer(t *testing.T) {
-	c, err := Connect("localhost", Username("root"), ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", "memphis")
 	if err != nil {
 		t.Error(err)
 	}
@@ -121,7 +121,7 @@ func TestRemoveProducer(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = p.Remove()
+	err = p.Destroy()
 
 	if err != nil {
 		t.Error(err)
@@ -129,7 +129,7 @@ func TestRemoveProducer(t *testing.T) {
 }
 
 func TestConsume(t *testing.T) {
-	c, err := Connect("localhost", Username("root"), ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", "memphis")
 	if err != nil {
 		t.Error(err)
 	}
@@ -158,8 +158,6 @@ func TestConsume(t *testing.T) {
 		t.Error(err)
 	}
 
-	// fmt.Println("ack received? ", <-ack.Ok())
-
 	consumer, err := s.CreateConsumer("consumer_a", ConsumerGroup(""))
 	res, ok := <-consumer.Puller
 	if !ok {
@@ -170,14 +168,14 @@ func TestConsume(t *testing.T) {
 		t.Error("Did not receive exact produced message")
 	}
 
-	err = consumer.Remove()
+	err = consumer.Destroy()
 	if err != nil {
 		t.Error(err)
 	}
 }
 
 func TestCreateConsumer(t *testing.T) {
-	c, err := Connect("localhost", Username("root"), ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", "memphis")
 	if err != nil {
 		t.Error(err)
 	}
@@ -204,24 +202,24 @@ func TestCreateConsumer(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, err = c.CreateConsumer("consumer_name_b", "station_name_1", ConsumerGroup("consumer_group_g"), PullIntervalMillis(1000), BatchSize(10), BatchMaxWaitTimeMillis(5000), MaxAckTimeMillis(30000), MaxMsgDeliveries(10))
+	_, err = c.CreateConsumer("station_name_1", "consumer_name_b", ConsumerGroup("consumer_group_g"), PullIntervalMillis(1000), BatchSize(10), BatchMaxWaitTimeMillis(5000), MaxAckTimeMillis(30000), MaxMsgDeliveries(10))
 	if err != nil {
 		t.Error("Consumer names has to be unique")
 	}
 
-	_, err = c.CreateConsumer("consumer_name_b", "station_name_1")
+	_, err = c.CreateConsumer("station_name_1", "consumer_name_b")
 	if err == nil {
 		t.Error("Consumer names has to be unique")
 	}
 
-	_, err = c.CreateConsumer("consumer_name_a", "station_name_1")
+	_, err = c.CreateConsumer("station_name_1", "consumer_name_a")
 	if err == nil {
 		t.Error("Consumer names has to be unique")
 	}
 }
 
 func TestRemoveConsumer(t *testing.T) {
-	c, err := Connect("localhost", Username("root"), ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", "memphis")
 	if err != nil {
 		t.Error(err)
 	}
@@ -248,12 +246,12 @@ func TestRemoveConsumer(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = consumer.Remove()
+	err = consumer.Destroy()
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = p.Remove()
+	err = p.Destroy()
 	if err != nil {
 		t.Error(err)
 	}

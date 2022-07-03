@@ -8,15 +8,15 @@ import (
 )
 
 func main() {
-	c, err := memphis.Connect("localhost", memphis.Username("root"), memphis.ConnectionToken("memphis"))
+	c, err := memphis.Connect("localhost", "root", "memphis")
 	if err != nil {
 		os.Exit(1)
 	}
 	defer c.Close()
 
 	//Implicit Producer creation (default factory and station)
-	p1, err := c.CreateProducer("producer_name_a")
-	p1.Producer([]byte("You have a message!"))
+	p1, err := c.CreateProducer("station_1", "producer_name_a")
+	p1.Produce([]byte("You have a message!"))
 
 	//Explicit factory and station creations
 	f, err := c.CreateFactory("factory_name_1")

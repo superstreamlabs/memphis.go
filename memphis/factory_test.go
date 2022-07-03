@@ -5,7 +5,7 @@ import (
 )
 
 func TestRemoveFactory(t *testing.T) {
-	c, err := Connect("localhost", Username("root"), ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", "memphis")
 	if err != nil {
 		t.Error(err)
 	}
