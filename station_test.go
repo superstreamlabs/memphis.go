@@ -15,7 +15,7 @@ func TestCreateStation(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer f.Remove()
+	defer f.Destroy()
 
 	_, err = f.CreateStation("station_name_1", RetentionTypeOpt(Messages), RetentionTypeOpt(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindowMillis(1000))
 	if err != nil {
@@ -62,7 +62,7 @@ func TestRemoveStation(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer f.Remove()
+	defer f.Destroy()
 
 	s, err := f.CreateStation("station_name_1")
 	if err != nil {
@@ -86,7 +86,7 @@ func TestCreateStationWithDefaults(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer f.Remove()
+	defer f.Destroy()
 
 	_, err = f.CreateStation("station_name_1")
 	if err != nil {

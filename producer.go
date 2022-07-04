@@ -1,8 +1,6 @@
 package memphis
 
 import (
-	"errors"
-	"regexp"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -27,25 +25,12 @@ type removeProducerReq struct {
 }
 
 func (c *Conn) CreateProducer(stationName, name string) (*Producer, error) {
-	err := validateProducerName(name)
-	if err != nil {
-		return nil, err
-	}
-
 	p := Producer{Name: name, stationName: stationName, conn: c}
 	return &p, c.create(&p)
 }
 
 func (s *Station) CreateProducer(name string) (*Producer, error) {
 	return s.conn.CreateProducer(s.Name, name)
-}
-
-func validateProducerName(name string) error {
-	regex := regexp.MustCompile("^[a-z_]+$")
-	if !regex.MatchString(name) {
-		return errors.New("Producer name can only contain lower-case letters and _")
-	}
-	return nil
 }
 
 func (p *Producer) getCreationApiPath() string {

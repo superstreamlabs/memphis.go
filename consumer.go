@@ -1,8 +1,6 @@
 package memphis
 
 import (
-	"errors"
-	"regexp"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -48,7 +46,7 @@ type ConsumerOpts struct {
 	MaxMsgDeliveries         int
 }
 
-func GetDefaultProducerOptions() ConsumerOpts {
+func GetDefaultConsumerOptions() ConsumerOpts {
 	return ConsumerOpts{
 		ConsumerGroup:            "",
 		PullIntervalMillis:       1000,
@@ -62,12 +60,7 @@ func GetDefaultProducerOptions() ConsumerOpts {
 type ConsumerOpt func(*ConsumerOpts) error
 
 func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...ConsumerOpt) (*Consumer, error) {
-	defaultOpts := GetDefaultProducerOptions()
-
-	err := validateConsumerName(consumerName)
-	if err != nil {
-		return nil, err
-	}
+	defaultOpts := GetDefaultConsumerOptions()
 
 	defaultOpts.Name = consumerName
 	defaultOpts.StationName = stationName
@@ -84,11 +77,6 @@ func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...Consumer
 }
 
 func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
-
-	if opts.ConsumerGroup == "" {
-		opts.ConsumerGroup = opts.Name
-	}
-
 	consumer := Consumer{Name: opts.Name,
 		ConsumerGroup:      opts.ConsumerGroup,
 		PullIntervalMillis: opts.PullIntervalMillis,
@@ -105,12 +93,17 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 	consumer.Puller = make(chan []byte, 1024)
 	consumer.pullerQuit = make(chan struct{}, 1)
 
-	ackWait := time.Duration(opts.MaxAckTimeMillis) * time.Millisecond
-	subj := getSubjectName(opts.StationName)
-	consumer.subscription, err = c.brokerSubscribe(subj, opts.ConsumerGroup,
+	ackWait := time.Duration(consumer.MaxAckTimeMillis) * time.Millisecond
+	subj := getSubjectName(consumer.stationName)
+	durableName := consumer.ConsumerGroup
+	if durableName == "" {
+		durableName = consumer.Name
+	}
+
+	consumer.subscription, err = c.brokerSubscribe(subj, durableName,
 		nats.ManualAck(),
 		nats.AckWait(ackWait),
-		nats.MaxRequestBatch(opts.BatchMaxTimeToWaitMillis),
+		nats.MaxRequestExpires(time.Duration(opts.BatchMaxTimeToWaitMillis)*time.Millisecond),
 		nats.MaxRequestBatch(opts.BatchSize))
 	if err != nil {
 		return nil, err
@@ -150,14 +143,6 @@ func (consumer *Consumer) startPuller(pullInterval time.Duration) {
 func (c *Consumer) Destroy() error {
 	c.pullerQuit <- struct{}{}
 	return c.conn.destroy(c)
-}
-
-func validateConsumerName(name string) error {
-	regex := regexp.MustCompile("^[a-z_]+$")
-	if !regex.MatchString(name) {
-		return errors.New("Consumer name can only contain lower-case letters and _")
-	}
-	return nil
 }
 
 func (c *Consumer) getCreationApiPath() string {

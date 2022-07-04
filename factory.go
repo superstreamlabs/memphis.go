@@ -49,7 +49,7 @@ func (opts *FactoryOpts) CreateFactory(c *Conn) (*Factory, error) {
 	return &factory, c.create(&factory)
 }
 
-func (f *Factory) Remove() error {
+func (f *Factory) Destroy() error {
 	return f.conn.destroy(f)
 }
 

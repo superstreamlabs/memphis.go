@@ -15,7 +15,7 @@ func TestCreateProducer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer f.Remove()
+	defer f.Destroy()
 
 	s, err := f.CreateStation("station_name_1")
 	if err != nil {
@@ -62,7 +62,7 @@ func TestProduce(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer f.Remove()
+	defer f.Destroy()
 
 	s, err := f.CreateStation("station_name_1")
 	if err != nil {
@@ -81,23 +81,6 @@ func TestProduce(t *testing.T) {
 	}
 }
 
-func TestValidateProducerName(t *testing.T) {
-	err := validateProducerName("val_id")
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = validateProducerName("inVALID")
-	if err == nil {
-		t.Error(err)
-	}
-
-	err = validateProducerName("invalid1")
-	if err == nil {
-		t.Error(err)
-	}
-}
-
 func TestRemoveProducer(t *testing.T) {
 	c, err := Connect("localhost", "root", "memphis")
 	if err != nil {
@@ -109,7 +92,7 @@ func TestRemoveProducer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer f.Remove()
+	defer f.Destroy()
 
 	s, err := f.CreateStation("station_name_1")
 	if err != nil {
@@ -139,7 +122,7 @@ func TestConsume(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer f.Remove()
+	defer f.Destroy()
 
 	s, err := f.CreateStation("station_name_1")
 	if err != nil {
@@ -185,7 +168,7 @@ func TestCreateConsumer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer f.Remove()
+	defer f.Destroy()
 
 	s, err := f.CreateStation("station_name_1")
 	if err != nil {
@@ -229,7 +212,7 @@ func TestRemoveConsumer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer f.Remove()
+	defer f.Destroy()
 
 	s, err := f.CreateStation("station_name_1")
 	if err != nil {

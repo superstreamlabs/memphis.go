@@ -16,7 +16,7 @@ func TestRemoveFactory(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = f.Remove()
+	err = f.Destroy()
 	if err != nil {
 		t.Error(err)
 	}
