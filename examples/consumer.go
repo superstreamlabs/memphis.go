@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/memphisdev/memphis.go/memphis"
+	"github.com/memphisdev/memphis.go"
 )
 
 func main() {
