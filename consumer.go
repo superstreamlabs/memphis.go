@@ -1,6 +1,7 @@
 package memphis
 
 import (
+	"errors"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -10,14 +11,27 @@ type Consumer struct {
 	Name               string
 	ConsumerGroup      string
 	PullIntervalMillis int
+	BatchSize          int
 	MaxAckTimeMillis   int
 	MaxMsgDeliveries   int
 	conn               *Conn
 	stationName        string
 	subscription       *nats.Subscription
-	Puller             chan []byte
+	puller             chan *Msg
 	pullerQuit         chan struct{}
-	pullerError        chan error
+}
+
+type Msg struct {
+	msg *nats.Msg
+	err error
+}
+
+func (m *Msg) Data() []byte {
+	return m.msg.Data
+}
+
+func (m *Msg) Ack() error {
+	return m.msg.Ack()
 }
 
 type createConsumerReq struct {
@@ -80,6 +94,7 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 	consumer := Consumer{Name: opts.Name,
 		ConsumerGroup:      opts.ConsumerGroup,
 		PullIntervalMillis: opts.PullIntervalMillis,
+		BatchSize:          opts.BatchSize,
 		MaxAckTimeMillis:   opts.MaxAckTimeMillis,
 		MaxMsgDeliveries:   opts.MaxMsgDeliveries,
 		conn:               c,
@@ -90,7 +105,7 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 		return nil, err
 	}
 
-	consumer.Puller = make(chan []byte, 1024)
+	consumer.puller = make(chan *Msg, consumer.BatchSize)
 	consumer.pullerQuit = make(chan struct{}, 1)
 
 	ackWait := time.Duration(consumer.MaxAckTimeMillis) * time.Millisecond
@@ -117,27 +132,52 @@ func (s *Station) CreateConsumer(name string, opts ...ConsumerOpt) (*Consumer, e
 	return s.conn.CreateConsumer(s.Name, name, opts...)
 }
 
+func fetchFromSubscription(subscription *nats.Subscription, batchSize int, outChan chan *Msg) {
+	msgs, err := subscription.Fetch(batchSize)
+	if err != nil {
+		outChan <- &Msg{msg: nil, err: err}
+	}
+
+	for _, msg := range msgs {
+		outChan <- &Msg{msg: msg, err: nil}
+	}
+}
+
 func (consumer *Consumer) startPuller(pullInterval time.Duration) {
+	fetchFromSubscription(consumer.subscription, consumer.BatchSize, consumer.puller)
+
 	ticker := time.NewTicker(pullInterval)
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
-				msgs, err := consumer.subscription.Fetch(1)
-				if err != nil {
-					consumer.pullerError <- err
-					continue
-				}
-
-				for _, msg := range msgs {
-					consumer.Puller <- msg.Data
-				}
+				fetchFromSubscription(consumer.subscription, consumer.BatchSize, consumer.puller)
 			case <-consumer.pullerQuit:
 				ticker.Stop()
 				return
 			}
 		}
 	}()
+}
+
+func (c *Consumer) Fetch() ([]*Msg, error) {
+	if len(c.puller) == 0 {
+		return nil, errors.New("Nothing to fetch")
+	}
+
+	msgs := make([]*Msg, 0, c.BatchSize)
+	for i := 0; i < c.BatchSize; i++ {
+		select {
+		case msg := <-c.puller:
+			if msg.err != nil {
+				return []*Msg{}, msg.err
+			}
+			msgs = append(msgs, msg)
+		default:
+			break
+		}
+	}
+	return msgs, nil
 }
 
 func (c *Consumer) Destroy() error {

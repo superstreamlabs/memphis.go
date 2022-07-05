@@ -142,12 +142,17 @@ func TestConsume(t *testing.T) {
 	}
 
 	consumer, err := s.CreateConsumer("consumer_a", ConsumerGroup(""))
-	res, ok := <-consumer.Puller
-	if !ok {
-		t.Error("chan is not ok")
+	if err != nil {
+		t.Error(err)
 	}
 
-	if string(res) != testMessage {
+	msgs, err := consumer.Fetch()
+	if err != nil {
+		t.Error(err)
+	}
+
+	res := string(msgs[0].Data())
+	if res != testMessage {
 		t.Error("Did not receive exact produced message")
 	}
 
