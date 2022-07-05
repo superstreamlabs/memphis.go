@@ -14,6 +14,7 @@ type Consumer struct {
 	BatchSize          int
 	MaxAckTimeMillis   int
 	MaxMsgDeliveries   int
+	BatchMaxTimeToWait time.Duration
 	conn               *Conn
 	stationName        string
 	subscription       *nats.Subscription
@@ -97,6 +98,7 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 		BatchSize:          opts.BatchSize,
 		MaxAckTimeMillis:   opts.MaxAckTimeMillis,
 		MaxMsgDeliveries:   opts.MaxMsgDeliveries,
+		BatchMaxTimeToWait: time.Duration(opts.BatchMaxTimeToWaitMillis) * time.Millisecond,
 		conn:               c,
 		stationName:        opts.StationName}
 
@@ -118,7 +120,7 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 	consumer.subscription, err = c.brokerSubscribe(subj, durableName,
 		nats.ManualAck(),
 		nats.AckWait(ackWait),
-		nats.MaxRequestExpires(time.Duration(opts.BatchMaxTimeToWaitMillis)*time.Millisecond),
+		nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
 		nats.MaxRequestBatch(opts.BatchSize))
 	if err != nil {
 		return nil, err
@@ -144,10 +146,9 @@ func fetchFromSubscription(subscription *nats.Subscription, batchSize int, outCh
 }
 
 func (consumer *Consumer) startPuller(pullInterval time.Duration) {
-	fetchFromSubscription(consumer.subscription, consumer.BatchSize, consumer.puller)
-
 	ticker := time.NewTicker(pullInterval)
 	go func() {
+		fetchFromSubscription(consumer.subscription, consumer.BatchSize, consumer.puller)
 		for {
 			select {
 			case <-ticker.C:
@@ -161,21 +162,26 @@ func (consumer *Consumer) startPuller(pullInterval time.Duration) {
 }
 
 func (c *Consumer) Fetch() ([]*Msg, error) {
-	if len(c.puller) == 0 {
-		return nil, errors.New("Nothing to fetch")
-	}
+	timeout := time.After(c.BatchMaxTimeToWait)
 
 	msgs := make([]*Msg, 0, c.BatchSize)
-	for i := 0; i < c.BatchSize; i++ {
-		select {
-		case msg := <-c.puller:
+	select {
+	case msg := <-c.puller:
+		for i := 0; i < c.BatchSize-1; i++ {
 			if msg.err != nil {
 				return []*Msg{}, msg.err
 			}
 			msgs = append(msgs, msg)
-		default:
-			break
+			if len(c.puller) == 0 {
+				return msgs, nil
+			}
+			msg = <-c.puller
 		}
+	case <-timeout:
+		if len(msgs) == 0 {
+			return nil, errors.New("Nothing to fetch")
+		}
+		return nil, errors.New("Fetch timed out")
 	}
 	return msgs, nil
 }

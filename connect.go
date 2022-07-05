@@ -37,8 +37,8 @@ type Conn struct {
 	ConnId               string
 	AccessToken          string
 	tcpConn              net.Conn
-	pingQuitChan         chan bool
-	refreshTokenQuitChan chan bool
+	pingQuitChan         chan struct{}
+	refreshTokenQuitChan chan struct{}
 	brokerManager        *nats.Conn
 	brokerConn           nats.JetStream
 }
@@ -109,13 +109,28 @@ func (opts Options) Connect() (*Conn, error) {
 		opts:      opts,
 	}
 
-	// connect to TcpPort using username, token and connectionID
-	err := c.setupTcpConn()
-	if err != nil {
-		return nil, err
+	if opts.MaxReconnect > 9 {
+		opts.MaxReconnect = 9
 	}
 
-	err = c.setupDataConn()
+	maxAttempts := 1
+	if opts.Reconnect {
+		maxAttempts = opts.MaxReconnect
+	}
+
+	var err error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		err = c.setupTcpConn()
+		if err != nil {
+			continue
+		}
+
+		err = c.setupDataConn()
+		if err != nil {
+			continue
+		}
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -178,6 +193,9 @@ func (c *Conn) setupTcpConn() error {
 			Ping: true,
 		})
 		if err != nil {
+			if resp.AccessTokenExpiry != 0 {
+				c.refreshTokenQuitChan <- struct{}{}
+			}
 			return err
 		}
 		c.pingQuitChan = heartBeat(c.tcpConn, resp.PingInterval, ping)
@@ -209,23 +227,24 @@ func (c *Conn) setupDataConn() error {
 
 	if err != nil {
 		fmt.Println(err.Error())
+		c.brokerManager.Close()
 		return err
 	}
 	return nil
 }
 
 func (c *Conn) Close() {
-	c.refreshTokenQuitChan <- true
-	c.pingQuitChan <- true
+	c.refreshTokenQuitChan <- struct{}{}
+	c.pingQuitChan <- struct{}{}
 
 	c.tcpConn.Close()
 	c.brokerManager.Close()
 	c.connected = false
 }
 
-func heartBeat(tcpConn net.Conn, interval int, msg []byte) chan bool {
+func heartBeat(tcpConn net.Conn, interval int, msg []byte) chan struct{} {
 	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
-	quit := make(chan bool)
+	quit := make(chan struct{})
 	go func() {
 		for {
 			select {

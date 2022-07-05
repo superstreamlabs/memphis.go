@@ -156,6 +156,8 @@ func TestConsume(t *testing.T) {
 		t.Error("Did not receive exact produced message")
 	}
 
+	msgs[0].Ack()
+
 	err = consumer.Destroy()
 	if err != nil {
 		t.Error(err)
