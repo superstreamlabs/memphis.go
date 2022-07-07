@@ -246,7 +246,7 @@ func TestRemoveConsumer(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = s.Remove()
+	err = s.Destroy()
 	if err != nil {
 		t.Error(err)
 	}

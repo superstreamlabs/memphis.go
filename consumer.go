@@ -111,7 +111,7 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 	consumer.pullerQuit = make(chan struct{}, 1)
 
 	ackWait := time.Duration(consumer.MaxAckTimeMillis) * time.Millisecond
-	subj := getSubjectName(consumer.stationName)
+	subj := consumer.stationName + ".final"
 	durableName := consumer.ConsumerGroup
 	if durableName == "" {
 		durableName = consumer.Name

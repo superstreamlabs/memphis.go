@@ -113,16 +113,8 @@ func (f *Factory) CreateStation(name string, opts ...StationOpt) (*Station, erro
 
 type StationName string
 
-func (s *Station) Remove() error {
+func (s *Station) Destroy() error {
 	return s.conn.destroy(s)
-}
-
-func (s *Station) getSubjectName() string {
-	return getSubjectName(s.Name)
-}
-
-func getSubjectName(stationName string) string {
-	return stationName + ".final"
 }
 
 func (s *Station) getCreationApiPath() string {
