@@ -27,7 +27,6 @@ func TestCreateProducer(t *testing.T) {
 		t.Error(err)
 	}
 
-	//
 	_, err = s.CreateProducer("producer_name_a")
 	if err == nil {
 		t.Error("Producer names has to be unique")
