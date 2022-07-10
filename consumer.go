@@ -10,11 +10,11 @@ import (
 type Consumer struct {
 	Name               string
 	ConsumerGroup      string
-	PullIntervalMillis int
+	PullInterval       time.Duration
 	BatchSize          int
-	MaxAckTimeMillis   int
-	MaxMsgDeliveries   int
 	BatchMaxTimeToWait time.Duration
+	MaxAckTime         time.Duration
+	MaxMsgDeliveries   int
 	conn               *Conn
 	stationName        string
 	subscription       *nats.Subscription
@@ -52,23 +52,23 @@ type removeConsumerReq struct {
 }
 
 type ConsumerOpts struct {
-	Name                     string
-	StationName              string
-	ConsumerGroup            string
-	PullIntervalMillis       int
-	BatchSize                int
-	BatchMaxTimeToWaitMillis int
-	MaxAckTimeMillis         int
-	MaxMsgDeliveries         int
+	Name               string
+	StationName        string
+	ConsumerGroup      string
+	PullInterval       time.Duration
+	BatchSize          int
+	BatchMaxTimeToWait time.Duration
+	MaxAckTime         time.Duration
+	MaxMsgDeliveries   int
 }
 
 func GetDefaultConsumerOptions() ConsumerOpts {
 	return ConsumerOpts{
-		PullIntervalMillis:       1000,
-		BatchSize:                10,
-		BatchMaxTimeToWaitMillis: 5000,
-		MaxAckTimeMillis:         30000,
-		MaxMsgDeliveries:         10,
+		PullInterval:       1 * time.Second,
+		BatchSize:          10,
+		BatchMaxTimeToWait: 5 * time.Second,
+		MaxAckTime:         30 * time.Second,
+		MaxMsgDeliveries:   10,
 	}
 }
 
@@ -95,11 +95,11 @@ func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...Consumer
 func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 	consumer := Consumer{Name: opts.Name,
 		ConsumerGroup:      opts.ConsumerGroup,
-		PullIntervalMillis: opts.PullIntervalMillis,
+		PullInterval:       opts.PullInterval,
 		BatchSize:          opts.BatchSize,
-		MaxAckTimeMillis:   opts.MaxAckTimeMillis,
+		MaxAckTime:         opts.MaxAckTime,
 		MaxMsgDeliveries:   opts.MaxMsgDeliveries,
-		BatchMaxTimeToWait: time.Duration(opts.BatchMaxTimeToWaitMillis) * time.Millisecond,
+		BatchMaxTimeToWait: opts.BatchMaxTimeToWait,
 		conn:               c,
 		stationName:        opts.StationName}
 
@@ -112,13 +112,12 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 	consumer.puller = make(chan *Msg, consumer.BatchSize)
 	consumer.pullerQuit = make(chan struct{}, 1)
 
-	ackWait := time.Duration(consumer.MaxAckTimeMillis) * time.Millisecond
 	subj := consumer.stationName + ".final"
 
 	consumer.subscription, err = c.brokerSubscribe(subj,
 		consumer.ConsumerGroup,
 		nats.ManualAck(),
-		nats.AckWait(ackWait),
+		nats.AckWait(consumer.MaxAckTime),
 		nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
 		nats.MaxRequestBatch(opts.BatchSize))
 	if err != nil {
@@ -135,8 +134,7 @@ func (s *Station) CreateConsumer(name string, opts ...ConsumerOpt) (*Consumer, e
 type ConsumeHandler func([]*Msg, error)
 
 func (c *Consumer) Consume(handlerFunc ConsumeHandler) {
-	pullInterval := time.Millisecond * time.Duration(c.PullIntervalMillis)
-	ticker := time.NewTicker(pullInterval)
+	ticker := time.NewTicker(c.PullInterval)
 
 	if c.firstFetch {
 		c.firstFetch = false
@@ -220,7 +218,7 @@ func (c *Consumer) getCreationReq() any {
 		ConnectionId:     c.conn.ConnId,
 		ConsumerType:     "application",
 		ConsumerGroup:    c.ConsumerGroup,
-		MaxAckTimeMillis: c.MaxAckTimeMillis,
+		MaxAckTimeMillis: int(c.MaxAckTime.Milliseconds()),
 		MaxMsgDeliveries: c.MaxMsgDeliveries,
 	}
 }
@@ -252,9 +250,9 @@ func ConsumerGroup(cg string) ConsumerOpt {
 		return nil
 	}
 }
-func PullIntervalMillis(pullIntervalMillis int) ConsumerOpt {
+func PullInterval(pullInterval time.Duration) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
-		opts.PullIntervalMillis = pullIntervalMillis
+		opts.PullInterval = pullInterval
 		return nil
 	}
 }
@@ -264,15 +262,15 @@ func BatchSize(batchSize int) ConsumerOpt {
 		return nil
 	}
 }
-func BatchMaxWaitTimeMillis(batchMaxWaitTimeMillis int) ConsumerOpt {
+func BatchMaxWaitTime(batchMaxWaitTime time.Duration) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
-		opts.BatchMaxTimeToWaitMillis = batchMaxWaitTimeMillis
+		opts.BatchMaxTimeToWait = batchMaxWaitTime
 		return nil
 	}
 }
-func MaxAckTimeMillis(maxAckTimeMillis int) ConsumerOpt {
+func MaxAckTime(maxAckTime time.Duration) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
-		opts.MaxAckTimeMillis = maxAckTimeMillis
+		opts.MaxAckTime = maxAckTime
 		return nil
 	}
 }

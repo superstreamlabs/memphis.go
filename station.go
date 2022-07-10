@@ -1,15 +1,17 @@
 package memphis
 
+import "time"
+
 type Station struct {
-	Name              string
-	RetentionType     RetentionType
-	RetentionValue    int
-	StorageType       StorageType
-	Replicas          int
-	DedupEnabled      bool
-	DedupWindowMillis int
-	factoryName       string
-	conn              *Conn
+	Name           string
+	RetentionType  RetentionType
+	RetentionValue int
+	StorageType    StorageType
+	Replicas       int
+	DedupEnabled   bool
+	DedupWindow    time.Duration
+	factoryName    string
+	conn           *Conn
 }
 
 type RetentionType int
@@ -51,26 +53,26 @@ type removeStationReq struct {
 }
 
 type StationOpts struct {
-	Name              string
-	FactoryName       string
-	RetentionType     RetentionType
-	RetentionVal      int
-	StorageType       StorageType
-	Replicas          int
-	DedupEnabled      bool
-	DedupWindowMillis int
+	Name          string
+	FactoryName   string
+	RetentionType RetentionType
+	RetentionVal  int
+	StorageType   StorageType
+	Replicas      int
+	DedupEnabled  bool
+	DedupWindow   time.Duration
 }
 
 type StationOpt func(*StationOpts) error
 
 func GetStationDefaultOptions() StationOpts {
 	return StationOpts{
-		RetentionType:     MaxMessageAgeSeconds,
-		RetentionVal:      604800,
-		StorageType:       File,
-		Replicas:          1,
-		DedupEnabled:      false,
-		DedupWindowMillis: 0,
+		RetentionType: MaxMessageAgeSeconds,
+		RetentionVal:  604800,
+		StorageType:   File,
+		Replicas:      1,
+		DedupEnabled:  false,
+		DedupWindow:   0 * time.Millisecond,
 	}
 }
 
@@ -93,15 +95,15 @@ func (c *Conn) CreateStation(Name, FactoryName string, opts ...StationOpt) (*Sta
 
 func (opts *StationOpts) CreateStation(c *Conn) (*Station, error) {
 	s := Station{
-		Name:              opts.Name,
-		RetentionType:     opts.RetentionType,
-		RetentionValue:    opts.RetentionVal,
-		StorageType:       opts.StorageType,
-		Replicas:          opts.Replicas,
-		DedupEnabled:      opts.DedupEnabled,
-		DedupWindowMillis: opts.DedupWindowMillis,
-		factoryName:       opts.FactoryName,
-		conn:              c,
+		Name:           opts.Name,
+		RetentionType:  opts.RetentionType,
+		RetentionValue: opts.RetentionVal,
+		StorageType:    opts.StorageType,
+		Replicas:       opts.Replicas,
+		DedupEnabled:   opts.DedupEnabled,
+		DedupWindow:    opts.DedupWindow,
+		factoryName:    opts.FactoryName,
+		conn:           c,
 	}
 
 	return &s, s.conn.create(&s)
@@ -130,7 +132,7 @@ func (s *Station) getCreationReq() any {
 		StorageType:       s.StorageType.String(),
 		Replicas:          s.Replicas,
 		DedupEnabled:      s.DedupEnabled,
-		DedupWindowMillis: s.DedupWindowMillis,
+		DedupWindowMillis: int(s.DedupWindow.Milliseconds()),
 	}
 }
 
@@ -190,9 +192,9 @@ func EnableDedup() StationOpt {
 	}
 }
 
-func DedupWindowMillis(dedupWindowMillis int) StationOpt {
+func DedupWindow(dedupWindow time.Duration) StationOpt {
 	return func(opts *StationOpts) error {
-		opts.DedupWindowMillis = dedupWindowMillis
+		opts.DedupWindow = dedupWindow
 		return nil
 	}
 }

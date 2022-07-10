@@ -21,16 +21,16 @@ import (
 type Option func(*Options) error
 
 type Options struct {
-	Host                    string
-	ManagementPort          int
-	TcpPort                 int
-	DataPort                int
-	Username                string
-	ConnectionToken         string
-	Reconnect               bool
-	MaxReconnect            int
-	ReconnectIntervalMillis int
-	TimeoutMillis           int
+	Host              string
+	ManagementPort    int
+	TcpPort           int
+	DataPort          int
+	Username          string
+	ConnectionToken   string
+	Reconnect         bool
+	MaxReconnect      int
+	ReconnectInterval time.Duration
+	Timeout           time.Duration
 }
 
 type queryReq struct {
@@ -71,13 +71,13 @@ type Conn struct {
 
 func GetDefaultOptions() Options {
 	return Options{
-		ManagementPort:          5555,
-		TcpPort:                 6666,
-		DataPort:                7766,
-		Reconnect:               true,
-		MaxReconnect:            3,
-		ReconnectIntervalMillis: 200,
-		TimeoutMillis:           15000,
+		ManagementPort:    5555,
+		TcpPort:           6666,
+		DataPort:          7766,
+		Reconnect:         true,
+		MaxReconnect:      3,
+		ReconnectInterval: 200 * time.Millisecond,
+		Timeout:           15 * time.Second,
 	}
 }
 
@@ -296,8 +296,8 @@ func (c *Conn) setupDataConn() error {
 		Url:               url,
 		AllowReconnect:    opts.Reconnect,
 		MaxReconnect:      opts.MaxReconnect,
-		ReconnectWait:     time.Duration(opts.ReconnectIntervalMillis) * time.Millisecond,
-		Timeout:           time.Duration(opts.TimeoutMillis) * time.Millisecond,
+		ReconnectWait:     opts.ReconnectInterval,
+		Timeout:           opts.Timeout,
 		Token:             opts.ConnectionToken,
 		DisconnectedErrCB: c.createBrokerDisconnectionHandler(),
 	}
@@ -504,16 +504,16 @@ func MaxReconnect(maxReconnect int) Option {
 	}
 }
 
-func ReconnectIntervalMilis(reconnectInterval int) Option {
+func ReconnectInterval(reconnectInterval time.Duration) Option {
 	return func(o *Options) error {
-		o.ReconnectIntervalMillis = reconnectInterval
+		o.ReconnectInterval = reconnectInterval
 		return nil
 	}
 }
 
-func TimeoutMillis(timeout int) Option {
+func Timeout(timeout time.Duration) Option {
 	return func(o *Options) error {
-		o.TimeoutMillis = timeout
+		o.Timeout = timeout
 		return nil
 	}
 }

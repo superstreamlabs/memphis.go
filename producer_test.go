@@ -2,6 +2,7 @@ package memphis
 
 import (
 	"testing"
+	"time"
 )
 
 func TestCreateProducer(t *testing.T) {
@@ -192,7 +193,7 @@ func TestConsume(t *testing.T) {
 		t.Error(err)
 	}
 
-	consumer, err := s.CreateConsumer("consumer_a", PullIntervalMillis(1000))
+	consumer, err := s.CreateConsumer("consumer_a", PullInterval(1*time.Second))
 	if err != nil {
 		t.Error(err)
 	}
@@ -236,12 +237,12 @@ func TestCreateConsumer(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, err = s.CreateConsumer("consumer_name_a", ConsumerGroup("consumer_group_3"), PullIntervalMillis(1000), BatchSize(10), BatchMaxWaitTimeMillis(5000), MaxAckTimeMillis(30000), MaxMsgDeliveries(10))
+	_, err = s.CreateConsumer("consumer_name_a", ConsumerGroup("consumer_group_3"), PullInterval(1*time.Second), BatchSize(10), BatchMaxWaitTime(5*time.Second), MaxAckTime(30*time.Second), MaxMsgDeliveries(10))
 	if err == nil {
 		t.Error(err)
 	}
 
-	_, err = c.CreateConsumer("station_name_1", "consumer_name_b", ConsumerGroup("consumer_group_g"), PullIntervalMillis(1000), BatchSize(10), BatchMaxWaitTimeMillis(5000), MaxAckTimeMillis(30000), MaxMsgDeliveries(10))
+	_, err = c.CreateConsumer("station_name_1", "consumer_name_b", ConsumerGroup("consumer_group_g"), PullInterval(1*time.Second), BatchSize(10), BatchMaxWaitTime(5*time.Second), MaxAckTime(30*time.Second), MaxMsgDeliveries(10))
 	if err != nil {
 		t.Error("Consumer names has to be unique")
 	}

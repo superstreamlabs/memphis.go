@@ -15,7 +15,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	consumer, err := conn.CreateConsumer("<station-name>", "<consumer-name>", memphis.PullIntervalMillis(15*1000))
+	consumer, err := conn.CreateConsumer("<station-name>", "<consumer-name>", memphis.PullInterval(15*time.Second))
 
 	if err != nil {
 		fmt.Printf("Consumer creation failed: %v\n", err)
