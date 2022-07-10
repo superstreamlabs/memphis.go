@@ -18,13 +18,14 @@ type Consumer struct {
 	conn               *Conn
 	stationName        string
 	subscription       *nats.Subscription
+	firstFetch         bool
+	consumeActive      bool
 	puller             chan *Msg
 	pullerQuit         chan struct{}
 }
 
 type Msg struct {
 	msg *nats.Msg
-	err error
 }
 
 func (m *Msg) Data() []byte {
@@ -107,6 +108,7 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 		return nil, err
 	}
 
+	consumer.firstFetch = true
 	consumer.puller = make(chan *Msg, consumer.BatchSize)
 	consumer.pullerQuit = make(chan struct{}, 1)
 
@@ -126,7 +128,6 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 		return nil, err
 	}
 
-	consumer.startPuller(time.Duration(opts.PullIntervalMillis) * time.Millisecond)
 	return &consumer, err
 }
 
@@ -134,26 +135,24 @@ func (s *Station) CreateConsumer(name string, opts ...ConsumerOpt) (*Consumer, e
 	return s.conn.CreateConsumer(s.Name, name, opts...)
 }
 
-func fetchFromSubscription(subscription *nats.Subscription, batchSize int, outChan chan *Msg) {
-	msgs, err := subscription.Fetch(batchSize)
-	if err != nil {
-		outChan <- &Msg{msg: nil, err: err}
-	}
+type ConsumeHandler func([]*Msg, error)
 
-	for _, msg := range msgs {
-		outChan <- &Msg{msg: msg, err: nil}
-	}
-}
-
-func (consumer *Consumer) startPuller(pullInterval time.Duration) {
+func (c *Consumer) Consume(pullInterval time.Duration, handlerFunc ConsumeHandler) {
 	ticker := time.NewTicker(pullInterval)
+
+	if c.firstFetch {
+		c.firstFetch = false
+		msgs, err := fetchSubscription(c.subscription, c.BatchSize)
+		go handlerFunc(msgs, err)
+	}
+
 	go func() {
-		fetchFromSubscription(consumer.subscription, consumer.BatchSize, consumer.puller)
 		for {
 			select {
 			case <-ticker.C:
-				fetchFromSubscription(consumer.subscription, consumer.BatchSize, consumer.puller)
-			case <-consumer.pullerQuit:
+				msgs, err := fetchSubscription(c.subscription, c.BatchSize)
+				go handlerFunc(msgs, err)
+			case <-c.pullerQuit:
 				ticker.Stop()
 				return
 			}
@@ -161,29 +160,50 @@ func (consumer *Consumer) startPuller(pullInterval time.Duration) {
 	}()
 }
 
-func (c *Consumer) Fetch() ([]*Msg, error) {
-	timeout := time.After(c.BatchMaxTimeToWait)
+func (c *Consumer) StopConsume() {
+	c.pullerQuit <- struct{}{}
+}
 
-	msgs := make([]*Msg, 0, c.BatchSize)
-	select {
-	case msg := <-c.puller:
-		for i := 0; i < c.BatchSize-1; i++ {
-			if msg.err != nil {
-				return []*Msg{}, msg.err
-			}
-			msgs = append(msgs, msg)
-			if len(c.puller) == 0 {
-				return msgs, nil
-			}
-			msg = <-c.puller
-		}
-	case <-timeout:
-		if len(msgs) == 0 {
-			return nil, errors.New("Nothing to fetch")
-		}
-		return nil, errors.New("Fetch timed out")
+func fetchSubscription(subscription *nats.Subscription, batchSize int) ([]*Msg, error) {
+	msgs, err := subscription.Fetch(batchSize)
+	if err != nil {
+		return nil, err
 	}
-	return msgs, nil
+
+	wrappedMsgs := make([]*Msg, 0, batchSize)
+
+	for _, msg := range msgs {
+		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg})
+	}
+	return wrappedMsgs, nil
+}
+
+type FetchResult struct {
+	msgs []*Msg
+	err  error
+}
+
+func fetchSubscriprionWithTimeout(subscription *nats.Subscription, batchSize int, timeoutDuration time.Duration) ([]*Msg, error) {
+	out := make(chan FetchResult, 1)
+	go func() {
+		msgs, err := fetchSubscription(subscription, batchSize)
+		out <- FetchResult{msgs: msgs, err: err}
+	}()
+	select {
+	case <-time.After(timeoutDuration):
+		return nil, errors.New("Fetch timed out")
+	case fetchRes := <-out:
+		return fetchRes.msgs, fetchRes.err
+
+	}
+}
+
+func (c *Consumer) Fetch() ([]*Msg, error) {
+	if c.firstFetch {
+		c.firstFetch = false
+	}
+
+	return fetchSubscriprionWithTimeout(c.subscription, c.BatchSize, c.BatchMaxTimeToWait)
 }
 
 func (c *Consumer) Destroy() error {

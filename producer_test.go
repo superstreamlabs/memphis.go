@@ -2,6 +2,7 @@ package memphis
 
 import (
 	"testing"
+	"time"
 )
 
 func TestCreateProducer(t *testing.T) {
@@ -110,7 +111,7 @@ func TestRemoveProducer(t *testing.T) {
 	}
 }
 
-func TestConsume(t *testing.T) {
+func TestFetch(t *testing.T) {
 	c, err := Connect("localhost", "root", "memphis")
 	if err != nil {
 		t.Error(err)
@@ -156,6 +157,56 @@ func TestConsume(t *testing.T) {
 	}
 
 	msgs[0].Ack()
+
+	err = consumer.Destroy()
+	if err != nil {
+		t.Error(err)
+	}
+}
+func TestConsume(t *testing.T) {
+	c, err := Connect("localhost", "root", "memphis")
+	if err != nil {
+		t.Error(err)
+	}
+	defer c.Close()
+
+	f, err := c.CreateFactory("factory_name_1")
+	if err != nil {
+		t.Error(err)
+	}
+	defer f.Destroy()
+
+	s, err := f.CreateStation("station_name_1")
+	if err != nil {
+		t.Error(err)
+	}
+
+	p, err := s.CreateProducer("producer_name_a")
+	if err != nil {
+		t.Error(err)
+	}
+
+	testMessage := "Hey There!"
+	err = p.Produce([]byte(testMessage))
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	consumer, err := s.CreateConsumer("consumer_a", ConsumerGroup(""))
+	if err != nil {
+		t.Error(err)
+	}
+
+	handler := func(msgs []*Msg, err error) {
+		res := string(msgs[0].Data())
+		if res != testMessage {
+			t.Error("Did not receive exact produced message")
+		}
+		msgs[0].Ack()
+	}
+
+	consumer.Consume(time.Second, handler)
 
 	err = consumer.Destroy()
 	if err != nil {
