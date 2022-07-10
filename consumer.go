@@ -64,7 +64,6 @@ type ConsumerOpts struct {
 
 func GetDefaultConsumerOptions() ConsumerOpts {
 	return ConsumerOpts{
-		ConsumerGroup:            "",
 		PullIntervalMillis:       1000,
 		BatchSize:                10,
 		BatchMaxTimeToWaitMillis: 5000,
@@ -80,6 +79,7 @@ func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...Consumer
 
 	defaultOpts.Name = consumerName
 	defaultOpts.StationName = stationName
+	defaultOpts.ConsumerGroup = consumerName
 
 	for _, opt := range opts {
 		if opt != nil {
