@@ -66,7 +66,7 @@ type Conn struct {
 	refreshTokenWait time.Duration
 	pingWait         time.Duration
 	brokerConn       *nats.Conn
-	js               nats.JetStream
+	js               nats.JetStreamContext
 }
 
 func GetDefaultOptions() Options {

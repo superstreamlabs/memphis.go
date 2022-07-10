@@ -5,6 +5,11 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	log "github.com/sirupsen/logrus"
+)
+
+const (
+	consumerDefaultPingInterval = 30 * time.Second
 )
 
 type Consumer struct {
@@ -18,10 +23,12 @@ type Consumer struct {
 	conn               *Conn
 	stationName        string
 	subscription       *nats.Subscription
+	pingInterval       time.Duration
+	subscriptionActive bool
 	firstFetch         bool
 	consumeActive      bool
-	puller             chan *Msg
-	pullerQuit         chan struct{}
+	consumeQuit        chan struct{}
+	pingQuit           chan struct{}
 }
 
 type Msg struct {
@@ -109,8 +116,10 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 	}
 
 	consumer.firstFetch = true
-	consumer.puller = make(chan *Msg, consumer.BatchSize)
-	consumer.pullerQuit = make(chan struct{}, 1)
+	consumer.consumeQuit = make(chan struct{}, 1)
+	consumer.pingQuit = make(chan struct{}, 1)
+
+	consumer.pingInterval = consumerDefaultPingInterval
 
 	subj := consumer.stationName + ".final"
 
@@ -124,11 +133,38 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 		return nil, err
 	}
 
+	consumer.subscriptionActive = true
+
+	go consumer.pingConsumer()
+
 	return &consumer, err
 }
 
 func (s *Station) CreateConsumer(name string, opts ...ConsumerOpt) (*Consumer, error) {
 	return s.conn.CreateConsumer(s.Name, name, opts...)
+}
+
+func (c *Consumer) pingConsumer() {
+	ticker := time.NewTicker(c.pingInterval)
+	if !c.subscriptionActive {
+		log.Fatal("started ping for inactive subscription")
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			_, err := c.subscription.ConsumerInfo()
+			if err != nil {
+				c.subscriptionActive = false
+				log.Error("Station unreachable")
+				return
+			}
+		case <-c.pingQuit:
+			ticker.Stop()
+			return
+		}
+	}
+
 }
 
 type ConsumeHandler func([]*Msg, error)
@@ -138,7 +174,7 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) {
 
 	if c.firstFetch {
 		c.firstFetch = false
-		msgs, err := fetchSubscription(c.subscription, c.BatchSize)
+		msgs, err := c.fetchSubscription()
 		go handlerFunc(msgs, err)
 	}
 
@@ -146,21 +182,33 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) {
 		for {
 			select {
 			case <-ticker.C:
-				msgs, err := fetchSubscription(c.subscription, c.BatchSize)
+				msgs, err := c.fetchSubscription()
 				go handlerFunc(msgs, err)
-			case <-c.pullerQuit:
+			case <-c.consumeQuit:
 				ticker.Stop()
 				return
 			}
 		}
 	}()
+	c.consumeActive = true
 }
 
 func (c *Consumer) StopConsume() {
-	c.pullerQuit <- struct{}{}
+	if !c.consumeActive {
+		log.Error("Consume is inactive")
+		return
+	}
+	c.consumeQuit <- struct{}{}
+	c.consumeActive = false
 }
 
-func fetchSubscription(subscription *nats.Subscription, batchSize int) ([]*Msg, error) {
+func (c *Consumer) fetchSubscription() ([]*Msg, error) {
+	if !c.subscriptionActive {
+		return nil, errors.New("Station unreachable")
+	}
+
+	subscription := c.subscription
+	batchSize := c.BatchSize
 	msgs, err := subscription.Fetch(batchSize)
 	if err != nil {
 		return nil, err
@@ -179,10 +227,11 @@ type FetchResult struct {
 	err  error
 }
 
-func fetchSubscriprionWithTimeout(subscription *nats.Subscription, batchSize int, timeoutDuration time.Duration) ([]*Msg, error) {
+func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
+	timeoutDuration := c.BatchMaxTimeToWait
 	out := make(chan FetchResult, 1)
 	go func() {
-		msgs, err := fetchSubscription(subscription, batchSize)
+		msgs, err := c.fetchSubscription()
 		out <- FetchResult{msgs: msgs, err: err}
 	}()
 	select {
@@ -199,11 +248,17 @@ func (c *Consumer) Fetch() ([]*Msg, error) {
 		c.firstFetch = false
 	}
 
-	return fetchSubscriprionWithTimeout(c.subscription, c.BatchSize, c.BatchMaxTimeToWait)
+	return c.fetchSubscriprionWithTimeout()
 }
 
 func (c *Consumer) Destroy() error {
-	c.pullerQuit <- struct{}{}
+	if c.consumeActive {
+		c.StopConsume()
+	}
+	if c.subscriptionActive {
+		c.pingQuit <- struct{}{}
+	}
+
 	return c.conn.destroy(c)
 }
 
