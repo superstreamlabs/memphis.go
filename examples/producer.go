@@ -8,13 +8,13 @@ import (
 )
 
 func main() {
-	c, err := memphis.Connect("localhost", "root", "memphis")
+	c, err := memphis.Connect("<memphis-host>", "<application type username>", "<broker-token>")
 	if err != nil {
 		os.Exit(1)
 	}
 	defer c.Close()
 
-	p, err := c.CreateProducer("station_1", "producer_name_a")
+	p, err := c.CreateProducer("<station-name>", "<producer-name>")
 	err = p.Produce([]byte("You have a message!"))
 
 	if err != nil {
