@@ -114,12 +114,9 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 
 	ackWait := time.Duration(consumer.MaxAckTimeMillis) * time.Millisecond
 	subj := consumer.stationName + ".final"
-	durableName := consumer.ConsumerGroup
-	if durableName == "" {
-		durableName = consumer.Name
-	}
 
-	consumer.subscription, err = c.brokerSubscribe(subj, durableName,
+	consumer.subscription, err = c.brokerSubscribe(subj,
+		consumer.ConsumerGroup,
 		nats.ManualAck(),
 		nats.AckWait(ackWait),
 		nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
@@ -137,7 +134,8 @@ func (s *Station) CreateConsumer(name string, opts ...ConsumerOpt) (*Consumer, e
 
 type ConsumeHandler func([]*Msg, error)
 
-func (c *Consumer) Consume(pullInterval time.Duration, handlerFunc ConsumeHandler) {
+func (c *Consumer) Consume(handlerFunc ConsumeHandler) {
+	pullInterval := time.Millisecond * time.Duration(c.PullIntervalMillis)
 	ticker := time.NewTicker(pullInterval)
 
 	if c.firstFetch {

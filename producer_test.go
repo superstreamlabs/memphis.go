@@ -2,7 +2,6 @@ package memphis
 
 import (
 	"testing"
-	"time"
 )
 
 func TestCreateProducer(t *testing.T) {
@@ -141,7 +140,7 @@ func TestFetch(t *testing.T) {
 		t.Error(err)
 	}
 
-	consumer, err := s.CreateConsumer("consumer_a", ConsumerGroup(""))
+	consumer, err := s.CreateConsumer("consumer_a")
 	if err != nil {
 		t.Error(err)
 	}
@@ -193,7 +192,7 @@ func TestConsume(t *testing.T) {
 		t.Error(err)
 	}
 
-	consumer, err := s.CreateConsumer("consumer_a", ConsumerGroup(""))
+	consumer, err := s.CreateConsumer("consumer_a", PullIntervalMillis(1000))
 	if err != nil {
 		t.Error(err)
 	}
@@ -206,7 +205,7 @@ func TestConsume(t *testing.T) {
 		msgs[0].Ack()
 	}
 
-	consumer.Consume(time.Second, handler)
+	consumer.Consume(handler)
 
 	err = consumer.Destroy()
 	if err != nil {
