@@ -13,8 +13,9 @@ import (
 	"sync"
 	"time"
 
+	"log"
+
 	"github.com/nats-io/nats.go"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -199,7 +200,7 @@ func listenForConnChanges(c *Conn) {
 				}
 				err := c.doReconnect()
 				if err != nil {
-					log.Error("reconnection failed")
+					log.Print("reconnection failed")
 					c.closeExceptConnListener()
 					dataConnected = false
 				}
@@ -207,7 +208,7 @@ func listenForConnChanges(c *Conn) {
 
 		case dataConnected = <-cs.dataConnected:
 			if !dataConnected {
-				log.Warning("broker conn disconnected")
+				log.Print("broker conn disconnected")
 				c.closeExceptConnListener()
 				tcpConnected = false
 			}
@@ -255,8 +256,6 @@ func (c *Conn) dial(resp *connectResp) error {
 func (c *Conn) startTcpConn(firstAttempt bool) error {
 	opts := &c.opts
 
-	log.Debug("tcp connection attempt started")
-
 	connAttempts := opts.MaxReconnect
 	if firstAttempt {
 		connAttempts += 1
@@ -267,7 +266,8 @@ func (c *Conn) startTcpConn(firstAttempt bool) error {
 	reconnectWaitChan := make(chan struct{}, 1)
 	for i := 0; i < connAttempts; i++ {
 		go func() {
-			<-time.After(c.opts.ReconnectInterval)
+			// <-time.After(c.opts.ReconnectInterval)
+			<-time.After(5 * time.Second)
 			reconnectWaitChan <- struct{}{}
 		}()
 		err = c.dial(&resp)
@@ -281,8 +281,6 @@ func (c *Conn) startTcpConn(firstAttempt bool) error {
 	if err != nil {
 		return err
 	}
-
-	log.Debug("tcp connection attempt finished successfully")
 
 	c.ConnId = resp.ConnId
 	c.accessToken = resp.AccessToken
@@ -316,14 +314,12 @@ func (c *Conn) checkTcpConnection() {
 	buff := make([]byte, 1)
 	go func() {
 		for {
-			log.Debug("tcp connection check iteration")
-
 			select {
 			case <-ticker.C:
 				c.tcpConnLock.Lock()
 
 				if err := c.tcpConn.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
-					log.Error("failed setting deadline for check read, connection monitoring may not work")
+					log.Print("failed setting deadline for check read, connection monitoring may not work")
 				}
 
 				_, err := c.tcpConn.Read(buff)
@@ -332,7 +328,7 @@ func (c *Conn) checkTcpConnection() {
 				}
 
 				if err := c.tcpConn.SetReadDeadline(time.Time{}); err != nil {
-					log.Error("failed setting deadline for check read, connection monitoring may not work")
+					log.Print("failed setting deadline for check read, connection monitoring may not work")
 				}
 				c.tcpConnLock.Unlock()
 			case <-c.state.connectCheckQuitChan:
@@ -420,14 +416,14 @@ func (c *Conn) refreshToken() {
 			case <-time.After(wait):
 				b, err := c.tcpRequestResponse(refreshReq)
 				if err != nil {
-					log.Error("Failed requesting refresh token")
+					log.Print("Failed requesting refresh token")
 					return
 				}
 
 				var resp refreshTokenResp
 				err = json.Unmarshal(b, &resp)
 				if err != nil {
-					log.Error("Failed parsing refresh token response")
+					log.Print("Failed parsing refresh token response")
 					return
 				}
 
@@ -460,14 +456,14 @@ func (c *Conn) sendPing() {
 			case <-time.After(wait):
 				b, err := c.tcpRequestResponse(pingReq)
 				if err != nil {
-					log.Error("Failed requesting ping")
+					log.Print("Failed requesting ping")
 					return
 				}
 
 				var resp refreshTokenResp
 				err = json.Unmarshal(b, &resp)
 				if err != nil {
-					log.Error("Failed parsing ping response")
+					log.Print("Failed parsing ping response")
 					return
 				}
 				wait = time.Duration(resp.AccessTokenExpiry) * time.Millisecond

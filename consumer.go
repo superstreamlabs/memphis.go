@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	log "github.com/sirupsen/logrus"
+	"log"
 )
 
 const (
@@ -166,7 +166,7 @@ func (c *Consumer) pingConsumer() {
 			_, err := c.subscription.ConsumerInfo()
 			if err != nil {
 				c.subscriptionActive = false
-				log.Error("Station unreachable")
+				log.Print("Station unreachable")
 				return
 			}
 		case <-c.pingQuit:
@@ -209,7 +209,7 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) {
 // StopConsume - stops the continuous consume operation.
 func (c *Consumer) StopConsume() {
 	if !c.consumeActive {
-		log.Error("Consume is inactive")
+		log.Print("consume is inactive")
 		return
 	}
 	c.consumeQuit <- struct{}{}
@@ -218,7 +218,7 @@ func (c *Consumer) StopConsume() {
 
 func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 	if !c.subscriptionActive {
-		return nil, errors.New("Station unreachable")
+		return nil, errors.New("station unreachable")
 	}
 
 	subscription := c.subscription
@@ -251,7 +251,7 @@ func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
 	}()
 	select {
 	case <-time.After(timeoutDuration):
-		return nil, errors.New("Fetch timed out")
+		return nil, errors.New("fetch timed out")
 	case fetchRes := <-out:
 		return fetchRes.msgs, fetchRes.err
 
