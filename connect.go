@@ -172,6 +172,13 @@ func (opts Options) Connect() (*Conn, error) {
 	return &c, nil
 }
 
+func (c *Conn) doReconnect() error {
+	c.tcpConn.Close()
+	firstAttempt := false
+	err := c.startTcpConn(firstAttempt)
+	return err
+}
+
 func listenForConnChanges(c *Conn) {
 	cs := &c.state
 	tcpConnected, dataConnected, timedOpsStarted := false, false, false
@@ -190,9 +197,7 @@ func listenForConnChanges(c *Conn) {
 				if timedOpsStarted {
 					c.stopTimedOps()
 				}
-				c.tcpConn.Close()
-				firstAttempt := false
-				err := c.startTcpConn(firstAttempt)
+				err := c.doReconnect()
 				if err != nil {
 					log.Error("reconnection failed")
 					c.closeExceptConnListener()
@@ -212,9 +217,43 @@ func listenForConnChanges(c *Conn) {
 	}
 }
 
-func (c *Conn) startTcpConn(firstAttempt bool) error {
+func (c *Conn) dial(resp *connectResp) error {
 	opts := &c.opts
 	url := opts.Host + ":" + strconv.Itoa(opts.TcpPort)
+	var err error
+
+	c.tcpConn, err = net.Dial("tcp", url)
+	if err != nil {
+		return err
+	}
+
+	connectMsg, err := json.Marshal(connectReq{
+		Username:  opts.Username,
+		ConnToken: opts.ConnectionToken,
+		ConnId:    "",
+	})
+	if err != nil {
+		c.tcpConn.Close()
+		return err
+	}
+
+	b, err := c.tcpRequestResponse(connectMsg)
+	if err != nil {
+		c.tcpConn.Close()
+		return err
+	}
+
+	err = json.Unmarshal(b, &resp)
+	if err != nil {
+		c.tcpConn.Close()
+		return err
+	}
+
+	return nil
+}
+
+func (c *Conn) startTcpConn(firstAttempt bool) error {
+	opts := &c.opts
 
 	log.Debug("tcp connection attempt started")
 
@@ -225,33 +264,18 @@ func (c *Conn) startTcpConn(firstAttempt bool) error {
 
 	var err error
 	var resp connectResp
+	reconnectWaitChan := make(chan struct{}, 1)
 	for i := 0; i < connAttempts; i++ {
-		c.tcpConn, err = net.Dial("tcp", url)
+		go func() {
+			<-time.After(c.opts.ReconnectInterval)
+			reconnectWaitChan <- struct{}{}
+		}()
+		err = c.dial(&resp)
 		if err != nil {
+			<-reconnectWaitChan
 			continue
 		}
-
-		connectMsg, err := json.Marshal(connectReq{
-			Username:  opts.Username,
-			ConnToken: opts.ConnectionToken,
-			ConnId:    "",
-		})
-		if err != nil {
-			c.tcpConn.Close()
-			continue
-		}
-
-		b, err := c.tcpRequestResponse(connectMsg)
-		if err != nil {
-			c.tcpConn.Close()
-			continue
-		}
-
-		err = json.Unmarshal(b, &resp)
-		if err != nil {
-			c.tcpConn.Close()
-			continue
-		}
+		break
 	}
 
 	if err != nil {
