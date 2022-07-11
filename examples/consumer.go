@@ -1,29 +1,40 @@
-const memphis = require("memphis-dev");
+package main
 
-(async function () {
-    try {
-        await memphis.connect({
-            host: "<memphis-host>",
-            username: "<application type username>",
-            connectionToken: "<broker-token>"
-        });
+import (
+	"fmt"
+	"os"
+	"time"
 
-        const consumer = await memphis.consumer({
-            stationName: "<station-name>",
-            consumerName: "<consumer-name>",
-            consumerGroup: ""
-        });
+	"github.com/memphisdev/memphis.go"
+)
 
-        consumer.on("message", message => {
-            console.log(message.getData().toString());
-            message.ack();
-        });
+func main() {
+	conn, err := memphis.Connect("<memphis-host>", "<application type username>", "<broker-token>")
+	if err != nil {
+		os.Exit(1)
+	}
+	defer conn.Close()
 
-        consumer.on("error", error => {
-            console.log(error);
-        });
-    } catch (ex) {
-        console.log(ex);
-        memphis.close();
-    }
-}());
+	consumer, err := conn.CreateConsumer("<station-name>", "<consumer-name>", memphis.PullInterval(15*time.Second))
+
+	if err != nil {
+		fmt.Printf("Consumer creation failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	handler := func(msgs []*memphis.Msg, err error) {
+		if err != nil {
+			fmt.Printf("Fetch failed: %v\n", err)
+			return
+		}
+
+		for _, msg := range msgs {
+			fmt.Println(string(msg.Data()))
+			msg.Ack()
+		}
+	}
+
+	consumer.Consume(handler)
+
+	time.Sleep(30 * time.Second)
+}

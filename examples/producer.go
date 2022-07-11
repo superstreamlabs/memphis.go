@@ -1,33 +1,24 @@
-const memphis = require("memphis-dev");
+package main
 
-(async function () {
-    try {
-        await memphis.connect({
-            host: "<memphis-host>",
-            username: "<application type username>",
-            connectionToken: "<broker-token>"
-        });
+import (
+	"fmt"
+	"os"
 
-        const producer = await memphis.producer({
-            stationName: "<station-name>",
-            producerName: "<producer-name>"
-        });
+	"github.com/memphisdev/memphis.go"
+)
 
-        const promises = [];
-        for (let index = 0; index < 100; index++) {
-            promises.push(
-                producer.produce({
-                    message: Buffer.from(`Message #${index}: Hello world`)
-                })
-            );
-            console.log("Message sent");
-        }
+func main() {
+	c, err := memphis.Connect("<memphis-host>", "<application type username>", "<broker-token>")
+	if err != nil {
+		os.Exit(1)
+	}
+	defer c.Close()
 
-        await Promise.all(promises);
-        console.log("All messages sent");
-        memphis.close();
-    } catch (ex) {
-        console.log(ex);
-        memphis.close();
-    }
-})();
+	p, err := c.CreateProducer("<station-name>", "<producer-name>")
+	err = p.Produce([]byte("You have a message!"))
+
+	if err != nil {
+		fmt.Errorf("Produce failed: %v", err)
+		os.Exit(1)
+	}
+}
