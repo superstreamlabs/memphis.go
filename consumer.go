@@ -62,7 +62,7 @@ type removeConsumerReq struct {
 	StationName string `json:"station_name"`
 }
 
-// ProduceOpts - configuration options for a consumer.
+// ConsumerOpts - configuration options for a consumer.
 type ConsumerOpts struct {
 	Name               string
 	StationName        string
@@ -149,7 +149,7 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 	return &consumer, err
 }
 
-// Station.CreateProducer - creates a producer attached to this station.
+// Station.CreateConsumer - creates a producer attached to this station.
 func (s *Station) CreateConsumer(name string, opts ...ConsumerOpt) (*Consumer, error) {
 	return s.conn.CreateConsumer(s.Name, name, opts...)
 }
