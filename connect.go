@@ -17,6 +17,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	ConnectDefaultTcpCheckInterval = 2 * time.Second
+)
+
 // Option is a function on the options for a connection.
 type Option func(*Options) error
 
@@ -38,14 +42,13 @@ type queryReq struct {
 }
 
 type ConnState struct {
-	reconnectAttemptsLeft int
-	tcpConnected          chan bool
-	dataConnected         chan bool
-	queryConnection       chan queryReq
-	connectCheckQuitChan  chan struct{}
-	pingQuitChan          chan struct{}
-	refreshTokenQuitChan  chan struct{}
-	die                   chan struct{}
+	tcpConnected         chan bool
+	dataConnected        chan bool
+	queryConnection      chan queryReq
+	connectCheckQuitChan chan struct{}
+	pingQuitChan         chan struct{}
+	refreshTokenQuitChan chan struct{}
+	die                  chan struct{}
 }
 
 func (c *Conn) IsConnected() bool {
@@ -132,17 +135,16 @@ func normalizeHost(host string) string {
 }
 
 func (opts Options) Connect() (*Conn, error) {
-	c := Conn{
-		opts: opts,
-	}
-
 	if opts.MaxReconnect > 9 {
 		opts.MaxReconnect = 9
 	}
-	c.state.reconnectAttemptsLeft = opts.MaxReconnect
 
 	if !opts.Reconnect {
-		c.state.reconnectAttemptsLeft = 0
+		opts.MaxReconnect = 0
+	}
+
+	c := Conn{
+		opts: opts,
 	}
 
 	c.state.tcpConnected = make(chan bool)
@@ -155,14 +157,12 @@ func (opts Options) Connect() (*Conn, error) {
 
 	go listenForConnChanges(&c)
 
-	var err error
-	err = c.setupTcpConn()
-	if err != nil {
+	firstAttempt := true
+	if err := c.startTcpConn(firstAttempt); err != nil {
 		return nil, err
 	}
 
-	err = c.setupDataConn()
-	if err != nil {
+	if err := c.startDataConn(); err != nil {
 		return nil, err
 	}
 
@@ -171,7 +171,7 @@ func (opts Options) Connect() (*Conn, error) {
 
 func listenForConnChanges(c *Conn) {
 	cs := &c.state
-	tcpConnected, dataConnected := false, false
+	tcpConnected, dataConnected, timedOpsStarted := false, false, false
 	for {
 		select {
 		case req := <-cs.queryConnection:
@@ -179,23 +179,29 @@ func listenForConnChanges(c *Conn) {
 
 		case tcpConnected = <-cs.tcpConnected:
 			if tcpConnected {
-				go c.checkTcpConnection()
+				c.checkTcpConnection()
+				c.refreshToken()
+				c.sendPing()
+				timedOpsStarted = true
 			} else {
-				log.Warning("TCP conn disconnected")
-				c.closeTcpConn()
-				if cs.reconnectAttemptsLeft > 0 {
-					log.Warning("reconnection attempt for TCP conn")
-					cs.reconnectAttemptsLeft--
-					go c.setupTcpConn()
-				} else {
-					go c.Close()
+				if timedOpsStarted {
+					c.stopTimedOps()
+				}
+				c.tcpConn.Close()
+				firstAttempt := false
+				err := c.startTcpConn(firstAttempt)
+				if err != nil {
+					log.Error("reconnection failed")
+					c.closeExceptConnListener()
+					dataConnected = false
 				}
 			}
 
 		case dataConnected = <-cs.dataConnected:
 			if !dataConnected {
-				log.Warning("Broker conn disconnected")
-				go c.Close()
+				log.Warning("broker conn disconnected")
+				c.closeExceptConnListener()
+				tcpConnected = false
 			}
 		case <-cs.die:
 			return
@@ -203,43 +209,59 @@ func listenForConnChanges(c *Conn) {
 	}
 }
 
-func (c *Conn) setupTcpConn() error {
+func (c *Conn) startTcpConn(firstAttempt bool) error {
 	opts := &c.opts
 	url := opts.Host + ":" + strconv.Itoa(opts.TcpPort)
 
-	log.Debug("connecting TCP")
+	log.Debug("tcp connection attempt started")
+
+	connAttempts := opts.MaxReconnect
+	if firstAttempt {
+		connAttempts += 1
+	}
 
 	var err error
-	c.tcpConn, err = net.Dial("tcp", url)
-	if err != nil {
-		return err
-	}
-
-	connectMsg, err := json.Marshal(connectReq{
-		Username:  opts.Username,
-		ConnToken: opts.ConnectionToken,
-		ConnId:    "",
-	})
-	if err != nil {
-		return err
-	}
-
-	b, err := c.tcpRequestResponse(connectMsg)
-
 	var resp connectResp
-	err = json.Unmarshal(b, &resp)
+	for i := 0; i < connAttempts; i++ {
+		c.tcpConn, err = net.Dial("tcp", url)
+		if err != nil {
+			continue
+		}
+
+		connectMsg, err := json.Marshal(connectReq{
+			Username:  opts.Username,
+			ConnToken: opts.ConnectionToken,
+			ConnId:    "",
+		})
+		if err != nil {
+			c.tcpConn.Close()
+			continue
+		}
+
+		b, err := c.tcpRequestResponse(connectMsg)
+		if err != nil {
+			c.tcpConn.Close()
+			continue
+		}
+
+		err = json.Unmarshal(b, &resp)
+		if err != nil {
+			c.tcpConn.Close()
+			continue
+		}
+	}
+
 	if err != nil {
 		return err
 	}
+
+	log.Debug("tcp connection attempt finished successfully")
 
 	c.ConnId = resp.ConnId
 	c.accessToken = resp.AccessToken
 	c.refreshTokenWait = time.Duration(resp.AccessTokenExpiry) * time.Millisecond
 	c.pingWait = time.Duration(resp.PingInterval) * time.Millisecond
-	refreshToken(c)
-	sendPing(c)
 
-	log.Debug("Finished TCP conn setup")
 	c.state.tcpConnected <- true
 	return nil
 }
@@ -262,32 +284,39 @@ func (c *Conn) tcpRequestResponse(req []byte) ([]byte, error) {
 }
 
 func (c *Conn) checkTcpConnection() {
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(ConnectDefaultTcpCheckInterval)
 
 	buff := make([]byte, 1)
-	for {
-		log.Debug("Connection check iteration")
+	go func() {
+		for {
+			log.Debug("tcp connection check iteration")
 
-		select {
-		case <-ticker.C:
-			c.tcpConnLock.Lock()
+			select {
+			case <-ticker.C:
+				c.tcpConnLock.Lock()
 
-			c.tcpConn.SetReadDeadline(time.Now().Add(1 * time.Second))
+				if err := c.tcpConn.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
+					log.Error("failed setting deadline for check read, connection monitoring may not work")
+				}
 
-			_, err := c.tcpConn.Read(buff)
-			if err == io.EOF {
-				c.state.tcpConnected <- false
+				_, err := c.tcpConn.Read(buff)
+				if err == io.EOF {
+					c.state.tcpConnected <- false
+				}
+
+				if err := c.tcpConn.SetReadDeadline(time.Time{}); err != nil {
+					log.Error("failed setting deadline for check read, connection monitoring may not work")
+				}
+				c.tcpConnLock.Unlock()
+			case <-c.state.connectCheckQuitChan:
+				ticker.Stop()
+				return
 			}
-			c.tcpConn.SetReadDeadline(time.Time{})
-			c.tcpConnLock.Unlock()
-		case <-c.state.connectCheckQuitChan:
-			ticker.Stop()
-			return
 		}
-	}
+	}()
 }
 
-func (c *Conn) setupDataConn() error {
+func (c *Conn) startDataConn() error {
 	opts := &c.opts
 
 	var err error
@@ -304,13 +333,11 @@ func (c *Conn) setupDataConn() error {
 	c.brokerConn, err = natsOpts.Connect()
 
 	if err != nil {
-		log.Error(err.Error())
 		return err
 	}
 	c.js, err = c.brokerConn.JetStream()
 
 	if err != nil {
-		log.Error(err.Error())
 		c.brokerConn.Close()
 		return err
 	}
@@ -325,7 +352,7 @@ func (c *Conn) createBrokerDisconnectionHandler() nats.ConnErrHandler {
 	}
 }
 
-func (c *Conn) closeTcpConn() {
+func (c *Conn) stopTimedOps() {
 	if c.pingWait != 0 {
 		c.state.pingQuitChan <- struct{}{}
 	}
@@ -335,17 +362,19 @@ func (c *Conn) closeTcpConn() {
 	}
 
 	c.state.connectCheckQuitChan <- struct{}{}
-
-	c.tcpConn.Close()
 }
 
 func (c *Conn) Close() {
-	c.closeTcpConn()
-	c.brokerConn.Close()
+	c.closeExceptConnListener()
 	c.state.die <- struct{}{}
 }
 
-func refreshToken(c *Conn) {
+func (c *Conn) closeExceptConnListener() {
+	c.tcpConn.Close()
+	c.brokerConn.Close()
+}
+
+func (c *Conn) refreshToken() {
 	if c.refreshTokenWait == 0 {
 		return
 	}
@@ -385,7 +414,7 @@ func refreshToken(c *Conn) {
 	}()
 }
 
-func sendPing(c *Conn) {
+func (c *Conn) sendPing() {
 	if c.pingWait == 0 {
 		return
 	}
@@ -448,6 +477,9 @@ func (c *Conn) mgmtRequest(apiMethod string, apiPath string, reqStruct any) erro
 	}
 
 	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 { //HTTP success status code
 		var errorResp errorResp
