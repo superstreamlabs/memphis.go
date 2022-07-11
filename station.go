@@ -2,6 +2,7 @@ package memphis
 
 import "time"
 
+// Station - memphis station object.
 type Station struct {
 	Name           string
 	RetentionType  RetentionType
@@ -14,6 +15,7 @@ type Station struct {
 	conn           *Conn
 }
 
+// RetentionType - station's message retention type
 type RetentionType int
 
 const (
@@ -26,6 +28,7 @@ func (r RetentionType) String() string {
 	return [...]string{"message_age_sec", "messages", "bytes"}[r]
 }
 
+// StorageType - station's message storage type
 type StorageType int
 
 const (
@@ -52,6 +55,7 @@ type removeStationReq struct {
 	Name string `json:"station_name"`
 }
 
+// StationsOpts - configuration options for a station.
 type StationOpts struct {
 	Name          string
 	FactoryName   string
@@ -63,8 +67,10 @@ type StationOpts struct {
 	DedupWindow   time.Duration
 }
 
+// StationOpt - a function on the options for a station.
 type StationOpt func(*StationOpts) error
 
+// GetStationDefaultOptions - returns default configuration options for the station.
 func GetStationDefaultOptions() StationOpts {
 	return StationOpts{
 		RetentionType: MaxMessageAgeSeconds,
@@ -144,6 +150,7 @@ func (s *Station) getDestructionReq() any {
 	return removeStationReq{Name: s.Name}
 }
 
+// Name - station's name
 func Name(name string) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.Name = name
@@ -151,6 +158,7 @@ func Name(name string) StationOpt {
 	}
 }
 
+// FactoryName - factory name to link the station with.
 func FactoryName(factoryName string) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.FactoryName = factoryName
@@ -158,6 +166,7 @@ func FactoryName(factoryName string) StationOpt {
 	}
 }
 
+// RetentionTypeOpt - retention type, default is MaxMessageAgeSeconds.
 func RetentionTypeOpt(retentionType RetentionType) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.RetentionType = retentionType
@@ -165,6 +174,7 @@ func RetentionTypeOpt(retentionType RetentionType) StationOpt {
 	}
 }
 
+// RetentionVal -  number which represents the retention based on the retentionType, default is 604800.
 func RetentionVal(retentionVal int) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.RetentionVal = retentionVal
@@ -172,6 +182,7 @@ func RetentionVal(retentionVal int) StationOpt {
 	}
 }
 
+// StorageTypeOpt - persistance storage for messages of the station, default is storageTypes.FILE.
 func StorageTypeOpt(storageType StorageType) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.StorageType = storageType
@@ -179,12 +190,14 @@ func StorageTypeOpt(storageType StorageType) StationOpt {
 	}
 }
 
+// Replicas - number of replicas for the messages of the data, default is 1.
 func Replicas(replicas int) StationOpt {
 	return func(opts *StationOpts) error {
 		return nil
 	}
 }
 
+// EnableDedup - whether to allow dedup mecanism, dedup happens based on message ID, default is false.
 func EnableDedup() StationOpt {
 	return func(opts *StationOpts) error {
 		opts.DedupEnabled = true
@@ -192,6 +205,7 @@ func EnableDedup() StationOpt {
 	}
 }
 
+// DedupWindow - time frame in which dedup track messages, default is 0.
 func DedupWindow(dedupWindow time.Duration) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.DedupWindow = dedupWindow

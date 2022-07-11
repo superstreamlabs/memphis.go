@@ -12,6 +12,7 @@ const (
 	consumerDefaultPingInterval = 30 * time.Second
 )
 
+// Consumer - memphis consumer object.
 type Consumer struct {
 	Name               string
 	ConsumerGroup      string
@@ -31,14 +32,17 @@ type Consumer struct {
 	pingQuit           chan struct{}
 }
 
+// Msg - a received message, can be acked.
 type Msg struct {
 	msg *nats.Msg
 }
 
+// Msg.Data - get message's data.
 func (m *Msg) Data() []byte {
 	return m.msg.Data
 }
 
+// Msg.Ack - ack the message.
 func (m *Msg) Ack() error {
 	return m.msg.Ack()
 }
@@ -58,6 +62,7 @@ type removeConsumerReq struct {
 	StationName string `json:"station_name"`
 }
 
+// ProduceOpts - configuration options for a consumer.
 type ConsumerOpts struct {
 	Name               string
 	StationName        string
@@ -69,6 +74,7 @@ type ConsumerOpts struct {
 	MaxMsgDeliveries   int
 }
 
+// GetDefaultConsumerOptions - returns default configuration options for consumers.
 func GetDefaultConsumerOptions() ConsumerOpts {
 	return ConsumerOpts{
 		PullInterval:       1 * time.Second,
@@ -79,8 +85,10 @@ func GetDefaultConsumerOptions() ConsumerOpts {
 	}
 }
 
+// ConsumerOpt  - a function on the options for consumers.
 type ConsumerOpt func(*ConsumerOpts) error
 
+// CreateConsumer - creates a consumer.
 func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...ConsumerOpt) (*Consumer, error) {
 	defaultOpts := GetDefaultConsumerOptions()
 
@@ -99,6 +107,7 @@ func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...Consumer
 	return defaultOpts.CreateConsumer(c)
 }
 
+// ConsumerOpts.CreateConsumer - creates a consumer using a configuration struct.
 func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 	consumer := Consumer{Name: opts.Name,
 		ConsumerGroup:      opts.ConsumerGroup,
@@ -140,6 +149,7 @@ func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
 	return &consumer, err
 }
 
+// Station.CreateProducer - creates a producer attached to this station.
 func (s *Station) CreateConsumer(name string, opts ...ConsumerOpt) (*Consumer, error) {
 	return s.conn.CreateConsumer(s.Name, name, opts...)
 }
@@ -167,8 +177,11 @@ func (c *Consumer) pingConsumer() {
 
 }
 
+// ConsumeHandler - handler for consumed messages
 type ConsumeHandler func([]*Msg, error)
 
+// Consumer.Consume - start consuming messages according to the interval configured in the consumer object.
+// When a batch is consumed the handlerFunc will be called.
 func (c *Consumer) Consume(handlerFunc ConsumeHandler) {
 	ticker := time.NewTicker(c.PullInterval)
 
@@ -193,6 +206,7 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) {
 	c.consumeActive = true
 }
 
+// StopConsume - stops the continuous consume operation.
 func (c *Consumer) StopConsume() {
 	if !c.consumeActive {
 		log.Error("Consume is inactive")
@@ -222,17 +236,18 @@ func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 	return wrappedMsgs, nil
 }
 
-type FetchResult struct {
+//
+type fetchResult struct {
 	msgs []*Msg
 	err  error
 }
 
 func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
 	timeoutDuration := c.BatchMaxTimeToWait
-	out := make(chan FetchResult, 1)
+	out := make(chan fetchResult, 1)
 	go func() {
 		msgs, err := c.fetchSubscription()
-		out <- FetchResult{msgs: msgs, err: err}
+		out <- fetchResult{msgs: msgs, err: err}
 	}()
 	select {
 	case <-time.After(timeoutDuration):
@@ -243,6 +258,7 @@ func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
 	}
 }
 
+// Fetch - immediately fetch a message batch.
 func (c *Consumer) Fetch() ([]*Msg, error) {
 	if c.firstFetch {
 		c.firstFetch = false
@@ -251,6 +267,7 @@ func (c *Consumer) Fetch() ([]*Msg, error) {
 	return c.fetchSubscriprionWithTimeout()
 }
 
+// Destroy - destoy this consumer.
 func (c *Consumer) Destroy() error {
 	if c.consumeActive {
 		c.StopConsume()
@@ -286,6 +303,7 @@ func (p *Consumer) getDestructionReq() any {
 	return removeConsumerReq{Name: p.Name, StationName: p.stationName}
 }
 
+// ConsumerName - name for the consumer.
 func ConsumerName(name string) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.Name = name
@@ -293,42 +311,55 @@ func ConsumerName(name string) ConsumerOpt {
 	}
 }
 
+// StationNameOpt - station name to consume messages from.
 func StationNameOpt(stationName string) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.StationName = stationName
 		return nil
 	}
 }
+
+// ConsumerGroup - consumer group name, default is "".
 func ConsumerGroup(cg string) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.ConsumerGroup = cg
 		return nil
 	}
 }
+
+// PullInterval - interval between pulls, default is 1 second.
 func PullInterval(pullInterval time.Duration) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.PullInterval = pullInterval
 		return nil
 	}
 }
+
+// BatchSize - pull batch size.
 func BatchSize(batchSize int) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.BatchSize = batchSize
 		return nil
 	}
 }
+
+// BatchMaxWaitTime - max time to wait between pulls, defauls is 5 seconds.
 func BatchMaxWaitTime(batchMaxWaitTime time.Duration) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.BatchMaxTimeToWait = batchMaxWaitTime
 		return nil
 	}
 }
+
+// MaxAckTime - max time for ack a message, in case a message not acked within this time period memphis will resend it.
 func MaxAckTime(maxAckTime time.Duration) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.MaxAckTime = maxAckTime
 		return nil
 	}
 }
+
+// MaxMsgDeliveries - max number of message deliveries, by default is 10.
 func MaxMsgDeliveries(maxMsgDeliveries int) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.MaxMsgDeliveries = maxMsgDeliveries

@@ -41,7 +41,7 @@ type queryReq struct {
 	resp chan bool
 }
 
-type ConnState struct {
+type connState struct {
 	tcpConnected         chan bool
 	dataConnected        chan bool
 	queryConnection      chan queryReq
@@ -59,11 +59,12 @@ func (c *Conn) IsConnected() bool {
 	return <-query.resp
 }
 
+// Conn - holds the connection with memphis.
 type Conn struct {
 	opts             Options
 	ConnId           string
 	accessToken      string
-	state            ConnState
+	state            connState
 	tcpConn          net.Conn
 	tcpConnLock      sync.Mutex
 	refreshTokenWait time.Duration
@@ -72,6 +73,7 @@ type Conn struct {
 	js               nats.JetStreamContext
 }
 
+// GetDefaultOptions - returns default configuration options for the client.
 func GetDefaultOptions() Options {
 	return Options{
 		ManagementPort:    5555,
@@ -111,6 +113,7 @@ type errorResp struct {
 	Message string `json:"message"`
 }
 
+// Connect - creates connection with memphis.
 func Connect(host, username, connectionToken string, options ...Option) (*Conn, error) {
 	opts := GetDefaultOptions()
 
@@ -501,6 +504,7 @@ func (c *Conn) brokerSubscribe(subject, durable string, opts ...nats.SubOpt) (*n
 	return c.js.PullSubscribe(subject, durable, opts...)
 }
 
+// ManagementPort - default is 5555.
 func ManagementPort(port int) Option {
 	return func(o *Options) error {
 		o.ManagementPort = port
@@ -508,6 +512,7 @@ func ManagementPort(port int) Option {
 	}
 }
 
+// TcpPort - default is 6666.
 func TcpPort(port int) Option {
 	return func(o *Options) error {
 		o.TcpPort = port
@@ -515,6 +520,7 @@ func TcpPort(port int) Option {
 	}
 }
 
+// DataPort - default is 7766.
 func DataPort(port int) Option {
 	return func(o *Options) error {
 		o.DataPort = port
@@ -522,6 +528,7 @@ func DataPort(port int) Option {
 	}
 }
 
+// Reconnect - whether to do reconnect while connection is lost.
 func Reconnect(reconnect bool) Option {
 	return func(o *Options) error {
 		o.Reconnect = reconnect
@@ -529,6 +536,7 @@ func Reconnect(reconnect bool) Option {
 	}
 }
 
+// MaxReconnect - the amount of reconnect attempts.
 func MaxReconnect(maxReconnect int) Option {
 	return func(o *Options) error {
 		o.MaxReconnect = maxReconnect
@@ -536,6 +544,7 @@ func MaxReconnect(maxReconnect int) Option {
 	}
 }
 
+// ReconnectInterval - interval in miliseconds between reconnect attempts.
 func ReconnectInterval(reconnectInterval time.Duration) Option {
 	return func(o *Options) error {
 		o.ReconnectInterval = reconnectInterval
@@ -543,6 +552,7 @@ func ReconnectInterval(reconnectInterval time.Duration) Option {
 	}
 }
 
+// Timeout - connection timeout in miliseconds.
 func Timeout(timeout time.Duration) Option {
 	return func(o *Options) error {
 		o.Timeout = timeout
