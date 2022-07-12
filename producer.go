@@ -71,14 +71,14 @@ type ProduceOpts struct {
 // ProduceOpt - a function on the options for produce operations.
 type ProduceOpt func(*ProduceOpts) error
 
-// GetDefaultProduceOpts - returns default configuration options for produce operations.
-func GetDefaultProduceOpts() ProduceOpts {
+// getDefaultProduceOpts - returns default configuration options for produce operations.
+func getDefaultProduceOpts() ProduceOpts {
 	return ProduceOpts{AckWaitSec: 15}
 }
 
 // Producer.Produce - produces a message into a station.
 func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
-	defaultOpts := GetDefaultProduceOpts()
+	defaultOpts := getDefaultProduceOpts()
 
 	defaultOpts.Message = message
 
@@ -90,12 +90,12 @@ func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
 		}
 	}
 
-	return defaultOpts.Produce(p)
+	return defaultOpts.produce(p)
 
 }
 
-// ProducerOpts.Produce - produces a message into a station using a configuration struct.
-func (opts *ProduceOpts) Produce(p *Producer) error {
+// ProducerOpts.produce - produces a message into a station using a configuration struct.
+func (opts *ProduceOpts) produce(p *Producer) error {
 	natsMessage := nats.Msg{
 		Header:  map[string][]string{"connectionId": {p.conn.ConnId}, "producedBy": {p.Name}},
 		Subject: p.stationName + ".final",

@@ -74,8 +74,8 @@ type ConsumerOpts struct {
 	MaxMsgDeliveries   int
 }
 
-// GetDefaultConsumerOptions - returns default configuration options for consumers.
-func GetDefaultConsumerOptions() ConsumerOpts {
+// getDefaultConsumerOptions - returns default configuration options for consumers.
+func getDefaultConsumerOptions() ConsumerOpts {
 	return ConsumerOpts{
 		PullInterval:       1 * time.Second,
 		BatchSize:          10,
@@ -90,7 +90,7 @@ type ConsumerOpt func(*ConsumerOpts) error
 
 // CreateConsumer - creates a consumer.
 func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...ConsumerOpt) (*Consumer, error) {
-	defaultOpts := GetDefaultConsumerOptions()
+	defaultOpts := getDefaultConsumerOptions()
 
 	defaultOpts.Name = consumerName
 	defaultOpts.StationName = stationName
@@ -104,11 +104,11 @@ func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...Consumer
 		}
 	}
 
-	return defaultOpts.CreateConsumer(c)
+	return defaultOpts.createConsumer(c)
 }
 
-// ConsumerOpts.CreateConsumer - creates a consumer using a configuration struct.
-func (opts *ConsumerOpts) CreateConsumer(c *Conn) (*Consumer, error) {
+// ConsumerOpts.createConsumer - creates a consumer using a configuration struct.
+func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	consumer := Consumer{Name: opts.Name,
 		ConsumerGroup:      opts.ConsumerGroup,
 		PullInterval:       opts.PullInterval,
