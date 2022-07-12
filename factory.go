@@ -25,8 +25,8 @@ type FactoryOpts struct {
 // FactoryOpt - a function on the options for a connection.
 type FactoryOpt func(*FactoryOpts) error
 
-// GetDefaultFactoryOpts - returns default configuration options for the factory.
-func GetDefaultFactoryOpts() FactoryOpts {
+// getDefaultFactoryOpts - returns default configuration options for the factory.
+func getDefaultFactoryOpts() FactoryOpts {
 	return FactoryOpts{
 		Description: "",
 	}
@@ -34,7 +34,7 @@ func GetDefaultFactoryOpts() FactoryOpts {
 
 // CreateFactory - creates a factory.
 func (c *Conn) CreateFactory(name string, opts ...FactoryOpt) (*Factory, error) {
-	defaultOpts := GetDefaultFactoryOpts()
+	defaultOpts := getDefaultFactoryOpts()
 
 	defaultOpts.Name = name
 
@@ -46,11 +46,11 @@ func (c *Conn) CreateFactory(name string, opts ...FactoryOpt) (*Factory, error) 
 		}
 	}
 
-	return defaultOpts.CreateFactory(c)
+	return defaultOpts.createFactory(c)
 }
 
-// CreateFactory - creates a factory using FactoryOpts struct.
-func (opts *FactoryOpts) CreateFactory(c *Conn) (*Factory, error) {
+// createFactory - creates a factory using FactoryOpts struct.
+func (opts *FactoryOpts) createFactory(c *Conn) (*Factory, error) {
 	factory := Factory{Name: opts.Name, Description: opts.Description, conn: c}
 	return &factory, c.create(&factory)
 }
