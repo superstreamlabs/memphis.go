@@ -36,5 +36,8 @@ func main() {
 
 	consumer.Consume(handler)
 
+	// The program will close the connection after 30 seconds,
+	// the message handler may be called after the connection closed
+	// so the handler may receive a timeout error
 	time.Sleep(30 * time.Second)
 }
