@@ -96,10 +96,10 @@ func (c *Conn) CreateStation(Name, FactoryName string, opts ...StationOpt) (*Sta
 		}
 	}
 
-	return defaultOpts.CreateStation(c)
+	return defaultOpts.createStation(c)
 }
 
-func (opts *StationOpts) CreateStation(c *Conn) (*Station, error) {
+func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 	s := Station{
 		Name:           opts.Name,
 		RetentionType:  opts.RetentionType,

@@ -74,8 +74,8 @@ type Conn struct {
 	js               nats.JetStreamContext
 }
 
-// GetDefaultOptions - returns default configuration options for the client.
-func GetDefaultOptions() Options {
+// getDefaultOptions - returns default configuration options for the client.
+func getDefaultOptions() Options {
 	return Options{
 		ManagementPort:    5555,
 		TcpPort:           6666,
@@ -116,7 +116,7 @@ type errorResp struct {
 
 // Connect - creates connection with memphis.
 func Connect(host, username, connectionToken string, options ...Option) (*Conn, error) {
-	opts := GetDefaultOptions()
+	opts := getDefaultOptions()
 
 	opts.Host = normalizeHost(host)
 	opts.Username = username
@@ -130,7 +130,7 @@ func Connect(host, username, connectionToken string, options ...Option) (*Conn, 
 		}
 	}
 
-	return opts.Connect()
+	return opts.connect()
 }
 
 func normalizeHost(host string) string {
@@ -138,7 +138,7 @@ func normalizeHost(host string) string {
 	return r.ReplaceAllString(host, "")
 }
 
-func (opts Options) Connect() (*Conn, error) {
+func (opts Options) connect() (*Conn, error) {
 	if opts.MaxReconnect > 9 {
 		opts.MaxReconnect = 9
 	}
