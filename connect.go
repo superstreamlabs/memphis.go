@@ -151,7 +151,7 @@ func (opts Options) Connect() (*Conn, error) {
 		opts: opts,
 	}
 
-	c.state.tcpConnected = make(chan bool)
+	c.state.tcpConnected = make(chan bool, 1)
 	c.state.dataConnected = make(chan bool)
 	c.state.queryConnection = make(chan queryReq)
 	c.state.pingQuitChan = make(chan struct{})
@@ -190,18 +190,22 @@ func listenForConnChanges(c *Conn) {
 
 		case tcpConnected = <-cs.tcpConnected:
 			if tcpConnected {
-				c.checkTcpConnection()
-				c.refreshToken()
-				c.sendPing()
-				timedOpsStarted = true
+				if !timedOpsStarted {
+					c.checkTcpConnection()
+					c.refreshToken()
+					c.sendPing()
+					timedOpsStarted = true
+				}
 			} else {
 				if timedOpsStarted {
 					c.stopTimedOps()
+					timedOpsStarted = false
 				}
+
 				err := c.doReconnect()
 				if err != nil {
 					log.Print("reconnection failed")
-					c.closeExceptConnListener()
+					go c.Close()
 					dataConnected = false
 				}
 			}
@@ -209,10 +213,13 @@ func listenForConnChanges(c *Conn) {
 		case dataConnected = <-cs.dataConnected:
 			if !dataConnected {
 				log.Print("broker conn disconnected")
-				c.closeExceptConnListener()
+				go c.Close()
 				tcpConnected = false
 			}
 		case <-cs.die:
+			if timedOpsStarted {
+				c.stopTimedOps()
+			}
 			return
 		}
 	}
@@ -266,8 +273,7 @@ func (c *Conn) startTcpConn(firstAttempt bool) error {
 	reconnectWaitChan := make(chan struct{}, 1)
 	for i := 0; i < connAttempts; i++ {
 		go func() {
-			// <-time.After(c.opts.ReconnectInterval)
-			<-time.After(5 * time.Second)
+			<-time.After(c.opts.ReconnectInterval)
 			reconnectWaitChan <- struct{}{}
 		}()
 		err = c.dial(&resp)
@@ -309,30 +315,29 @@ func (c *Conn) tcpRequestResponse(req []byte) ([]byte, error) {
 }
 
 func (c *Conn) checkTcpConnection() {
-	ticker := time.NewTicker(ConnectDefaultTcpCheckInterval)
-
 	buff := make([]byte, 1)
 	go func() {
 		for {
 			select {
-			case <-ticker.C:
+			case <-time.After(ConnectDefaultTcpCheckInterval):
 				c.tcpConnLock.Lock()
-
 				if err := c.tcpConn.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
-					log.Print("failed setting deadline for check read, connection monitoring may not work")
+					c.state.tcpConnected <- false
+					continue
 				}
 
 				_, err := c.tcpConn.Read(buff)
 				if err == io.EOF {
 					c.state.tcpConnected <- false
+					continue
 				}
 
 				if err := c.tcpConn.SetReadDeadline(time.Time{}); err != nil {
-					log.Print("failed setting deadline for check read, connection monitoring may not work")
+					c.state.tcpConnected <- false
+					continue
 				}
 				c.tcpConnLock.Unlock()
 			case <-c.state.connectCheckQuitChan:
-				ticker.Stop()
 				return
 			}
 		}
@@ -388,11 +393,7 @@ func (c *Conn) stopTimedOps() {
 }
 
 func (c *Conn) Close() {
-	c.closeExceptConnListener()
 	c.state.die <- struct{}{}
-}
-
-func (c *Conn) closeExceptConnListener() {
 	c.tcpConn.Close()
 	c.brokerConn.Close()
 }

@@ -8,8 +8,8 @@ func TestConnect(t *testing.T) {
 	c, err := Connect("localhost", "root", "memphis")
 	if err != nil {
 		t.Error()
+		return
 	}
-
 	c.Close()
 }
 

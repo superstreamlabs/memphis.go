@@ -18,22 +18,22 @@ func TestCreateStation(t *testing.T) {
 	}
 	defer f.Destroy()
 
-	_, err = f.CreateStation("station_name_1", RetentionTypeOpt(Messages), RetentionTypeOpt(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
+	_, err = f.CreateStation("station_name_1", RetentionTypeOpt(Messages), RetentionVal(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = f.CreateStation("station_name_1", RetentionTypeOpt(Messages), RetentionTypeOpt(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
+	_, err = f.CreateStation("station_name_1", RetentionTypeOpt(Messages), RetentionVal(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
 	if err == nil {
 		t.Error(err)
 	}
 
-	_, err = c.CreateStation("station_name_1", "factory_name_1", RetentionTypeOpt(Messages), RetentionTypeOpt(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
+	_, err = c.CreateStation("station_name_1", "factory_name_1", RetentionTypeOpt(Messages), RetentionVal(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
 	if err == nil {
 		t.Error(err)
 	}
 
-	_, err = c.CreateStation("station_name_2", "factory_name_1", RetentionTypeOpt(Messages), RetentionTypeOpt(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
+	_, err = c.CreateStation("station_name_2", "factory_name_1", RetentionTypeOpt(Messages), RetentionVal(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
 	if err != nil {
 		t.Error(err)
 	}
