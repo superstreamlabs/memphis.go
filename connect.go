@@ -521,8 +521,12 @@ func (c *Conn) brokerPublish(msg *nats.Msg, opts ...nats.PubOpt) (nats.PubAckFut
 	return c.js.PublishMsgAsync(msg, opts...)
 }
 
-func (c *Conn) brokerSubscribe(subject, durable string, opts ...nats.SubOpt) (*nats.Subscription, error) {
+func (c *Conn) brokerPullSubscribe(subject, durable string, opts ...nats.SubOpt) (*nats.Subscription, error) {
 	return c.js.PullSubscribe(subject, durable, opts...)
+}
+
+func (c *Conn) brokerQueueSubscribe(subj, queue string, cb nats.MsgHandler) (*nats.Subscription, error) {
+	return c.brokerConn.QueueSubscribe(subj, queue, cb)
 }
 
 // ManagementPort - default is 5555.
