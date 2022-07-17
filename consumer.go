@@ -3,9 +3,8 @@ package memphis
 import (
 	"errors"
 	"fmt"
-	"time"
-
 	"log"
+	"time"
 
 	"github.com/nats-io/nats.go"
 )
@@ -207,10 +206,18 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
 			select {
 			case <-ticker.C:
 				msgs, err := c.fetchSubscription()
+
+				// ignore fetch timeout if we have messages in the dlq channel
+				if err == nats.ErrTimeout && len(c.dlqCh) > 0 {
+					err = nil
+				}
+
+				// push messages from the dlq channel to the user's handler
 				for len(c.dlqCh) > 0 {
 					dlqMsg := Msg{msg: <-c.dlqCh}
 					msgs = append(msgs, &dlqMsg)
 				}
+
 				go handlerFunc(msgs, err)
 			case <-c.consumeQuit:
 				ticker.Stop()
