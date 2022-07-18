@@ -2,14 +2,16 @@ package memphis
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"log"
 )
 
 const (
 	consumerDefaultPingInterval = 30 * time.Second
+	dlqSubjPrefix               = "$memphis_dlq"
 )
 
 // Consumer - memphis consumer object.
@@ -28,6 +30,7 @@ type Consumer struct {
 	subscriptionActive bool
 	firstFetch         bool
 	consumeActive      bool
+	dlqCh              chan *nats.Msg
 	consumeQuit        chan struct{}
 	pingQuit           chan struct{}
 }
@@ -125,6 +128,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	}
 
 	consumer.firstFetch = true
+	consumer.dlqCh = make(chan *nats.Msg, 1)
 	consumer.consumeQuit = make(chan struct{}, 1)
 	consumer.pingQuit = make(chan struct{}, 1)
 
@@ -132,12 +136,13 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	subj := consumer.stationName + ".final"
 
-	consumer.subscription, err = c.brokerSubscribe(subj,
+	consumer.subscription, err = c.brokerPullSubscribe(subj,
 		consumer.ConsumerGroup,
 		nats.ManualAck(),
 		nats.AckWait(consumer.MaxAckTime),
 		nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
-		nats.MaxRequestBatch(opts.BatchSize))
+		nats.MaxRequestBatch(opts.BatchSize),
+		nats.MaxDeliver(opts.MaxMsgDeliveries))
 	if err != nil {
 		return nil, err
 	}
@@ -182,10 +187,15 @@ type ConsumeHandler func([]*Msg, error)
 
 // Consumer.Consume - start consuming messages according to the interval configured in the consumer object.
 // When a batch is consumed the handlerFunc will be called.
-func (c *Consumer) Consume(handlerFunc ConsumeHandler) {
+func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
 	ticker := time.NewTicker(c.PullInterval)
 
 	if c.firstFetch {
+		err := c.firstFetchInit()
+		if err != nil {
+			return err
+		}
+
 		c.firstFetch = false
 		msgs, err := c.fetchSubscription()
 		go handlerFunc(msgs, err)
@@ -196,6 +206,18 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) {
 			select {
 			case <-ticker.C:
 				msgs, err := c.fetchSubscription()
+
+				// ignore fetch timeout if we have messages in the dlq channel
+				if err == nats.ErrTimeout && len(c.dlqCh) > 0 {
+					err = nil
+				}
+
+				// push messages from the dlq channel to the user's handler
+				for len(c.dlqCh) > 0 {
+					dlqMsg := Msg{msg: <-c.dlqCh}
+					msgs = append(msgs, &dlqMsg)
+				}
+
 				go handlerFunc(msgs, err)
 			case <-c.consumeQuit:
 				ticker.Stop()
@@ -204,6 +226,7 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) {
 		}
 	}()
 	c.consumeActive = true
+	return nil
 }
 
 // StopConsume - stops the continuous consume operation.
@@ -236,7 +259,6 @@ func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 	return wrappedMsgs, nil
 }
 
-//
 type fetchResult struct {
 	msgs []*Msg
 	err  error
@@ -261,10 +283,35 @@ func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
 // Fetch - immediately fetch a message batch.
 func (c *Consumer) Fetch() ([]*Msg, error) {
 	if c.firstFetch {
+		err := c.firstFetchInit()
+		if err != nil {
+			return nil, err
+		}
+
 		c.firstFetch = false
 	}
 
 	return c.fetchSubscriprionWithTimeout()
+}
+
+func (c *Consumer) firstFetchInit() error {
+	var err error
+	_, err = c.conn.brokerQueueSubscribe(c.getDlqSubjName(), c.getDlqQueueName(), c.createDlqMsgHandler())
+	return err
+}
+
+func (c *Consumer) createDlqMsgHandler() nats.MsgHandler {
+	return func(msg *nats.Msg) {
+		c.dlqCh <- msg
+	}
+}
+
+func (c *Consumer) getDlqSubjName() string {
+	return fmt.Sprintf("%v_%v_%v", dlqSubjPrefix, c.stationName, c.ConsumerGroup)
+}
+
+func (c *Consumer) getDlqQueueName() string {
+	return c.getDlqSubjName()
 }
 
 // Destroy - destoy this consumer.
