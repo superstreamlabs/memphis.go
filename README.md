@@ -36,12 +36,12 @@ go get github.com/memphisdev/memphis.go
 ```
 
 # Importing
-```shell
+```go
 import "github.com/memphisdev/memphis.go"
 ```
 
 ### Connecting to Memphis
-```shell
+```go
 c, err := memphis.Connect("<memphis-host>", 
 	"<application type username>", 
 	"<broker-token>")
@@ -49,7 +49,7 @@ c, err := memphis.Connect("<memphis-host>",
 <br>
 It is possible to pass connection configuration parameters, as function-parameters.
 
-```shell
+```go
 // function params
 c, err := memphis.Connect("<memphis-host>", 
 	"<application type username>", 
@@ -67,13 +67,13 @@ Once connected, all features offered by Memphis are available.<br>
 ### Disconnecting from Memphis
 To disconnect from Memphis, call Close() on the Memphis connection object.<br>
 
-```shell
+```go
 c.Close();
 ```
 
 ### Creating a Factory
 
-```shell
+```go
 // c is of type memphis.Conn
 f, err := c.CreateFactory("<factory-name>", 
     Description("<optional-description>")
@@ -82,7 +82,7 @@ f, err := c.CreateFactory("<factory-name>",
 ### Destroying a Factory
 Destroying a factory will remove all its resources (including stations, producers, and consumers).<br>
 
-```shell
+```go
 err := f.Destroy()
 ```
 
@@ -90,7 +90,7 @@ err := f.Destroy()
 Stations can be created from both Conn and Factory<br>
 Passing optional parameters using functions<br>
 
-```shell
+```go
 s0, err = c.CreateStation("<station-name>","<factory-name>")
 
 s1, err = c.CreateStation("<station-name>", 
@@ -114,19 +114,19 @@ s2, err = f.CreateStation("<station-name>",
 ### Retention Types
 Memphis currently supports the following types of retention:<br>
 
-```shell
+```go
 memphis.MaxMeMessageAgeSeconds
 ```
 
 The above means that every message persists for the value set in the retention value field (in seconds).
 
-```shell
+```go
 memphis.Messages
 ```
 
 The above means that after the maximum number of saved messages (set in retention value)<br>has been reached, the oldest messages will be deleted.
 
-```shell
+```go
 memphis.Bytes
 ```
 
@@ -135,13 +135,13 @@ The above means that after maximum number of saved bytes (set in retention value
 ### Storage Types
 Memphis currently supports the following types of messages storage:<br>
 
-```shell
+```go
 memphis.File
 ```
 
 The above means that messages persist on the file system.
 
-```shell
+```go
 memphis.Memory
 ```
 
@@ -150,7 +150,7 @@ The above means that messages persist on the main memory.<br>
 ### Destroying a Station
 Destroying a station will remove all its resources (including producers and consumers).<br>
 
-```shell
+```go
 err := s.Destroy();
 ```
 
@@ -162,7 +162,7 @@ In order to stop receiving messages, you have to call ```consumer.StopConsume()`
 
 ### Creating a Producer
 
-```shell
+```go
 // from a Conn
 p0, err := c.CreateProducer("<station-name>", "<producer-name>") 
 
@@ -172,20 +172,20 @@ p1, err := s.CreateProducer("<producer-name>")
 
 ### Producing a Message
 
-```shell
+```go
 p.Produce("<message in []byte>",
             ackWait(<ack time.Duration>)) // defaults to 15 seconds
 ```
 
 ### Destroying a Producer
 
-```shell
+```go
 p.Destroy();
 ```
 
 ### Creating a Consumer
 
-```shell
+```go
 // creation from a Station
 consumer0, err = s.CreateConsumer("<consumer-name>",
   ConsumerGroup("<consumer-group>"), // defaults to consumer name
@@ -204,7 +204,7 @@ First, create a callback function that receives a slice of pointers to ```memphi
 Then, pass this callback into ```consumer.Consume``` function.<br><br>
 The consumer will try to fetch messages every ```pullInterval``` (that was given in Consumer's creation) and call the defined message handler.
 
-```shell
+```go
 func handler(msgs []*memphis.Msg, err error) {
 	if err != nil {
 		m := msgs[0]
