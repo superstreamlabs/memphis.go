@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
 	"github.com/nats-io/nats.go"
 )
 
@@ -124,8 +125,6 @@ func (opts Options) connect() (*Conn, error) {
 		return nil, err
 	}
 
-	c.accessToken = opts.ConnectionToken
-
 	return &c, nil
 }
 
@@ -152,13 +151,13 @@ func (c *Conn) startDataConn() error {
 	var err error
 	url := opts.Host + ":" + strconv.Itoa(opts.DataPort)
 	natsOpts := nats.Options{
-		Url:               url,
-		AllowReconnect:    opts.Reconnect,
-		MaxReconnect:      opts.MaxReconnect,
-		ReconnectWait:     opts.ReconnectInterval,
-		Timeout:           opts.Timeout,
-		Token:             opts.ConnectionToken,
-		User:		   	   opts.Username,
+		Url:            url,
+		AllowReconnect: opts.Reconnect,
+		MaxReconnect:   opts.MaxReconnect,
+		ReconnectWait:  opts.ReconnectInterval,
+		Timeout:        opts.Timeout,
+		Token:          opts.ConnectionToken,
+		User:           opts.Username,
 	}
 	c.brokerConn, err = natsOpts.Connect()
 
@@ -171,10 +170,16 @@ func (c *Conn) startDataConn() error {
 		c.brokerConn.Close()
 		return err
 	}
-	c.ConnId, err = c.brokerConn.GetConnectionId(3* time.Second)
+	c.ConnId, err = c.brokerConn.GetConnectionId(3 * time.Second)
 	if err != nil {
 		return err
 	}
+
+	c.accessToken, err = c.brokerConn.GetAccessToken(3 * time.Second)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

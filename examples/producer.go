@@ -18,15 +18,13 @@ func main() {
 
 	p, err := conn.CreateProducer("teststation", "testproducer")
 	if err != nil {
-		fmt.Printf("Produce failed: %v", err)
-		fmt.Errorf("Produce failed: %v", err)
+		fmt.Printf("Produce failed: %v\n", err)
 		os.Exit(2)
 	}
 	err = p.Produce([]byte("You have a message!"))
 
 	if err != nil {
-		fmt.Printf("Produce failed: %v", err)
-		fmt.Errorf("Produce failed: %v", err)
+		fmt.Printf("Produce failed: %v\n", err)
 		os.Exit(3)
 	}
 }
