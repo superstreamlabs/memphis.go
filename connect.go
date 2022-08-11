@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -25,9 +24,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-
-	"log"
-
 	"github.com/nats-io/nats.go"
 )
 
@@ -41,7 +37,6 @@ type Option func(*Options) error
 type Options struct {
 	Host              string
 	ManagementPort    int
-	TcpPort           int
 	DataPort          int
 	Username          string
 	ConnectionToken   string
@@ -55,22 +50,8 @@ type queryReq struct {
 	resp chan bool
 }
 
-type connState struct {
-	tcpConnected         chan bool
-	dataConnected        chan bool
-	queryConnection      chan queryReq
-	connectCheckQuitChan chan struct{}
-	pingQuitChan         chan struct{}
-	refreshTokenQuitChan chan struct{}
-	die                  chan struct{}
-}
-
 func (c *Conn) IsConnected() bool {
-	query := queryReq{
-		resp: make(chan bool),
-	}
-	c.state.queryConnection <- query
-	return <-query.resp
+	return c.brokerConn.IsConnected()
 }
 
 // Conn - holds the connection with memphis.
@@ -78,7 +59,6 @@ type Conn struct {
 	opts             Options
 	ConnId           string
 	accessToken      string
-	state            connState
 	tcpConn          net.Conn
 	tcpConnLock      sync.Mutex
 	refreshTokenWait time.Duration
@@ -91,36 +71,12 @@ type Conn struct {
 func getDefaultOptions() Options {
 	return Options{
 		ManagementPort:    5555,
-		TcpPort:           6666,
-		DataPort:          7766,
+		DataPort:          6666,
 		Reconnect:         true,
 		MaxReconnect:      3,
 		ReconnectInterval: 200 * time.Millisecond,
 		Timeout:           15 * time.Second,
 	}
-}
-
-type connectReq struct {
-	Username  string `json:"username"`
-	ConnToken string `json:"broker_creds"`
-	ConnId    string `json:"connection_id"`
-}
-
-type connectResp struct {
-	ConnId            string `json:"connection_id"`
-	AccessToken       string `json:"access_token"`
-	AccessTokenExpiry int    `json:"access_token_exp"`
-	PingInterval      int    `json:"ping_interval_ms"`
-}
-
-type refreshTokenResp connectResp
-
-type refreshAccessTokenReq struct {
-	ResendAccessToken bool `json:"resend_access_token"`
-}
-
-type pingReq struct {
-	Ping bool `json:"ping"`
 }
 
 type errorResp struct {
@@ -164,150 +120,13 @@ func (opts Options) connect() (*Conn, error) {
 		opts: opts,
 	}
 
-	c.state.tcpConnected = make(chan bool, 1)
-	c.state.dataConnected = make(chan bool)
-	c.state.queryConnection = make(chan queryReq)
-	c.state.pingQuitChan = make(chan struct{})
-	c.state.connectCheckQuitChan = make(chan struct{})
-	c.state.refreshTokenQuitChan = make(chan struct{})
-	c.state.die = make(chan struct{})
-
-	go listenForConnChanges(&c)
-
-	firstAttempt := true
-	if err := c.startTcpConn(firstAttempt); err != nil {
-		return nil, err
-	}
-
 	if err := c.startDataConn(); err != nil {
 		return nil, err
 	}
 
+	c.accessToken = opts.ConnectionToken
+
 	return &c, nil
-}
-
-func (c *Conn) doReconnect() error {
-	c.tcpConn.Close()
-	firstAttempt := false
-	err := c.startTcpConn(firstAttempt)
-	return err
-}
-
-func listenForConnChanges(c *Conn) {
-	cs := &c.state
-	tcpConnected, dataConnected, timedOpsStarted := false, false, false
-	for {
-		select {
-		case req := <-cs.queryConnection:
-			req.resp <- tcpConnected && dataConnected
-
-		case tcpConnected = <-cs.tcpConnected:
-			if tcpConnected {
-				if !timedOpsStarted {
-					c.checkTcpConnection()
-					c.refreshToken()
-					c.sendPing()
-					timedOpsStarted = true
-				}
-			} else {
-				if timedOpsStarted {
-					c.stopTimedOps()
-					timedOpsStarted = false
-				}
-
-				err := c.doReconnect()
-				if err != nil {
-					log.Print("reconnection failed")
-					go c.Close()
-					dataConnected = false
-				}
-			}
-
-		case dataConnected = <-cs.dataConnected:
-			if !dataConnected {
-				log.Print("broker conn disconnected")
-				go c.Close()
-				tcpConnected = false
-			}
-		case <-cs.die:
-			if timedOpsStarted {
-				c.stopTimedOps()
-			}
-			return
-		}
-	}
-}
-
-func (c *Conn) dial(resp *connectResp) error {
-	opts := &c.opts
-	url := opts.Host + ":" + strconv.Itoa(opts.TcpPort)
-	var err error
-
-	c.tcpConn, err = net.Dial("tcp", url)
-	if err != nil {
-		return err
-	}
-
-	connectMsg, err := json.Marshal(connectReq{
-		Username:  opts.Username,
-		ConnToken: opts.ConnectionToken,
-		ConnId:    "",
-	})
-	if err != nil {
-		c.tcpConn.Close()
-		return err
-	}
-
-	b, err := c.tcpRequestResponse(connectMsg)
-	if err != nil {
-		c.tcpConn.Close()
-		return err
-	}
-
-	err = json.Unmarshal(b, &resp)
-	if err != nil {
-		c.tcpConn.Close()
-		return err
-	}
-
-	return nil
-}
-
-func (c *Conn) startTcpConn(firstAttempt bool) error {
-	opts := &c.opts
-
-	connAttempts := opts.MaxReconnect
-	if firstAttempt {
-		connAttempts += 1
-	}
-
-	var err error
-	var resp connectResp
-	reconnectWaitChan := make(chan struct{}, 1)
-	for i := 0; i < connAttempts; i++ {
-		go func() {
-			<-time.After(c.opts.ReconnectInterval)
-			reconnectWaitChan <- struct{}{}
-		}()
-		err = c.dial(&resp)
-		if err != nil {
-			<-reconnectWaitChan
-			continue
-		}
-		break
-	}
-
-	if err != nil {
-		return err
-	}
-
-	c.ConnId = resp.ConnId
-	c.accessToken = resp.AccessToken
-	c.refreshTokenWait = time.Duration(resp.AccessTokenExpiry) * time.Millisecond
-	c.pingWait = time.Duration(resp.PingInterval) * time.Millisecond
-
-	c.state.tcpConnected <- true
-	return nil
 }
 
 func (c *Conn) tcpRequestResponse(req []byte) ([]byte, error) {
@@ -327,36 +146,6 @@ func (c *Conn) tcpRequestResponse(req []byte) ([]byte, error) {
 	return b[:bLen], nil
 }
 
-func (c *Conn) checkTcpConnection() {
-	buff := make([]byte, 1)
-	go func() {
-		for {
-			select {
-			case <-time.After(ConnectDefaultTcpCheckInterval):
-				c.tcpConnLock.Lock()
-				if err := c.tcpConn.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
-					c.state.tcpConnected <- false
-					continue
-				}
-
-				_, err := c.tcpConn.Read(buff)
-				if err == io.EOF {
-					c.state.tcpConnected <- false
-					continue
-				}
-
-				if err := c.tcpConn.SetReadDeadline(time.Time{}); err != nil {
-					c.state.tcpConnected <- false
-					continue
-				}
-				c.tcpConnLock.Unlock()
-			case <-c.state.connectCheckQuitChan:
-				return
-			}
-		}
-	}()
-}
-
 func (c *Conn) startDataConn() error {
 	opts := &c.opts
 
@@ -369,7 +158,7 @@ func (c *Conn) startDataConn() error {
 		ReconnectWait:     opts.ReconnectInterval,
 		Timeout:           opts.Timeout,
 		Token:             opts.ConnectionToken,
-		DisconnectedErrCB: c.createBrokerDisconnectionHandler(),
+		User:		   	   opts.Username,
 	}
 	c.brokerConn, err = natsOpts.Connect()
 
@@ -382,110 +171,15 @@ func (c *Conn) startDataConn() error {
 		c.brokerConn.Close()
 		return err
 	}
-
-	c.state.dataConnected <- true
+	c.ConnId, err = c.brokerConn.GetConnectionId(3* time.Second)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
-func (c *Conn) createBrokerDisconnectionHandler() nats.ConnErrHandler {
-	return func(_ *nats.Conn, err error) {
-		c.state.dataConnected <- false
-	}
-}
-
-func (c *Conn) stopTimedOps() {
-	if c.pingWait != 0 {
-		c.state.pingQuitChan <- struct{}{}
-	}
-
-	if c.refreshTokenWait != 0 {
-		c.state.refreshTokenQuitChan <- struct{}{}
-	}
-
-	c.state.connectCheckQuitChan <- struct{}{}
-}
-
 func (c *Conn) Close() {
-	c.state.die <- struct{}{}
-	c.tcpConn.Close()
 	c.brokerConn.Close()
-}
-
-func (c *Conn) refreshToken() {
-	if c.refreshTokenWait == 0 {
-		return
-	}
-
-	refreshReq, err := json.Marshal(refreshAccessTokenReq{
-		ResendAccessToken: true,
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	go func() {
-		wait := c.refreshTokenWait
-		for {
-			select {
-			case <-time.After(wait):
-				b, err := c.tcpRequestResponse(refreshReq)
-				if err != nil {
-					log.Print("Failed requesting refresh token")
-					return
-				}
-
-				var resp refreshTokenResp
-				err = json.Unmarshal(b, &resp)
-				if err != nil {
-					log.Print("Failed parsing refresh token response")
-					return
-				}
-
-				c.accessToken = resp.AccessToken
-				wait = time.Duration(resp.AccessTokenExpiry) * time.Millisecond
-
-			case <-c.state.refreshTokenQuitChan:
-				return
-			}
-		}
-	}()
-}
-
-func (c *Conn) sendPing() {
-	if c.pingWait == 0 {
-		return
-	}
-
-	pingReq, err := json.Marshal(pingReq{
-		Ping: true,
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	go func() {
-		wait := c.pingWait
-		for {
-			select {
-			case <-time.After(wait):
-				b, err := c.tcpRequestResponse(pingReq)
-				if err != nil {
-					log.Print("Failed requesting ping")
-					return
-				}
-
-				var resp refreshTokenResp
-				err = json.Unmarshal(b, &resp)
-				if err != nil {
-					log.Print("Failed parsing ping response")
-					return
-				}
-				wait = time.Duration(resp.AccessTokenExpiry) * time.Millisecond
-			case <-c.state.pingQuitChan:
-				return
-			}
-		}
-	}()
 }
 
 func (c *Conn) mgmtRequest(apiMethod string, apiPath string, reqStruct any) error {
@@ -550,15 +244,7 @@ func ManagementPort(port int) Option {
 	}
 }
 
-// TcpPort - default is 6666.
-func TcpPort(port int) Option {
-	return func(o *Options) error {
-		o.TcpPort = port
-		return nil
-	}
-}
-
-// DataPort - default is 7766.
+// DataPort - default is 6666.
 func DataPort(port int) Option {
 	return func(o *Options) error {
 		o.DataPort = port

@@ -8,17 +8,25 @@ import (
 )
 
 func main() {
-	conn, err := memphis.Connect("<memphis-host>", "<application type username>", "<broker-token>")
+	conn, err := memphis.Connect("127.0.0.1", "root", "memphis")
+
 	if err != nil {
 		os.Exit(1)
 	}
+
 	defer conn.Close()
 
-	p, err := conn.CreateProducer("<station-name>", "<producer-name>")
+	p, err := conn.CreateProducer("teststation", "testproducer")
+	if err != nil {
+		fmt.Printf("Produce failed: %v", err)
+		fmt.Errorf("Produce failed: %v", err)
+		os.Exit(2)
+	}
 	err = p.Produce([]byte("You have a message!"))
 
 	if err != nil {
+		fmt.Printf("Produce failed: %v", err)
 		fmt.Errorf("Produce failed: %v", err)
-		os.Exit(1)
+		os.Exit(3)
 	}
 }
