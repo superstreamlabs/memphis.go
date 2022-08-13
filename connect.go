@@ -30,6 +30,10 @@ import (
 
 const (
 	ConnectDefaultTcpCheckInterval = 2 * time.Second
+	// TODO (or/shoham) use userType for requests that need userType
+	// (look in the server for handlers that use getUserDetailsFromMiddleware and later use user.userType
+	// e.g. CreateConsumer)
+	userType = "application"
 )
 
 // Option is a function on the options for a connection.
@@ -59,7 +63,8 @@ func (c *Conn) IsConnected() bool {
 type Conn struct {
 	opts             Options
 	ConnId           string
-	accessToken      string
+	username         string
+	userType         string
 	tcpConn          net.Conn
 	tcpConnLock      sync.Mutex
 	refreshTokenWait time.Duration
@@ -170,12 +175,8 @@ func (c *Conn) startDataConn() error {
 		c.brokerConn.Close()
 		return err
 	}
+	c.username = opts.Username
 	c.ConnId, err = c.brokerConn.GetConnectionId(3 * time.Second)
-	if err != nil {
-		return err
-	}
-
-	c.accessToken, err = c.brokerConn.GetAccessToken(3 * time.Second)
 	if err != nil {
 		return err
 	}
@@ -206,7 +207,6 @@ func (c *Conn) mgmtRequest(apiMethod string, apiPath string, reqStruct any) erro
 		return err
 	}
 
-	req.Header.Add("Authorization", "Bearer "+c.accessToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -227,6 +227,10 @@ func (c *Conn) mgmtRequest(apiMethod string, apiPath string, reqStruct any) erro
 	}
 
 	return nil
+}
+
+func (c *Conn) brokerCorePublish(subject, reply string, msg []byte) error {
+	return c.brokerConn.PublishRequest(subject, reply, msg)
 }
 
 func (c *Conn) brokerPublish(msg *nats.Msg, opts ...nats.PubOpt) (nats.PubAckFuture, error) {
@@ -297,11 +301,32 @@ type apiObj interface {
 	getDestructionReq() any
 }
 
+type directObj interface {
+	getCreationSubject() string
+	getCreationReqV2() any
+
+	// getDestructionSubject() string
+	// getDestructionReqV2() any
+}
+
 func (c *Conn) create(o apiObj) error {
 	apiPath := o.getCreationApiPath()
 	creationReq := o.getCreationReq()
 
 	return c.mgmtRequest("POST", apiPath, creationReq)
+}
+
+func (c *Conn) createV2(do directObj) error {
+	subject := do.getCreationSubject()
+	creationReq := do.getCreationReqV2()
+
+	b, err := json.Marshal(creationReq)
+	if err != nil {
+		return err
+	}
+
+	// TODO (or/shoham) second parameter can be used for reply subject
+	return c.brokerCorePublish(subject, "", b)
 }
 
 func (c *Conn) destroy(o apiObj) error {

@@ -16,15 +16,21 @@ func main() {
 
 	defer conn.Close()
 
-	p, err := conn.CreateProducer("teststation", "testproducer")
+	_, err = conn.CreateFactory("factory_test_2")
 	if err != nil {
-		fmt.Printf("Produce failed: %v\n", err)
+		fmt.Printf("Factory creation failed: %v\n", err)
 		os.Exit(2)
 	}
-	err = p.Produce([]byte("You have a message!"))
 
-	if err != nil {
-		fmt.Printf("Produce failed: %v\n", err)
-		os.Exit(3)
-	}
+	// p, err := conn.CreateProducer("teststation", "testproducer")
+	// if err != nil {
+	// 	fmt.Printf("Produce failed: %v\n", err)
+	// 	os.Exit(2)
+	// }
+	// err = p.Produce([]byte("You have a message!"))
+
+	// if err != nil {
+	// 	fmt.Printf("Produce failed: %v\n", err)
+	// 	os.Exit(3)
+	// }
 }
