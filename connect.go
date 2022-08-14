@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -145,19 +146,24 @@ func (c *Conn) tcpRequestResponse(req []byte) ([]byte, error) {
 	return b[:bLen], nil
 }
 
+func disconnectedError(conn *nats.Conn, err error) {
+	fmt.Printf("Error %v", err.Error())
+}
+
 func (c *Conn) startDataConn() error {
 	opts := &c.opts
 
 	var err error
 	url := opts.Host + ":" + strconv.Itoa(opts.DataPort)
 	natsOpts := nats.Options{
-		Url:            url,
-		AllowReconnect: opts.Reconnect,
-		MaxReconnect:   opts.MaxReconnect,
-		ReconnectWait:  opts.ReconnectInterval,
-		Timeout:        opts.Timeout,
-		Token:          opts.ConnectionToken,
-		User:           opts.Username,
+		Url:               url,
+		AllowReconnect:    opts.Reconnect,
+		MaxReconnect:      opts.MaxReconnect,
+		ReconnectWait:     opts.ReconnectInterval,
+		Timeout:           opts.Timeout,
+		Token:             opts.ConnectionToken,
+		User:              opts.Username,
+		DisconnectedErrCB: disconnectedError,
 	}
 	c.brokerConn, err = natsOpts.Connect()
 
