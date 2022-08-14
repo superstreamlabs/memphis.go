@@ -21,11 +21,6 @@ type Factory struct {
 }
 
 type createFactoryReq struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-}
-
-type createFactoryReqV2 struct {
 	Username    string `json:"username"`
 	FactoryName string `json:"factory_name"`
 	FactoryDesc string `json:"factory_description"`
@@ -64,14 +59,14 @@ func (c *Conn) CreateFactory(name string, opts ...FactoryOpt) (*Factory, error) 
 			}
 		}
 	}
-
-	return defaultOpts.createFactory(c)
+	res, err := defaultOpts.createFactory(c)
+	return res, err
 }
 
 // createFactory - creates a factory using FactoryOpts struct.
 func (opts *FactoryOpts) createFactory(c *Conn) (*Factory, error) {
 	factory := Factory{Name: opts.Name, Description: opts.Description, conn: c}
-	return &factory, c.createV2(&factory)
+	return &factory, c.createSubjectAndPublish(&factory)
 }
 
 // Factory.Destroy - destroys this factory.
@@ -89,13 +84,6 @@ func (f *Factory) getCreationSubject() string {
 
 func (f *Factory) getCreationReq() any {
 	return createFactoryReq{
-		Name:        f.Name,
-		Description: f.Description,
-	}
-}
-
-func (f *Factory) getCreationReqV2() any {
-	return createFactoryReqV2{
 		Username:    f.conn.username,
 		FactoryName: f.Name,
 		FactoryDesc: f.Description,

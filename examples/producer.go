@@ -16,10 +16,17 @@ func main() {
 
 	defer conn.Close()
 
-	_, err = conn.CreateFactory("factory_test_2")
+	factory, err := conn.CreateFactory("factory_test_2")
 	if err != nil {
 		fmt.Printf("Factory creation failed: %v\n", err)
 		os.Exit(2)
+	}
+
+	station, err := conn.CreateStation("station_test_name_2", factory.Name)
+	fmt.Println(station)
+	if err != nil {
+		fmt.Printf("Station creation failed: %v\n", err)
+		os.Exit(3)
 	}
 
 	// p, err := conn.CreateProducer("teststation", "testproducer")
