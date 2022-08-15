@@ -126,7 +126,7 @@ func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 		conn:           c,
 	}
 
-	return &s, s.conn.createSubjectAndPublish(&s)
+	return &s, s.conn.createV2(&s)
 
 }
 

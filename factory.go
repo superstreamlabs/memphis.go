@@ -66,7 +66,7 @@ func (c *Conn) CreateFactory(name string, opts ...FactoryOpt) (*Factory, error) 
 // createFactory - creates a factory using FactoryOpts struct.
 func (opts *FactoryOpts) createFactory(c *Conn) (*Factory, error) {
 	factory := Factory{Name: opts.Name, Description: opts.Description, conn: c}
-	return &factory, c.createSubjectAndPublish(&factory)
+	return &factory, c.createV2(&factory)
 }
 
 // Factory.Destroy - destroys this factory.

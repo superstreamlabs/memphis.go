@@ -316,7 +316,7 @@ func (c *Conn) create(o apiObj) error {
 	return c.mgmtRequest("POST", apiPath, creationReq)
 }
 
-func (c *Conn) createSubjectAndPublish(do directObj) error {
+func (c *Conn) createV2(do directObj) error {
 	subject := do.getCreationSubject()
 	creationReq := do.getCreationReq()
 
