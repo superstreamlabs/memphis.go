@@ -325,8 +325,15 @@ func (c *Conn) createV2(do directObj) error {
 		return err
 	}
 
-	// TODO (or/shoham) second parameter can be used for reply subject
-	return c.brokerCorePublish(subject, "", b)
+	msg, err := c.brokerConn.Request(subject, b, 1*time.Second)
+	if err != nil {
+		return err
+	}
+	if len(msg.Data) > 0 {
+		return errors.New(string(msg.Data))
+	}
+
+	return nil
 }
 
 func (c *Conn) destroy(o apiObj) error {
