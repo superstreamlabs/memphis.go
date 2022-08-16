@@ -32,7 +32,31 @@ func main() {
 		os.Exit(3)
 	}
 
+	err = station.Destroy()
+	if err != nil {
+		fmt.Printf("Station destruction failed: %v\n", err)
+		os.Exit(3)
+	}
+
+	station, err = conn.CreateStation("station_test_name", factory.Name)
+	fmt.Println(station)
+	if err != nil {
+		fmt.Printf("Station creation failed: %v\n", err)
+		os.Exit(3)
+	}
+
 	p, err := conn.CreateProducer(station.Name, "test_producer")
+	if err != nil {
+		fmt.Printf("Producer creation failed: %v\n", err)
+		os.Exit(4)
+	}
+	err = p.Destroy()
+	if err != nil {
+		fmt.Printf("Producer destruction failed: %v\n", err)
+		os.Exit(5)
+	}
+
+	p, err = conn.CreateProducer(station.Name, "test_producer")
 	if err != nil {
 		fmt.Printf("Produce failed: %v\n", err)
 		os.Exit(4)
@@ -69,4 +93,11 @@ func main() {
 
 	consumer.Consume(handler)
 	<-handlerCh
+	consumer.StopConsume()
+
+	err = consumer.Destroy()
+	if err != nil {
+		fmt.Printf("Consumer destruction failed: %v\n", err)
+		os.Exit(5)
+	}
 }

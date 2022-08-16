@@ -77,6 +77,7 @@ type createConsumerReq struct {
 type removeConsumerReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
+	Username    string `json:"username"`
 }
 
 // ConsumerOpts - configuration options for a consumer.
@@ -337,7 +338,7 @@ func (c *Consumer) Destroy() error {
 		c.pingQuit <- struct{}{}
 	}
 
-	return c.conn.destroy(c)
+	return c.conn.destroyV2(c)
 }
 
 func (c *Consumer) getCreationApiPath() string {
@@ -369,8 +370,8 @@ func (c *Consumer) getDestructionSubject() string {
 	return "$memphis_consumer_destructions"
 }
 
-func (p *Consumer) getDestructionReq() any {
-	return removeConsumerReq{Name: p.Name, StationName: p.stationName}
+func (c *Consumer) getDestructionReq() any {
+	return removeConsumerReq{Name: c.Name, StationName: c.stationName, Username: c.conn.username}
 }
 
 // ConsumerName - name for the consumer.

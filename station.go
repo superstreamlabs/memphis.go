@@ -137,7 +137,7 @@ func (f *Factory) CreateStation(name string, opts ...StationOpt) (*Station, erro
 type StationName string
 
 func (s *Station) Destroy() error {
-	return s.conn.destroy(s)
+	return s.conn.destroyV2(s)
 }
 
 func (s *Station) getCreationApiPath() string {

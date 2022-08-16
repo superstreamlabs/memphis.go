@@ -37,6 +37,7 @@ type createProducerReq struct {
 type removeProducerReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
+	Username    string `json:"username"`
 }
 
 // CreateProducer - creates a producer.
@@ -77,12 +78,12 @@ func (p *Producer) getDestructionSubject() string {
 }
 
 func (p *Producer) getDestructionReq() any {
-	return removeProducerReq{Name: p.Name, StationName: p.stationName}
+	return removeProducerReq{Name: p.Name, StationName: p.stationName, Username: p.conn.username}
 }
 
 // Destroy - destoy this producer.
 func (p *Producer) Destroy() error {
-	return p.conn.destroy(p)
+	return p.conn.destroyV2(p)
 }
 
 // ProduceOpts - configuration options for produce operations.
