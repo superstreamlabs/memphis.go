@@ -14,12 +14,9 @@
 package memphis
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"net"
-	"net/http"
 	"regexp"
 	"strconv"
 	"sync"
@@ -188,47 +185,6 @@ func (c *Conn) Close() {
 	c.brokerConn.Close()
 }
 
-func (c *Conn) mgmtRequest(apiMethod string, apiPath string, reqStruct any) error {
-	if !c.IsConnected() {
-		return errors.New("Connection object is disconnected")
-	}
-
-	managementPort := strconv.Itoa(c.opts.ManagementPort)
-	url := "http://" + c.opts.Host + ":" + managementPort + apiPath
-	reqJson, err := json.Marshal(reqStruct)
-	if err != nil {
-		return err
-	}
-
-	reqBody := bytes.NewBuffer(reqJson)
-
-	req, err := http.NewRequest(apiMethod, url, reqBody)
-	if err != nil {
-		return err
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-
-	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 { //HTTP success status code
-		var errorResp errorResp
-		err = json.Unmarshal(respBody, &errorResp)
-		if err != nil {
-			return err
-		}
-		return errors.New(errorResp.Message)
-	}
-
-	return nil
-}
-
 func (c *Conn) brokerCorePublish(subject, reply string, msg []byte) error {
 	return c.brokerConn.PublishRequest(subject, reply, msg)
 }
@@ -293,14 +249,6 @@ func Timeout(timeout time.Duration) Option {
 	}
 }
 
-type apiObj interface {
-	getCreationApiPath() string
-	getCreationReq() any
-
-	getDestructionApiPath() string
-	getDestructionReq() any
-}
-
 type directObj interface {
 	getCreationSubject() string
 	getCreationReq() any
@@ -308,13 +256,6 @@ type directObj interface {
 	getDestructionSubject() string
 	getDestructionReq() any
 }
-
-// func (c *Conn) create(o apiObj) error {
-// 	apiPath := o.getCreationApiPath()
-// 	creationReq := o.getCreationReq()
-
-// 	return c.mgmtRequest("POST", apiPath, creationReq)
-// }
 
 func (c *Conn) create(do directObj) error {
 	subject := do.getCreationSubject()
@@ -336,14 +277,7 @@ func (c *Conn) create(do directObj) error {
 	return nil
 }
 
-func (c *Conn) destroy(o apiObj) error {
-	apiPath := o.getDestructionApiPath()
-	destructionReq := o.getDestructionReq()
-
-	return c.mgmtRequest("DELETE", apiPath, destructionReq)
-}
-
-func (c *Conn) destroyV2(o directObj) error {
+func (c *Conn) destroy(o directObj) error {
 	subject := o.getDestructionSubject()
 	destructionReq := o.getDestructionReq()
 

@@ -338,11 +338,7 @@ func (c *Consumer) Destroy() error {
 		c.pingQuit <- struct{}{}
 	}
 
-	return c.conn.destroyV2(c)
-}
-
-func (c *Consumer) getCreationApiPath() string {
-	return "/api/consumers/createConsumer"
+	return c.conn.destroy(c)
 }
 
 func (c *Consumer) getCreationSubject() string {
@@ -360,10 +356,6 @@ func (c *Consumer) getCreationReq() any {
 		MaxMsgDeliveries: c.MaxMsgDeliveries,
 		Username:         c.conn.username,
 	}
-}
-
-func (p *Consumer) getDestructionApiPath() string {
-	return "/api/consumers/destroyConsumer"
 }
 
 func (c *Consumer) getDestructionSubject() string {

@@ -51,10 +51,6 @@ func (s *Station) CreateProducer(name string) (*Producer, error) {
 	return s.conn.CreateProducer(s.Name, name)
 }
 
-func (p *Producer) getCreationApiPath() string {
-	return "/api/producers/createProducer"
-}
-
 func (p *Producer) getCreationSubject() string {
 	return "$memphis_producer_creations"
 }
@@ -69,10 +65,6 @@ func (p *Producer) getCreationReq() any {
 	}
 }
 
-func (p *Producer) getDestructionApiPath() string {
-	return "/api/producers/destroyProducer"
-}
-
 func (p *Producer) getDestructionSubject() string {
 	return "$memphis_producer_destructions"
 }
@@ -83,7 +75,7 @@ func (p *Producer) getDestructionReq() any {
 
 // Destroy - destoy this producer.
 func (p *Producer) Destroy() error {
-	return p.conn.destroyV2(p)
+	return p.conn.destroy(p)
 }
 
 // ProduceOpts - configuration options for produce operations.
