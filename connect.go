@@ -305,8 +305,8 @@ type directObj interface {
 	getCreationSubject() string
 	getCreationReq() any
 
-	// getDestructionSubject() string
-	// getDestructionReqV2() any
+	getDestructionSubject() string
+	getDestructionReq() any
 }
 
 // func (c *Conn) create(o apiObj) error {
@@ -341,4 +341,24 @@ func (c *Conn) destroy(o apiObj) error {
 	destructionReq := o.getDestructionReq()
 
 	return c.mgmtRequest("DELETE", apiPath, destructionReq)
+}
+
+func (c *Conn) destroyV2(o directObj) error {
+	subject := o.getDestructionSubject()
+	destructionReq := o.getDestructionReq()
+
+	b, err := json.Marshal(destructionReq)
+	if err != nil {
+		return err
+	}
+
+	msg, err := c.brokerConn.Request(subject, b, 1*time.Second)
+	if err != nil {
+		return err
+	}
+	if len(msg.Data) > 0 {
+		return errors.New(string(msg.Data))
+	}
+
+	return nil
 }

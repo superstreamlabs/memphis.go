@@ -71,7 +71,7 @@ type createConsumerReq struct {
 	ConsumerGroup    string `json:"consumers_group"`
 	MaxAckTimeMillis int    `json:"max_ack_time_ms"`
 	MaxMsgDeliveries int    `json:"max_msg_deliveries"`
-	Username    string `json:"username"`
+	Username         string `json:"username"`
 }
 
 type removeConsumerReq struct {
@@ -357,12 +357,16 @@ func (c *Consumer) getCreationReq() any {
 		ConsumerGroup:    c.ConsumerGroup,
 		MaxAckTimeMillis: int(c.MaxAckTime.Milliseconds()),
 		MaxMsgDeliveries: c.MaxMsgDeliveries,
-		Username:     	  c.conn.username,
+		Username:         c.conn.username,
 	}
 }
 
 func (p *Consumer) getDestructionApiPath() string {
 	return "/api/consumers/destroyConsumer"
+}
+
+func (c *Consumer) getDestructionSubject() string {
+	return "$memphis_consumer_destructions"
 }
 
 func (p *Consumer) getDestructionReq() any {

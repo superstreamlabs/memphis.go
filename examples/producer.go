@@ -23,13 +23,14 @@ func main() {
 		os.Exit(2)
 	}
 
+	defer factory.Destroy()
+
 	station, err := conn.CreateStation("station_test_name", factory.Name)
 	fmt.Println(station)
 	if err != nil {
 		fmt.Printf("Station creation failed: %v\n", err)
 		os.Exit(3)
 	}
-
 
 	p, err := conn.CreateProducer(station.Name, "test_producer")
 	if err != nil {
@@ -50,12 +51,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	handCh:= make(chan struct{})
+	handlerCh := make(chan struct{})
 	handler := func(msgs []*memphis.Msg, err error) {
 		fmt.Println("msgs", msgs)
 		if err != nil {
 			fmt.Printf("Fetch failed: %v\n", err)
-			handCh <- struct{}{}
+			handlerCh <- struct{}{}
 			return
 		}
 
@@ -63,9 +64,9 @@ func main() {
 			fmt.Println("msg", string(msg.Data()))
 			msg.Ack()
 		}
-		handCh <- struct{}{}
+		handlerCh <- struct{}{}
 	}
 
 	consumer.Consume(handler)
-	<- handCh
+	<-handlerCh
 }
