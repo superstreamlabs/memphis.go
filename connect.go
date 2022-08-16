@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nats-io/nats.go"
+	"github.com/memphisdev/memphis-nats.go"
 )
 
 const (
