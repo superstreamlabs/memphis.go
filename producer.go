@@ -31,6 +31,7 @@ type createProducerReq struct {
 	StationName  string `json:"station_name"`
 	ConnectionId string `json:"connection_id"`
 	ProducerType string `json:"producer_type"`
+	Username   	 string `json:"username"`
 }
 
 type removeProducerReq struct {
@@ -41,7 +42,7 @@ type removeProducerReq struct {
 // CreateProducer - creates a producer.
 func (c *Conn) CreateProducer(stationName, name string) (*Producer, error) {
 	p := Producer{Name: name, stationName: stationName, conn: c}
-	return &p, c.create(&p)
+	return &p, c.createV2(&p)
 }
 
 // Station.CreateProducer - creates a producer attached to this station.
@@ -59,11 +60,16 @@ func (p *Producer) getCreationReq() any {
 		StationName:  p.stationName,
 		ConnectionId: p.conn.ConnId,
 		ProducerType: "application",
+		Username:     p.conn.username,
 	}
 }
 
 func (p *Producer) getDestructionApiPath() string {
 	return "/api/producers/destroyProducer"
+}
+
+func (p *Producer) getCreationSubject() string {
+	return "$memphis_producer_creations"
 }
 
 func (p *Producer) getDestructionReq() any {

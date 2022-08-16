@@ -71,6 +71,7 @@ type createConsumerReq struct {
 	ConsumerGroup    string `json:"consumers_group"`
 	MaxAckTimeMillis int    `json:"max_ack_time_ms"`
 	MaxMsgDeliveries int    `json:"max_msg_deliveries"`
+	Username    string `json:"username"`
 }
 
 type removeConsumerReq struct {
@@ -135,7 +136,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		conn:               c,
 		stationName:        opts.StationName}
 
-	err := c.create(&consumer)
+	err := c.createV2(&consumer)
 	if err != nil {
 		return nil, err
 	}
@@ -343,6 +344,10 @@ func (c *Consumer) getCreationApiPath() string {
 	return "/api/consumers/createConsumer"
 }
 
+func (c *Consumer) getCreationSubject() string {
+	return "$memphis_consumer_creations"
+}
+
 func (c *Consumer) getCreationReq() any {
 	return createConsumerReq{
 		Name:             c.Name,
@@ -352,6 +357,7 @@ func (c *Consumer) getCreationReq() any {
 		ConsumerGroup:    c.ConsumerGroup,
 		MaxAckTimeMillis: int(c.MaxAckTime.Milliseconds()),
 		MaxMsgDeliveries: c.MaxMsgDeliveries,
+		Username:     	  c.conn.username,
 	}
 }
 
