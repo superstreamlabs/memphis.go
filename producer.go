@@ -31,7 +31,7 @@ type createProducerReq struct {
 	StationName  string `json:"station_name"`
 	ConnectionId string `json:"connection_id"`
 	ProducerType string `json:"producer_type"`
-	Username   	 string `json:"username"`
+	Username     string `json:"username"`
 }
 
 type removeProducerReq struct {
@@ -54,6 +54,10 @@ func (p *Producer) getCreationApiPath() string {
 	return "/api/producers/createProducer"
 }
 
+func (p *Producer) getCreationSubject() string {
+	return "$memphis_producer_creations"
+}
+
 func (p *Producer) getCreationReq() any {
 	return createProducerReq{
 		Name:         p.Name,
@@ -68,8 +72,8 @@ func (p *Producer) getDestructionApiPath() string {
 	return "/api/producers/destroyProducer"
 }
 
-func (p *Producer) getCreationSubject() string {
-	return "$memphis_producer_creations"
+func (p *Producer) getDestructionSubject() string {
+	return "$memphis_producer_destructions"
 }
 
 func (p *Producer) getDestructionReq() any {

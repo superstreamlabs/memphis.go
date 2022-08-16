@@ -71,7 +71,7 @@ func (opts *FactoryOpts) createFactory(c *Conn) (*Factory, error) {
 
 // Factory.Destroy - destroys this factory.
 func (f *Factory) Destroy() error {
-	return f.conn.destroy(f)
+	return f.conn.destroyV2(f)
 }
 
 func (f *Factory) getCreationApiPath() string {
@@ -92,6 +92,10 @@ func (f *Factory) getCreationReq() any {
 
 func (f *Factory) getDestructionApiPath() string {
 	return "/api/factories/removeFactory"
+}
+
+func (f *Factory) getDestructionSubject() string {
+	return "$memphis_factory_destructions"
 }
 
 func (f *Factory) getDestructionReq() any {
