@@ -42,7 +42,7 @@ type removeProducerReq struct {
 // CreateProducer - creates a producer.
 func (c *Conn) CreateProducer(stationName, name string) (*Producer, error) {
 	p := Producer{Name: name, stationName: stationName, conn: c}
-	return &p, c.createV2(&p)
+	return &p, c.create(&p)
 }
 
 // Station.CreateProducer - creates a producer attached to this station.

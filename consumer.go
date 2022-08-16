@@ -136,7 +136,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		conn:               c,
 		stationName:        opts.StationName}
 
-	err := c.createV2(&consumer)
+	err := c.create(&consumer)
 	if err != nil {
 		return nil, err
 	}

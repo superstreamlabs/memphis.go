@@ -309,14 +309,14 @@ type directObj interface {
 	// getDestructionReqV2() any
 }
 
-func (c *Conn) create(o apiObj) error {
-	apiPath := o.getCreationApiPath()
-	creationReq := o.getCreationReq()
+// func (c *Conn) create(o apiObj) error {
+// 	apiPath := o.getCreationApiPath()
+// 	creationReq := o.getCreationReq()
 
-	return c.mgmtRequest("POST", apiPath, creationReq)
-}
+// 	return c.mgmtRequest("POST", apiPath, creationReq)
+// }
 
-func (c *Conn) createV2(do directObj) error {
+func (c *Conn) create(do directObj) error {
 	subject := do.getCreationSubject()
 	creationReq := do.getCreationReq()
 

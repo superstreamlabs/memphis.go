@@ -50,10 +50,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	handCh:= make(chan struct{})
 	handler := func(msgs []*memphis.Msg, err error) {
 		fmt.Println("msgs", msgs)
 		if err != nil {
 			fmt.Printf("Fetch failed: %v\n", err)
+			handCh <- struct{}{}
 			return
 		}
 
@@ -61,8 +63,9 @@ func main() {
 			fmt.Println("msg", string(msg.Data()))
 			msg.Ack()
 		}
+		handCh <- struct{}{}
 	}
 
 	consumer.Consume(handler)
-
+	<- handCh
 }
