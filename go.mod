@@ -2,9 +2,7 @@ module github.com/memphisdev/memphis.go
 
 go 1.18
 
-// replace github.com/nats-io/nats.go => /Users/shohamroditi/memphis/memphis-nats.go
-
-require github.com/nats-io/nats.go v1.16.0
+require github.com/memphisdev/memphis-nats.go v0.0.2
 
 require (
 	github.com/nats-io/nkeys v0.3.0 // indirect

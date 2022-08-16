@@ -16,7 +16,7 @@ package memphis
 import (
 	"time"
 
-	"github.com/nats-io/nats.go"
+	"github.com/memphisdev/memphis-nats.go"
 )
 
 // Producer - memphis producer object.
@@ -31,11 +31,13 @@ type createProducerReq struct {
 	StationName  string `json:"station_name"`
 	ConnectionId string `json:"connection_id"`
 	ProducerType string `json:"producer_type"`
+	Username     string `json:"username"`
 }
 
 type removeProducerReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
+	Username    string `json:"username"`
 }
 
 // CreateProducer - creates a producer.
@@ -49,8 +51,8 @@ func (s *Station) CreateProducer(name string) (*Producer, error) {
 	return s.conn.CreateProducer(s.Name, name)
 }
 
-func (p *Producer) getCreationApiPath() string {
-	return "/api/producers/createProducer"
+func (p *Producer) getCreationSubject() string {
+	return "$memphis_producer_creations"
 }
 
 func (p *Producer) getCreationReq() any {
@@ -59,15 +61,16 @@ func (p *Producer) getCreationReq() any {
 		StationName:  p.stationName,
 		ConnectionId: p.conn.ConnId,
 		ProducerType: "application",
+		Username:     p.conn.username,
 	}
 }
 
-func (p *Producer) getDestructionApiPath() string {
-	return "/api/producers/destroyProducer"
+func (p *Producer) getDestructionSubject() string {
+	return "$memphis_producer_destructions"
 }
 
 func (p *Producer) getDestructionReq() any {
-	return removeProducerReq{Name: p.Name, StationName: p.stationName}
+	return removeProducerReq{Name: p.Name, StationName: p.stationName, Username: p.conn.username}
 }
 
 // Destroy - destoy this producer.

@@ -62,6 +62,7 @@ type createStationReq struct {
 	Replicas          int    `json:"replicas"`
 	DedupEnabled      bool   `json:"dedup_enabled"`
 	DedupWindowMillis int    `json:"dedup_window_in_ms"`
+	Username          string `json:"username"`
 }
 
 type removeStationReq struct {
@@ -108,8 +109,8 @@ func (c *Conn) CreateStation(Name, FactoryName string, opts ...StationOpt) (*Sta
 			}
 		}
 	}
-
-	return defaultOpts.createStation(c)
+	res, err := defaultOpts.createStation(c)
+	return res, err
 }
 
 func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
@@ -126,6 +127,7 @@ func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 	}
 
 	return &s, s.conn.create(&s)
+
 }
 
 func (f *Factory) CreateStation(name string, opts ...StationOpt) (*Station, error) {
@@ -138,8 +140,8 @@ func (s *Station) Destroy() error {
 	return s.conn.destroy(s)
 }
 
-func (s *Station) getCreationApiPath() string {
-	return "/api/stations/createStation"
+func (s *Station) getCreationSubject() string {
+	return "$memphis_station_creations"
 }
 
 func (s *Station) getCreationReq() any {
@@ -152,11 +154,12 @@ func (s *Station) getCreationReq() any {
 		Replicas:          s.Replicas,
 		DedupEnabled:      s.DedupEnabled,
 		DedupWindowMillis: int(s.DedupWindow.Milliseconds()),
+		Username:          s.conn.username,
 	}
 }
 
-func (s *Station) getDestructionApiPath() string {
-	return "/api/stations/removeStation"
+func (s *Station) getDestructionSubject() string {
+	return "$memphis_station_destructions"
 }
 
 func (s *Station) getDestructionReq() any {

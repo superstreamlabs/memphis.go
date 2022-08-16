@@ -14,23 +14,24 @@
 package memphis
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
-	"net/http"
 	"regexp"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/nats-io/nats.go"
+	"github.com/memphisdev/memphis-nats.go"
 )
 
 const (
 	ConnectDefaultTcpCheckInterval = 2 * time.Second
+	// TODO (or/shoham) use userType for requests that need userType
+	// (look in the server for handlers that use getUserDetailsFromMiddleware and later use user.userType
+	// e.g. CreateConsumer)
+	userType = "application"
 )
 
 // Option is a function on the options for a connection.
@@ -60,7 +61,8 @@ func (c *Conn) IsConnected() bool {
 type Conn struct {
 	opts             Options
 	ConnId           string
-	accessToken      string
+	username         string
+	userType         string
 	tcpConn          net.Conn
 	tcpConnLock      sync.Mutex
 	refreshTokenWait time.Duration
@@ -176,12 +178,8 @@ func (c *Conn) startDataConn() error {
 		c.brokerConn.Close()
 		return err
 	}
+	c.username = opts.Username
 	c.ConnId, err = c.brokerConn.GetConnectionId(3 * time.Second)
-	if err != nil {
-		return err
-	}
-
-	c.accessToken, err = c.brokerConn.GetAccessToken(3 * time.Second)
 	if err != nil {
 		return err
 	}
@@ -193,46 +191,8 @@ func (c *Conn) Close() {
 	c.brokerConn.Close()
 }
 
-func (c *Conn) mgmtRequest(apiMethod string, apiPath string, reqStruct any) error {
-	if !c.IsConnected() {
-		return errors.New("Connection object is disconnected")
-	}
-
-	managementPort := strconv.Itoa(c.opts.ManagementPort)
-	url := "http://" + c.opts.Host + ":" + managementPort + apiPath
-	reqJson, err := json.Marshal(reqStruct)
-	if err != nil {
-		return err
-	}
-
-	reqBody := bytes.NewBuffer(reqJson)
-
-	req, err := http.NewRequest(apiMethod, url, reqBody)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Add("Authorization", "Bearer "+c.accessToken)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-
-	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 { //HTTP success status code
-		var errorResp errorResp
-		err = json.Unmarshal(respBody, &errorResp)
-		if err != nil {
-			return err
-		}
-		return errors.New(errorResp.Message)
-	}
-
-	return nil
+func (c *Conn) brokerCorePublish(subject, reply string, msg []byte) error {
+	return c.brokerConn.PublishRequest(subject, reply, msg)
 }
 
 func (c *Conn) brokerPublish(msg *nats.Msg, opts ...nats.PubOpt) (nats.PubAckFuture, error) {
@@ -295,24 +255,50 @@ func Timeout(timeout time.Duration) Option {
 	}
 }
 
-type apiObj interface {
-	getCreationApiPath() string
+type directObj interface {
+	getCreationSubject() string
 	getCreationReq() any
 
-	getDestructionApiPath() string
+	getDestructionSubject() string
 	getDestructionReq() any
 }
 
-func (c *Conn) create(o apiObj) error {
-	apiPath := o.getCreationApiPath()
-	creationReq := o.getCreationReq()
+func (c *Conn) create(do directObj) error {
+	subject := do.getCreationSubject()
+	creationReq := do.getCreationReq()
 
-	return c.mgmtRequest("POST", apiPath, creationReq)
+	b, err := json.Marshal(creationReq)
+	if err != nil {
+		return err
+	}
+
+	msg, err := c.brokerConn.Request(subject, b, 1*time.Second)
+	if err != nil {
+		return err
+	}
+	if len(msg.Data) > 0 {
+		return errors.New(string(msg.Data))
+	}
+
+	return nil
 }
 
-func (c *Conn) destroy(o apiObj) error {
-	apiPath := o.getDestructionApiPath()
+func (c *Conn) destroy(o directObj) error {
+	subject := o.getDestructionSubject()
 	destructionReq := o.getDestructionReq()
 
-	return c.mgmtRequest("DELETE", apiPath, destructionReq)
+	b, err := json.Marshal(destructionReq)
+	if err != nil {
+		return err
+	}
+
+	msg, err := c.brokerConn.Request(subject, b, 1*time.Second)
+	if err != nil {
+		return err
+	}
+	if len(msg.Data) > 0 {
+		return errors.New(string(msg.Data))
+	}
+
+	return nil
 }

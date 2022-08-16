@@ -19,7 +19,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/nats-io/nats.go"
+	"github.com/memphisdev/memphis-nats.go"
 )
 
 const (
@@ -71,11 +71,13 @@ type createConsumerReq struct {
 	ConsumerGroup    string `json:"consumers_group"`
 	MaxAckTimeMillis int    `json:"max_ack_time_ms"`
 	MaxMsgDeliveries int    `json:"max_msg_deliveries"`
+	Username         string `json:"username"`
 }
 
 type removeConsumerReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
+	Username    string `json:"username"`
 }
 
 // ConsumerOpts - configuration options for a consumer.
@@ -339,8 +341,8 @@ func (c *Consumer) Destroy() error {
 	return c.conn.destroy(c)
 }
 
-func (c *Consumer) getCreationApiPath() string {
-	return "/api/consumers/createConsumer"
+func (c *Consumer) getCreationSubject() string {
+	return "$memphis_consumer_creations"
 }
 
 func (c *Consumer) getCreationReq() any {
@@ -352,15 +354,16 @@ func (c *Consumer) getCreationReq() any {
 		ConsumerGroup:    c.ConsumerGroup,
 		MaxAckTimeMillis: int(c.MaxAckTime.Milliseconds()),
 		MaxMsgDeliveries: c.MaxMsgDeliveries,
+		Username:         c.conn.username,
 	}
 }
 
-func (p *Consumer) getDestructionApiPath() string {
-	return "/api/consumers/destroyConsumer"
+func (c *Consumer) getDestructionSubject() string {
+	return "$memphis_consumer_destructions"
 }
 
-func (p *Consumer) getDestructionReq() any {
-	return removeConsumerReq{Name: p.Name, StationName: p.stationName}
+func (c *Consumer) getDestructionReq() any {
+	return removeConsumerReq{Name: c.Name, StationName: c.stationName, Username: c.conn.username}
 }
 
 // ConsumerName - name for the consumer.
