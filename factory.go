@@ -21,7 +21,6 @@ type Factory struct {
 }
 
 type createFactoryReq struct {
-	Username    string `json:"username"`
 	FactoryName string `json:"factory_name"`
 	FactoryDesc string `json:"factory_description"`
 }
@@ -80,7 +79,6 @@ func (f *Factory) getCreationSubject() string {
 
 func (f *Factory) getCreationReq() any {
 	return createFactoryReq{
-		Username:    f.conn.username,
 		FactoryName: f.Name,
 		FactoryDesc: f.Description,
 	}

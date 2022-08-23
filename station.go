@@ -62,7 +62,6 @@ type createStationReq struct {
 	Replicas          int    `json:"replicas"`
 	DedupEnabled      bool   `json:"dedup_enabled"`
 	DedupWindowMillis int    `json:"dedup_window_in_ms"`
-	Username          string `json:"username"`
 }
 
 type removeStationReq struct {
@@ -154,7 +153,6 @@ func (s *Station) getCreationReq() any {
 		Replicas:          s.Replicas,
 		DedupEnabled:      s.DedupEnabled,
 		DedupWindowMillis: int(s.DedupWindow.Milliseconds()),
-		Username:          s.conn.username,
 	}
 }
 

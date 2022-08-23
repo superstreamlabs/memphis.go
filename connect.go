@@ -14,24 +14,16 @@
 package memphis
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"regexp"
 	"strconv"
-	"sync"
 	"time"
 
-	"github.com/memphisdev/memphis-nats.go"
-)
-
-const (
-	ConnectDefaultTcpCheckInterval = 2 * time.Second
-	// TODO (or/shoham) use userType for requests that need userType
-	// (look in the server for handlers that use getUserDetailsFromMiddleware and later use user.userType
-	// e.g. CreateConsumer)
-	userType = "application"
+	"github.com/nats-io/nats.go"
 )
 
 // Option is a function on the options for a connection.
@@ -39,8 +31,7 @@ type Option func(*Options) error
 
 type Options struct {
 	Host              string
-	ManagementPort    int
-	DataPort          int
+	Port              int
 	Username          string
 	ConnectionToken   string
 	Reconnect         bool
@@ -59,23 +50,17 @@ func (c *Conn) IsConnected() bool {
 
 // Conn - holds the connection with memphis.
 type Conn struct {
-	opts             Options
-	ConnId           string
-	username         string
-	userType         string
-	tcpConn          net.Conn
-	tcpConnLock      sync.Mutex
-	refreshTokenWait time.Duration
-	pingWait         time.Duration
-	brokerConn       *nats.Conn
-	js               nats.JetStreamContext
+	opts       Options
+	ConnId     string
+	username   string
+	brokerConn *nats.Conn
+	js         nats.JetStreamContext
 }
 
 // getDefaultOptions - returns default configuration options for the client.
 func getDefaultOptions() Options {
 	return Options{
-		ManagementPort:    5555,
-		DataPort:          6666,
+		Port:              6666,
 		Reconnect:         true,
 		MaxReconnect:      3,
 		ReconnectInterval: 200 * time.Millisecond,
@@ -111,6 +96,14 @@ func normalizeHost(host string) string {
 	return r.ReplaceAllString(host, "")
 }
 
+func randomHex(n int) (string, error) {
+	bytes := make([]byte, n)
+	if _, err := rand.Read(bytes); err != nil {
+	  return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+  }
+
 func (opts Options) connect() (*Conn, error) {
 	if opts.MaxReconnect > 9 {
 		opts.MaxReconnect = 9
@@ -120,43 +113,32 @@ func (opts Options) connect() (*Conn, error) {
 		opts.MaxReconnect = 0
 	}
 
+	connId, err := randomHex(24)
+	if err != nil {
+		return nil, err
+	}
+
 	c := Conn{
+		ConnId: connId,
 		opts: opts,
 	}
 
-	if err := c.startDataConn(); err != nil {
+	if err := c.startConn(); err != nil {
 		return nil, err
 	}
 
 	return &c, nil
 }
 
-func (c *Conn) tcpRequestResponse(req []byte) ([]byte, error) {
-	c.tcpConnLock.Lock()
-	_, err := c.tcpConn.Write(req)
-	if err != nil {
-		return nil, err
-	}
-
-	b := make([]byte, 1024)
-	bLen, err := c.tcpConn.Read(b)
-	c.tcpConnLock.Unlock()
-
-	if err != nil {
-		return nil, err
-	}
-	return b[:bLen], nil
-}
-
 func disconnectedError(conn *nats.Conn, err error) {
 	fmt.Printf("Error %v", err.Error())
 }
 
-func (c *Conn) startDataConn() error {
+func (c *Conn) startConn() error {
 	opts := &c.opts
 
 	var err error
-	url := opts.Host + ":" + strconv.Itoa(opts.DataPort)
+	url := opts.Host + ":" + strconv.Itoa(opts.Port)
 	natsOpts := nats.Options{
 		Url:               url,
 		AllowReconnect:    opts.Reconnect,
@@ -164,8 +146,8 @@ func (c *Conn) startDataConn() error {
 		ReconnectWait:     opts.ReconnectInterval,
 		Timeout:           opts.Timeout,
 		Token:             opts.ConnectionToken,
-		User:              opts.Username,
 		DisconnectedErrCB: disconnectedError,
+		Name:              c.ConnId + "::" + opts.Username,
 	}
 	c.brokerConn, err = natsOpts.Connect()
 
@@ -179,11 +161,6 @@ func (c *Conn) startDataConn() error {
 		return err
 	}
 	c.username = opts.Username
-	c.ConnId, err = c.brokerConn.GetConnectionId(3 * time.Second)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -207,18 +184,10 @@ func (c *Conn) brokerQueueSubscribe(subj, queue string, cb nats.MsgHandler) (*na
 	return c.brokerConn.QueueSubscribe(subj, queue, cb)
 }
 
-// ManagementPort - default is 5555.
-func ManagementPort(port int) Option {
+// Port - default is 6666.
+func Port(port int) Option {
 	return func(o *Options) error {
-		o.ManagementPort = port
-		return nil
-	}
-}
-
-// DataPort - default is 6666.
-func DataPort(port int) Option {
-	return func(o *Options) error {
-		o.DataPort = port
+		o.Port = port
 		return nil
 	}
 }

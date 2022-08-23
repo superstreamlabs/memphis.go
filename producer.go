@@ -16,7 +16,7 @@ package memphis
 import (
 	"time"
 
-	"github.com/memphisdev/memphis-nats.go"
+	"github.com/nats-io/nats.go"
 )
 
 // Producer - memphis producer object.
@@ -31,13 +31,11 @@ type createProducerReq struct {
 	StationName  string `json:"station_name"`
 	ConnectionId string `json:"connection_id"`
 	ProducerType string `json:"producer_type"`
-	Username     string `json:"username"`
 }
 
 type removeProducerReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
-	Username    string `json:"username"`
 }
 
 // CreateProducer - creates a producer.
@@ -61,7 +59,6 @@ func (p *Producer) getCreationReq() any {
 		StationName:  p.stationName,
 		ConnectionId: p.conn.ConnId,
 		ProducerType: "application",
-		Username:     p.conn.username,
 	}
 }
 
@@ -70,7 +67,7 @@ func (p *Producer) getDestructionSubject() string {
 }
 
 func (p *Producer) getDestructionReq() any {
-	return removeProducerReq{Name: p.Name, StationName: p.stationName, Username: p.conn.username}
+	return removeProducerReq{Name: p.Name, StationName: p.stationName}
 }
 
 // Destroy - destoy this producer.
