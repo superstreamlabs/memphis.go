@@ -104,10 +104,10 @@ func normalizeHost(host string) string {
 func randomHex(n int) (string, error) {
 	bytes := make([]byte, n)
 	if _, err := rand.Read(bytes); err != nil {
-	  return "", err
+		return "", err
 	}
 	return hex.EncodeToString(bytes), nil
-  }
+}
 
 func (opts Options) connect() (*Conn, error) {
 	if opts.MaxReconnect > 9 {
@@ -118,14 +118,14 @@ func (opts Options) connect() (*Conn, error) {
 		opts.MaxReconnect = 0
 	}
 
-	connId, err := randomHex(24)
+	connId, err := randomHex(12)
 	if err != nil {
 		return nil, err
 	}
 
 	c := Conn{
 		ConnId: connId,
-		opts: opts,
+		opts:   opts,
 	}
 
 	if err := c.startConn(); err != nil {
