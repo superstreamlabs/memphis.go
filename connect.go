@@ -136,7 +136,9 @@ func (opts Options) connect() (*Conn, error) {
 }
 
 func disconnectedError(conn *nats.Conn, err error) {
-	fmt.Printf("Error %v", err.Error())
+	if err != nil {
+		fmt.Printf("Error %v", err.Error())
+	}
 }
 
 func (c *Conn) startConn() error {
