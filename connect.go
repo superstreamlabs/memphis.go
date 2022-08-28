@@ -19,10 +19,11 @@ import (
 	"net"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/memphisdev/memphis-nats.go"
+	nats "github.com/memphisdev/memphis-nats.go"
 )
 
 const (
@@ -290,7 +291,7 @@ func (c *Conn) destroy(o directObj) error {
 	if err != nil {
 		return err
 	}
-	if len(msg.Data) > 0 {
+	if len(msg.Data) > 0 && !strings.Contains(string(msg.Data), "not exist") {
 		return errors.New(string(msg.Data))
 	}
 
