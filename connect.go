@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -272,7 +273,7 @@ func (c *Conn) destroy(o directObj) error {
 	if err != nil {
 		return err
 	}
-	if len(msg.Data) > 0 {
+	if len(msg.Data) > 0 && !strings.Contains(string(msg.Data), "not exist") {
 		return errors.New(string(msg.Data))
 	}
 
