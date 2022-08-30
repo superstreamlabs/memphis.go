@@ -18,6 +18,8 @@
 
 package memphis
 
+import "strings"
+
 // Factory - a memphis factory object
 type Factory struct {
 	Name        string
@@ -64,6 +66,9 @@ func (c *Conn) CreateFactory(name string, opts ...FactoryOpt) (*Factory, error) 
 		}
 	}
 	res, err := defaultOpts.createFactory(c)
+	if err != nil && strings.Contains(err.Error(), "already exist") {
+		return res, nil
+	}
 	return res, err
 }
 
