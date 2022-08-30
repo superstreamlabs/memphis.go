@@ -157,10 +157,8 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	consumer.subscription, err = c.brokerPullSubscribe(subj,
 		consumer.ConsumerGroup,
 		nats.ManualAck(),
-		nats.AckWait(consumer.MaxAckTime),
 		nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
-		nats.MaxRequestBatch(opts.BatchSize),
-		nats.MaxDeliver(opts.MaxMsgDeliveries))
+		nats.MaxRequestBatch(opts.BatchSize))
 	if err != nil {
 		return nil, err
 	}
