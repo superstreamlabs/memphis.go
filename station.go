@@ -18,7 +18,10 @@
 
 package memphis
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Station - memphis station object.
 type Station struct {
@@ -114,6 +117,9 @@ func (c *Conn) CreateStation(Name, FactoryName string, opts ...StationOpt) (*Sta
 		}
 	}
 	res, err := defaultOpts.createStation(c)
+	if err != nil && strings.Contains(err.Error(), "already exist") {
+		return res, nil
+	}
 	return res, err
 }
 
