@@ -158,7 +158,8 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		consumer.ConsumerGroup,
 		nats.ManualAck(),
 		nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
-		nats.MaxRequestBatch(opts.BatchSize))
+		nats.MaxRequestBatch(opts.BatchSize),
+		nats.MaxDeliver(opts.MaxMsgDeliveries))
 	if err != nil {
 		return nil, err
 	}
