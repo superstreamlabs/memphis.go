@@ -1,25 +1,35 @@
+// Copyright 2021-2022 The Memphis Authors
+// Licensed under the MIT License (the "License");
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+// This license limiting reselling the software itself "AS IS".
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 package memphis
 
 import (
-	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
-	"io/ioutil"
-	"net"
-	"net/http"
+	"fmt"
 	"regexp"
 	"strconv"
-	"sync"
+	"strings"
 	"time"
 
-	"log"
-
 	"github.com/nats-io/nats.go"
-)
-
-const (
-	ConnectDefaultTcpCheckInterval = 2 * time.Second
 )
 
 // Option is a function on the options for a connection.
@@ -27,9 +37,7 @@ type Option func(*Options) error
 
 type Options struct {
 	Host              string
-	ManagementPort    int
-	TcpPort           int
-	DataPort          int
+	Port              int
 	Username          string
 	ConnectionToken   string
 	Reconnect         bool
@@ -42,72 +50,28 @@ type queryReq struct {
 	resp chan bool
 }
 
-type connState struct {
-	tcpConnected         chan bool
-	dataConnected        chan bool
-	queryConnection      chan queryReq
-	connectCheckQuitChan chan struct{}
-	pingQuitChan         chan struct{}
-	refreshTokenQuitChan chan struct{}
-	die                  chan struct{}
-}
-
 func (c *Conn) IsConnected() bool {
-	query := queryReq{
-		resp: make(chan bool),
-	}
-	c.state.queryConnection <- query
-	return <-query.resp
+	return c.brokerConn.IsConnected()
 }
 
 // Conn - holds the connection with memphis.
 type Conn struct {
-	opts             Options
-	ConnId           string
-	accessToken      string
-	state            connState
-	tcpConn          net.Conn
-	tcpConnLock      sync.Mutex
-	refreshTokenWait time.Duration
-	pingWait         time.Duration
-	brokerConn       *nats.Conn
-	js               nats.JetStreamContext
+	opts       Options
+	ConnId     string
+	username   string
+	brokerConn *nats.Conn
+	js         nats.JetStreamContext
 }
 
 // getDefaultOptions - returns default configuration options for the client.
 func getDefaultOptions() Options {
 	return Options{
-		ManagementPort:    5555,
-		TcpPort:           6666,
-		DataPort:          7766,
+		Port:              6666,
 		Reconnect:         true,
 		MaxReconnect:      3,
 		ReconnectInterval: 200 * time.Millisecond,
 		Timeout:           15 * time.Second,
 	}
-}
-
-type connectReq struct {
-	Username  string `json:"username"`
-	ConnToken string `json:"broker_creds"`
-	ConnId    string `json:"connection_id"`
-}
-
-type connectResp struct {
-	ConnId            string `json:"connection_id"`
-	AccessToken       string `json:"access_token"`
-	AccessTokenExpiry int    `json:"access_token_exp"`
-	PingInterval      int    `json:"ping_interval_ms"`
-}
-
-type refreshTokenResp connectResp
-
-type refreshAccessTokenReq struct {
-	ResendAccessToken bool `json:"resend_access_token"`
-}
-
-type pingReq struct {
-	Ping bool `json:"ping"`
 }
 
 type errorResp struct {
@@ -138,6 +102,14 @@ func normalizeHost(host string) string {
 	return r.ReplaceAllString(host, "")
 }
 
+func randomHex(n int) (string, error) {
+	bytes := make([]byte, n)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
 func (opts Options) connect() (*Conn, error) {
 	if opts.MaxReconnect > 9 {
 		opts.MaxReconnect = 9
@@ -147,208 +119,34 @@ func (opts Options) connect() (*Conn, error) {
 		opts.MaxReconnect = 0
 	}
 
-	c := Conn{
-		opts: opts,
-	}
-
-	c.state.tcpConnected = make(chan bool, 1)
-	c.state.dataConnected = make(chan bool)
-	c.state.queryConnection = make(chan queryReq)
-	c.state.pingQuitChan = make(chan struct{})
-	c.state.connectCheckQuitChan = make(chan struct{})
-	c.state.refreshTokenQuitChan = make(chan struct{})
-	c.state.die = make(chan struct{})
-
-	go listenForConnChanges(&c)
-
-	firstAttempt := true
-	if err := c.startTcpConn(firstAttempt); err != nil {
+	connId, err := randomHex(12)
+	if err != nil {
 		return nil, err
 	}
 
-	if err := c.startDataConn(); err != nil {
+	c := Conn{
+		ConnId: connId,
+		opts:   opts,
+	}
+
+	if err := c.startConn(); err != nil {
 		return nil, err
 	}
 
 	return &c, nil
 }
 
-func (c *Conn) doReconnect() error {
-	c.tcpConn.Close()
-	firstAttempt := false
-	err := c.startTcpConn(firstAttempt)
-	return err
-}
-
-func listenForConnChanges(c *Conn) {
-	cs := &c.state
-	tcpConnected, dataConnected, timedOpsStarted := false, false, false
-	for {
-		select {
-		case req := <-cs.queryConnection:
-			req.resp <- tcpConnected && dataConnected
-
-		case tcpConnected = <-cs.tcpConnected:
-			if tcpConnected {
-				if !timedOpsStarted {
-					c.checkTcpConnection()
-					c.refreshToken()
-					c.sendPing()
-					timedOpsStarted = true
-				}
-			} else {
-				if timedOpsStarted {
-					c.stopTimedOps()
-					timedOpsStarted = false
-				}
-
-				err := c.doReconnect()
-				if err != nil {
-					log.Print("reconnection failed")
-					go c.Close()
-					dataConnected = false
-				}
-			}
-
-		case dataConnected = <-cs.dataConnected:
-			if !dataConnected {
-				log.Print("broker conn disconnected")
-				go c.Close()
-				tcpConnected = false
-			}
-		case <-cs.die:
-			if timedOpsStarted {
-				c.stopTimedOps()
-			}
-			return
-		}
+func disconnectedError(conn *nats.Conn, err error) {
+	if err != nil {
+		fmt.Printf("Error %v", err.Error())
 	}
 }
 
-func (c *Conn) dial(resp *connectResp) error {
-	opts := &c.opts
-	url := opts.Host + ":" + strconv.Itoa(opts.TcpPort)
-	var err error
-
-	c.tcpConn, err = net.Dial("tcp", url)
-	if err != nil {
-		return err
-	}
-
-	connectMsg, err := json.Marshal(connectReq{
-		Username:  opts.Username,
-		ConnToken: opts.ConnectionToken,
-		ConnId:    "",
-	})
-	if err != nil {
-		c.tcpConn.Close()
-		return err
-	}
-
-	b, err := c.tcpRequestResponse(connectMsg)
-	if err != nil {
-		c.tcpConn.Close()
-		return err
-	}
-
-	err = json.Unmarshal(b, &resp)
-	if err != nil {
-		c.tcpConn.Close()
-		return err
-	}
-
-	return nil
-}
-
-func (c *Conn) startTcpConn(firstAttempt bool) error {
-	opts := &c.opts
-
-	connAttempts := opts.MaxReconnect
-	if firstAttempt {
-		connAttempts += 1
-	}
-
-	var err error
-	var resp connectResp
-	reconnectWaitChan := make(chan struct{}, 1)
-	for i := 0; i < connAttempts; i++ {
-		go func() {
-			<-time.After(c.opts.ReconnectInterval)
-			reconnectWaitChan <- struct{}{}
-		}()
-		err = c.dial(&resp)
-		if err != nil {
-			<-reconnectWaitChan
-			continue
-		}
-		break
-	}
-
-	if err != nil {
-		return err
-	}
-
-	c.ConnId = resp.ConnId
-	c.accessToken = resp.AccessToken
-	c.refreshTokenWait = time.Duration(resp.AccessTokenExpiry) * time.Millisecond
-	c.pingWait = time.Duration(resp.PingInterval) * time.Millisecond
-
-	c.state.tcpConnected <- true
-	return nil
-}
-
-func (c *Conn) tcpRequestResponse(req []byte) ([]byte, error) {
-	c.tcpConnLock.Lock()
-	_, err := c.tcpConn.Write(req)
-	if err != nil {
-		return nil, err
-	}
-
-	b := make([]byte, 1024)
-	bLen, err := c.tcpConn.Read(b)
-	c.tcpConnLock.Unlock()
-
-	if err != nil {
-		return nil, err
-	}
-	return b[:bLen], nil
-}
-
-func (c *Conn) checkTcpConnection() {
-	buff := make([]byte, 1)
-	go func() {
-		for {
-			select {
-			case <-time.After(ConnectDefaultTcpCheckInterval):
-				c.tcpConnLock.Lock()
-				if err := c.tcpConn.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
-					c.state.tcpConnected <- false
-					continue
-				}
-
-				_, err := c.tcpConn.Read(buff)
-				if err == io.EOF {
-					c.state.tcpConnected <- false
-					continue
-				}
-
-				if err := c.tcpConn.SetReadDeadline(time.Time{}); err != nil {
-					c.state.tcpConnected <- false
-					continue
-				}
-				c.tcpConnLock.Unlock()
-			case <-c.state.connectCheckQuitChan:
-				return
-			}
-		}
-	}()
-}
-
-func (c *Conn) startDataConn() error {
+func (c *Conn) startConn() error {
 	opts := &c.opts
 
 	var err error
-	url := opts.Host + ":" + strconv.Itoa(opts.DataPort)
+	url := opts.Host + ":" + strconv.Itoa(opts.Port)
 	natsOpts := nats.Options{
 		Url:               url,
 		AllowReconnect:    opts.Reconnect,
@@ -356,7 +154,8 @@ func (c *Conn) startDataConn() error {
 		ReconnectWait:     opts.ReconnectInterval,
 		Timeout:           opts.Timeout,
 		Token:             opts.ConnectionToken,
-		DisconnectedErrCB: c.createBrokerDisconnectionHandler(),
+		DisconnectedErrCB: disconnectedError,
+		Name:              c.ConnId + "::" + opts.Username,
 	}
 	c.brokerConn, err = natsOpts.Connect()
 
@@ -369,152 +168,16 @@ func (c *Conn) startDataConn() error {
 		c.brokerConn.Close()
 		return err
 	}
-
-	c.state.dataConnected <- true
+	c.username = opts.Username
 	return nil
-}
-
-func (c *Conn) createBrokerDisconnectionHandler() nats.ConnErrHandler {
-	return func(_ *nats.Conn, err error) {
-		c.state.dataConnected <- false
-	}
-}
-
-func (c *Conn) stopTimedOps() {
-	if c.pingWait != 0 {
-		c.state.pingQuitChan <- struct{}{}
-	}
-
-	if c.refreshTokenWait != 0 {
-		c.state.refreshTokenQuitChan <- struct{}{}
-	}
-
-	c.state.connectCheckQuitChan <- struct{}{}
 }
 
 func (c *Conn) Close() {
-	c.state.die <- struct{}{}
-	c.tcpConn.Close()
 	c.brokerConn.Close()
 }
 
-func (c *Conn) refreshToken() {
-	if c.refreshTokenWait == 0 {
-		return
-	}
-
-	refreshReq, err := json.Marshal(refreshAccessTokenReq{
-		ResendAccessToken: true,
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	go func() {
-		wait := c.refreshTokenWait
-		for {
-			select {
-			case <-time.After(wait):
-				b, err := c.tcpRequestResponse(refreshReq)
-				if err != nil {
-					log.Print("Failed requesting refresh token")
-					return
-				}
-
-				var resp refreshTokenResp
-				err = json.Unmarshal(b, &resp)
-				if err != nil {
-					log.Print("Failed parsing refresh token response")
-					return
-				}
-
-				c.accessToken = resp.AccessToken
-				wait = time.Duration(resp.AccessTokenExpiry) * time.Millisecond
-
-			case <-c.state.refreshTokenQuitChan:
-				return
-			}
-		}
-	}()
-}
-
-func (c *Conn) sendPing() {
-	if c.pingWait == 0 {
-		return
-	}
-
-	pingReq, err := json.Marshal(pingReq{
-		Ping: true,
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	go func() {
-		wait := c.pingWait
-		for {
-			select {
-			case <-time.After(wait):
-				b, err := c.tcpRequestResponse(pingReq)
-				if err != nil {
-					log.Print("Failed requesting ping")
-					return
-				}
-
-				var resp refreshTokenResp
-				err = json.Unmarshal(b, &resp)
-				if err != nil {
-					log.Print("Failed parsing ping response")
-					return
-				}
-				wait = time.Duration(resp.AccessTokenExpiry) * time.Millisecond
-			case <-c.state.pingQuitChan:
-				return
-			}
-		}
-	}()
-}
-
-func (c *Conn) mgmtRequest(apiMethod string, apiPath string, reqStruct any) error {
-	if !c.IsConnected() {
-		return errors.New("Connection object is disconnected")
-	}
-
-	managementPort := strconv.Itoa(c.opts.ManagementPort)
-	url := "http://" + c.opts.Host + ":" + managementPort + apiPath
-	reqJson, err := json.Marshal(reqStruct)
-	if err != nil {
-		return err
-	}
-
-	reqBody := bytes.NewBuffer(reqJson)
-
-	req, err := http.NewRequest(apiMethod, url, reqBody)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Add("Authorization", "Bearer "+c.accessToken)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-
-	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 { //HTTP success status code
-		var errorResp errorResp
-		err = json.Unmarshal(respBody, &errorResp)
-		if err != nil {
-			return err
-		}
-		return errors.New(errorResp.Message)
-	}
-
-	return nil
+func (c *Conn) brokerCorePublish(subject, reply string, msg []byte) error {
+	return c.brokerConn.PublishRequest(subject, reply, msg)
 }
 
 func (c *Conn) brokerPublish(msg *nats.Msg, opts ...nats.PubOpt) (nats.PubAckFuture, error) {
@@ -529,26 +192,10 @@ func (c *Conn) brokerQueueSubscribe(subj, queue string, cb nats.MsgHandler) (*na
 	return c.brokerConn.QueueSubscribe(subj, queue, cb)
 }
 
-// ManagementPort - default is 5555.
-func ManagementPort(port int) Option {
+// Port - default is 6666.
+func Port(port int) Option {
 	return func(o *Options) error {
-		o.ManagementPort = port
-		return nil
-	}
-}
-
-// TcpPort - default is 6666.
-func TcpPort(port int) Option {
-	return func(o *Options) error {
-		o.TcpPort = port
-		return nil
-	}
-}
-
-// DataPort - default is 7766.
-func DataPort(port int) Option {
-	return func(o *Options) error {
-		o.DataPort = port
+		o.Port = port
 		return nil
 	}
 }
@@ -585,24 +232,50 @@ func Timeout(timeout time.Duration) Option {
 	}
 }
 
-type apiObj interface {
-	getCreationApiPath() string
+type directObj interface {
+	getCreationSubject() string
 	getCreationReq() any
 
-	getDestructionApiPath() string
+	getDestructionSubject() string
 	getDestructionReq() any
 }
 
-func (c *Conn) create(o apiObj) error {
-	apiPath := o.getCreationApiPath()
-	creationReq := o.getCreationReq()
+func (c *Conn) create(do directObj) error {
+	subject := do.getCreationSubject()
+	creationReq := do.getCreationReq()
 
-	return c.mgmtRequest("POST", apiPath, creationReq)
+	b, err := json.Marshal(creationReq)
+	if err != nil {
+		return err
+	}
+
+	msg, err := c.brokerConn.Request(subject, b, 1*time.Second)
+	if err != nil {
+		return err
+	}
+	if len(msg.Data) > 0 {
+		return errors.New(string(msg.Data))
+	}
+
+	return nil
 }
 
-func (c *Conn) destroy(o apiObj) error {
-	apiPath := o.getDestructionApiPath()
+func (c *Conn) destroy(o directObj) error {
+	subject := o.getDestructionSubject()
 	destructionReq := o.getDestructionReq()
 
-	return c.mgmtRequest("DELETE", apiPath, destructionReq)
+	b, err := json.Marshal(destructionReq)
+	if err != nil {
+		return err
+	}
+
+	msg, err := c.brokerConn.Request(subject, b, 1*time.Second)
+	if err != nil {
+		return err
+	}
+	if len(msg.Data) > 0 && !strings.Contains(string(msg.Data), "not exist") {
+		return errors.New(string(msg.Data))
+	}
+
+	return nil
 }

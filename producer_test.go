@@ -301,3 +301,92 @@ func TestRemoveConsumer(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestFullFlow(t *testing.T) {
+	conn, err := Connect("127.0.0.1", "root", "memphis")
+
+	if err != nil {
+
+	}
+
+	defer conn.Close()
+
+	factory, err := conn.CreateFactory("factory_test")
+	if err != nil {
+		t.Errorf("Factory creation failed: %v\n", err)
+
+	}
+
+	defer factory.Destroy()
+
+	station, err := conn.CreateStation("station_test_name", factory.Name)
+	if err != nil {
+		t.Errorf("Station creation failed: %v\n", err)
+
+	}
+
+	err = station.Destroy()
+	if err != nil {
+		t.Errorf("Station destruction failed: %v\n", err)
+
+	}
+
+	station, err = conn.CreateStation("station_test_name", factory.Name)
+	if err != nil {
+		t.Errorf("Station creation failed: %v\n", err)
+
+	}
+
+	p, err := conn.CreateProducer(station.Name, "test_producer")
+	if err != nil {
+		t.Errorf("Producer creation failed: %v\n", err)
+
+	}
+	err = p.Destroy()
+	if err != nil {
+		t.Errorf("Producer destruction failed: %v\n", err)
+
+	}
+
+	p, err = conn.CreateProducer(station.Name, "test_producer")
+	if err != nil {
+		t.Errorf("Produce failed: %v\n", err)
+
+	}
+	err = p.Produce([]byte("You have a message!"))
+
+	if err != nil {
+		t.Errorf("Produce failed: %v\n", err)
+
+	}
+
+	consumer, err := conn.CreateConsumer(station.Name, "consumername", PullInterval(5*time.Minute), MaxAckTime(5*time.Minute), MaxMsgDeliveries(7))
+
+	if err != nil {
+		t.Errorf("Consumer creation failed: %v\n", err)
+
+	}
+
+	handlerCh := make(chan struct{})
+	handler := func(msgs []*Msg, err error) {
+		if err != nil {
+			t.Errorf("Fetch failed: %v\n", err)
+			handlerCh <- struct{}{}
+			return
+		}
+
+		for _, msg := range msgs {
+			msg.Ack()
+		}
+		handlerCh <- struct{}{}
+	}
+
+	consumer.Consume(handler)
+	<-handlerCh
+	consumer.StopConsume()
+
+	err = consumer.Destroy()
+	if err != nil {
+		t.Errorf("Consumer destruction failed: %v\n", err)
+	}
+}
