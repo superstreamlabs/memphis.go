@@ -69,42 +69,18 @@ To disconnect from Memphis, call Close() on the Memphis connection object.<br>
 c.Close();
 ```
 
-### Creating a Factory
-
-```go
-// c is of type memphis.Conn
-f, err := c.CreateFactory("<factory-name>", 
-    Description("<optional-description>")
-```
-
-### Destroying a Factory
-Destroying a factory will remove all its resources (including stations, producers, and consumers).<br>
-
-```go
-err := f.Destroy()
-```
-
 ### Creating a Station
-Stations can be created from both Conn and Factory<br>
+Stations can be created from Conn<br>
 Passing optional parameters using functions<br>
 
 ```go
-s0, err = c.CreateStation("<station-name>","<factory-name>")
+s0, err = c.CreateStation("<station-name>")
 
 s1, err = c.CreateStation("<station-name>", 
-"<factory-name>",
  RetentionTypeOpt(<Messages/MaxMeMessageAgeSeconds/Bytes>),
  RetentionVal(<int>), 
  StorageTypeOpt(<Memory/File>), 
  Replicas(<int>), 
- EnableDedup(), 
- DedupWindow(<time.Duration>))
- 
-s2, err = f.CreateStation("<station-name>", 
- RetentionTypeOpt(<Messages/MaxMeMessageAgeSeconds/Bytes>),
- RetentionVal(<retention-value>), 
- StorageTypeOpt(<Memory/File>), 
- Replicas(<intgo>), 
  EnableDedup(), 
  DedupWindow(<time.Duration>))
 ```

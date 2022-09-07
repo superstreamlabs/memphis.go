@@ -12,13 +12,7 @@ func TestCreateProducer(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1")
-	if err != nil {
-		t.Error(err)
-	}
-	defer f.Destroy()
-
-	s, err := f.CreateStation("station_name_1")
+	s, err := c.CreateStation("station_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -43,7 +37,7 @@ func TestCreateProducer(t *testing.T) {
 		t.Error("Producer names has to be unique")
 	}
 
-	//This will create a station with default factory so removing our factory is not enough
+	//This will create a station
 	_, err = c.CreateProducer("station_name_2", "producer_name_a")
 	if err != nil {
 		t.Error(err)
@@ -58,13 +52,7 @@ func TestProduce(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1")
-	if err != nil {
-		t.Error(err)
-	}
-	defer f.Destroy()
-
-	s, err := f.CreateStation("station_name_1")
+	s, err := c.CreateStation("station_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -88,13 +76,7 @@ func TestRemoveProducer(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1")
-	if err != nil {
-		t.Error(err)
-	}
-	defer f.Destroy()
-
-	s, err := f.CreateStation("station_name_1")
+	s, err := c.CreateStation("station_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -118,13 +100,7 @@ func TestFetch(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1")
-	if err != nil {
-		t.Error(err)
-	}
-	defer f.Destroy()
-
-	s, err := f.CreateStation("station_name_1")
+	s, err := c.CreateStation("station_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -170,13 +146,7 @@ func TestConsume(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1")
-	if err != nil {
-		t.Error(err)
-	}
-	defer f.Destroy()
-
-	s, err := f.CreateStation("station_name_1")
+	s, err := c.CreateStation("station_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -221,13 +191,7 @@ func TestCreateConsumer(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1")
-	if err != nil {
-		t.Error(err)
-	}
-	defer f.Destroy()
-
-	s, err := f.CreateStation("station_name_1")
+	s, err := c.CreateStation("station_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -265,13 +229,7 @@ func TestRemoveConsumer(t *testing.T) {
 	}
 	defer c.Close()
 
-	f, err := c.CreateFactory("factory_name_1")
-	if err != nil {
-		t.Error(err)
-	}
-	defer f.Destroy()
-
-	s, err := f.CreateStation("station_name_1")
+	s, err := c.CreateStation("station_name_1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -311,15 +269,7 @@ func TestFullFlow(t *testing.T) {
 
 	defer conn.Close()
 
-	factory, err := conn.CreateFactory("factory_test")
-	if err != nil {
-		t.Errorf("Factory creation failed: %v\n", err)
-
-	}
-
-	defer factory.Destroy()
-
-	station, err := conn.CreateStation("station_test_name", factory.Name)
+	station, err := conn.CreateStation("station_test_name")
 	if err != nil {
 		t.Errorf("Station creation failed: %v\n", err)
 
@@ -331,7 +281,7 @@ func TestFullFlow(t *testing.T) {
 
 	}
 
-	station, err = conn.CreateStation("station_test_name", factory.Name)
+	station, err = conn.CreateStation("station_test_name")
 	if err != nil {
 		t.Errorf("Station creation failed: %v\n", err)
 
