@@ -200,6 +200,7 @@ func StorageTypeOpt(storageType StorageType) StationOpt {
 // Replicas - number of replicas for the messages of the data, default is 1.
 func Replicas(replicas int) StationOpt {
 	return func(opts *StationOpts) error {
+		opts.Replicas = replicas
 		return nil
 	}
 }
