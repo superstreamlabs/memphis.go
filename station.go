@@ -32,7 +32,6 @@ type Station struct {
 	Replicas       int
 	DedupEnabled   bool
 	DedupWindow    time.Duration
-	factoryName    string
 	conn           *Conn
 }
 
@@ -63,7 +62,6 @@ func (s StorageType) String() string {
 
 type createStationReq struct {
 	Name              string `json:"name"`
-	FactoryName       string `json:"factory_name"`
 	RetentionType     string `json:"retention_type"`
 	RetentionValue    int    `json:"retention_value"`
 	StorageType       string `json:"storage_type"`
@@ -79,7 +77,6 @@ type removeStationReq struct {
 // StationsOpts - configuration options for a station.
 type StationOpts struct {
 	Name          string
-	FactoryName   string
 	RetentionType RetentionType
 	RetentionVal  int
 	StorageType   StorageType
@@ -103,11 +100,10 @@ func GetStationDefaultOptions() StationOpts {
 	}
 }
 
-func (c *Conn) CreateStation(Name, FactoryName string, opts ...StationOpt) (*Station, error) {
+func (c *Conn) CreateStation(Name string, opts ...StationOpt) (*Station, error) {
 	defaultOpts := GetStationDefaultOptions()
 
 	defaultOpts.Name = Name
-	defaultOpts.FactoryName = FactoryName
 
 	for _, opt := range opts {
 		if opt != nil {
@@ -132,16 +128,11 @@ func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 		Replicas:       opts.Replicas,
 		DedupEnabled:   opts.DedupEnabled,
 		DedupWindow:    opts.DedupWindow,
-		factoryName:    opts.FactoryName,
 		conn:           c,
 	}
 
 	return &s, s.conn.create(&s)
 
-}
-
-func (f *Factory) CreateStation(name string, opts ...StationOpt) (*Station, error) {
-	return f.conn.CreateStation(name, f.Name, opts...)
 }
 
 type StationName string
@@ -157,7 +148,6 @@ func (s *Station) getCreationSubject() string {
 func (s *Station) getCreationReq() any {
 	return createStationReq{
 		Name:              s.Name,
-		FactoryName:       s.factoryName,
 		RetentionType:     s.RetentionType.String(),
 		RetentionValue:    s.RetentionValue,
 		StorageType:       s.StorageType.String(),
@@ -179,14 +169,6 @@ func (s *Station) getDestructionReq() any {
 func Name(name string) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.Name = name
-		return nil
-	}
-}
-
-// FactoryName - factory name to link the station with.
-func FactoryName(factoryName string) StationOpt {
-	return func(opts *StationOpts) error {
-		opts.FactoryName = factoryName
 		return nil
 	}
 }
@@ -218,6 +200,7 @@ func StorageTypeOpt(storageType StorageType) StationOpt {
 // Replicas - number of replicas for the messages of the data, default is 1.
 func Replicas(replicas int) StationOpt {
 	return func(opts *StationOpts) error {
+		opts.Replicas = replicas
 		return nil
 	}
 }
