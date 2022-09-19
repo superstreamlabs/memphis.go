@@ -14,8 +14,8 @@ func main() {
 	}
 	defer conn.Close()
 
-	p, err := conn.CreateProducer("<station-name>", "<producer-name>")
-	err = p.Produce([]byte("You have a message!"))
+	memphis.ProduceMsgs(conn, "<station-name>", "<producer-name>", []byte("You have a message!"), 5)
+
 
 	if err != nil {
 		fmt.Errorf("Produce failed: %v", err)

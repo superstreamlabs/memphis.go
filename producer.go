@@ -112,6 +112,37 @@ func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
 
 }
 
+// Producer.Produce - produces a message into a station.
+func  ProduceMsgs(conn *Conn,stationName string, producerName string, message []byte, ackWaitSec time.Duration, opts ...ProduceOpt) error {
+	defaultOpts := getDefaultProduceOpts()
+	defaultOpts.Message = message
+
+	for _, opt := range opts {
+		if opt != nil {
+			if err := opt(&defaultOpts); err != nil {
+				return err
+			}
+		}
+	}
+	natsMessage := nats.Msg{
+		Header:  map[string][]string{"producedBy": {producerName}, "stationName": {stationName}, "connId": {conn.ConnId}},
+		Subject: stationName + ".final",
+		Data:    defaultOpts.Message,
+	}
+	paf, err := conn.brokerPublish(&natsMessage, nats.StallWait(ackWaitSec))
+	if err != nil {
+		return err
+	}
+
+	select {
+	case <-paf.Ok():
+		return nil
+	case err = <-paf.Err():
+		return err
+	}
+
+}
+
 // ProducerOpts.produce - produces a message into a station using a configuration struct.
 func (opts *ProduceOpts) produce(p *Producer) error {
 	natsMessage := nats.Msg{
