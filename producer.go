@@ -82,8 +82,9 @@ func (p *Producer) Destroy() error {
 
 // ProduceOpts - configuration options for produce operations.
 type ProduceOpts struct {
-	Message    []byte
-	AckWaitSec int
+	Message     []byte
+	AckWaitSec  int
+	StationName string
 }
 
 // ProduceOpt - a function on the options for produce operations.
@@ -94,59 +95,48 @@ func getDefaultProduceOpts() ProduceOpts {
 	return ProduceOpts{AckWaitSec: 15}
 }
 
-// Producer.Produce - produces a message into a station.
-func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
-	defaultOpts := getDefaultProduceOpts()
-
-	defaultOpts.Message = message
+func (p *Producer) ProduceCombine(message []byte, produceOpts ProduceOpts, opts ...ProduceOpt) error {
 
 	for _, opt := range opts {
 		if opt != nil {
-			if err := opt(&defaultOpts); err != nil {
+			if err := opt(&produceOpts); err != nil {
 				return err
 			}
 		}
 	}
-
-	return defaultOpts.produce(p)
-
+	return produceOpts.produce(p)
 }
 
 // Producer.Produce - produces a message into a station.
-func  ProduceMsgs(conn *Conn,stationName string, producerName string, message []byte, ackWaitSec time.Duration, opts ...ProduceOpt) error {
+func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
 	defaultOpts := getDefaultProduceOpts()
+	defaultOpts.StationName = ""
 	defaultOpts.Message = message
 
-	for _, opt := range opts {
-		if opt != nil {
-			if err := opt(&defaultOpts); err != nil {
-				return err
-			}
-		}
-	}
-	natsMessage := nats.Msg{
-		Header:  map[string][]string{"producedBy": {producerName}, "stationName": {stationName}, "connId": {conn.ConnId}},
-		Subject: stationName + ".final",
-		Data:    defaultOpts.Message,
-	}
-	paf, err := conn.brokerPublish(&natsMessage, nats.StallWait(ackWaitSec))
-	if err != nil {
-		return err
-	}
+	return p.ProduceCombine(message, defaultOpts, opts...)
+}
 
-	select {
-	case <-paf.Ok():
-		return nil
-	case err = <-paf.Err():
-		return err
-	}
+// Producer.Produce - produces a message into a station.
+func (conn *Conn) Produce(stationName string, producerName string, message []byte, ackWaitSec int, opts ...ProduceOpt) error {
+	//
+	p := Producer{Name: producerName, stationName: stationName, conn: conn}
+	producerOpts := ProduceOpts{message, ackWaitSec, stationName}
+
+	return p.ProduceCombine(message, producerOpts, opts...)
 
 }
 
 // ProducerOpts.produce - produces a message into a station using a configuration struct.
 func (opts *ProduceOpts) produce(p *Producer) error {
+	var header map[string][]string
+	if opts.StationName == "" {
+		header = map[string][]string{"connectionId": {p.conn.ConnId}, "producedBy": {p.Name}}
+	} else {
+		header = map[string][]string{"producedBy": {p.Name}, "stationName": {opts.StationName}, "connectionId": {p.conn.ConnId}}
+
+	}
 	natsMessage := nats.Msg{
-		Header:  map[string][]string{"connectionId": {p.conn.ConnId}, "producedBy": {p.Name}},
+		Header:  header,
 		Subject: p.stationName + ".final",
 		Data:    opts.Message,
 	}
