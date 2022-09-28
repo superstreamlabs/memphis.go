@@ -279,3 +279,16 @@ func (c *Conn) destroy(o directObj) error {
 
 	return nil
 }
+
+func getInternalName(name string) string {
+	return replaceDelimiters(name)
+}
+
+const (
+	delimToReplace   = "."
+	delimReplacement = "#"
+)
+
+func replaceDelimiters(in string) string {
+	return strings.Replace(in, delimToReplace, delimReplacement, -1)
+}

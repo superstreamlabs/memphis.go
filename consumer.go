@@ -152,11 +152,12 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	consumer.pingInterval = consumerDefaultPingInterval
 
-	subjInternalName := getInternalStationName(consumer.stationName)
+	subjInternalName := getInternalName(consumer.stationName)
 	subj := subjInternalName + ".final"
 
+	durable := getInternalName(consumer.ConsumerGroup)
 	consumer.subscription, err = c.brokerPullSubscribe(subj,
-		consumer.ConsumerGroup,
+		durable,
 		nats.ManualAck(),
 		nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
 		nats.MaxRequestBatch(opts.BatchSize),
