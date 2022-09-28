@@ -97,6 +97,7 @@ func getDefaultProduceOpts() ProduceOpts {
 
 func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
 	defaultOpts := getDefaultProduceOpts()
+	defaultOpts.Message = message
 
 	for _, opt := range opts {
 		if opt != nil {
@@ -110,7 +111,7 @@ func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
 
 }
 
-func (conn *Conn) Produce(stationName string, producerName string, message []byte, ackWaitSec time.Duration, opts ...ProduceOpt) error{
+func (conn *Conn) Produce(stationName string, producerName string, message []byte, ackWaitSec time.Duration, opts ...ProduceOpt) error {
 	defaultOpts := getDefaultProduceOpts()
 	defaultOpts.Message = message
 	defaultOpts.AckWaitSec = ackWaitSec
