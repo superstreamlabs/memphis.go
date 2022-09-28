@@ -14,7 +14,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	conn.Produce("<station-name>", "<producer-name>", []byte("You have a message!"), 5)
+	conn.Produce("<station-name>", "<producer-name>", []byte("You have a message!"), 5000000000)
 
 
 	if err != nil {

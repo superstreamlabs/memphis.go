@@ -83,7 +83,7 @@ func (p *Producer) Destroy() error {
 // ProduceOpts - configuration options for produce operations.
 type ProduceOpts struct {
 	Message     []byte
-	AckWaitSec  int
+	AckWaitSec  time.Duration
 	StationName string
 }
 
@@ -95,53 +95,63 @@ func getDefaultProduceOpts() ProduceOpts {
 	return ProduceOpts{AckWaitSec: 15}
 }
 
-func (p *Producer) ProduceCombine(message []byte, produceOpts ProduceOpts, opts ...ProduceOpt) error {
+func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
+	defaultOpts := getDefaultProduceOpts()
 
 	for _, opt := range opts {
 		if opt != nil {
-			if err := opt(&produceOpts); err != nil {
+			if err := opt(&defaultOpts); err != nil {
 				return err
 			}
 		}
 	}
-	return produceOpts.produce(p)
+
+	return defaultOpts.produce(p)
+
 }
 
-// Producer.Produce - produces a message into a station.
-func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
+func (conn *Conn) Produce(stationName string, producerName string, message []byte, ackWaitSec time.Duration, opts ...ProduceOpt) error{
 	defaultOpts := getDefaultProduceOpts()
-	defaultOpts.StationName = ""
 	defaultOpts.Message = message
+	defaultOpts.AckWaitSec = ackWaitSec
 
-	return p.ProduceCombine(message, defaultOpts, opts...)
-}
+	for _, opt := range opts {
+		if opt != nil {
+			if err := opt(&defaultOpts); err != nil {
+				return err
+			}
+		}
+	}
 
-// Producer.Produce - produces a message into a station.
-func (conn *Conn) Produce(stationName string, producerName string, message []byte, ackWaitSec int, opts ...ProduceOpt) error {
-	//
-	p := Producer{Name: producerName, stationName: stationName, conn: conn}
-	producerOpts := ProduceOpts{message, ackWaitSec, stationName}
+	natsMessage := nats.Msg{
+		Header:  map[string][]string{"producedBy": {producerName}, "stationName": {stationName}, "connectionId": {conn.ConnId}},
+		Subject: stationName + ".final",
+		Data:    defaultOpts.Message,
+	}
 
-	return p.ProduceCombine(message, producerOpts, opts...)
+	stallWaitDuration := defaultOpts.AckWaitSec
+	paf, err := conn.brokerPublish(&natsMessage, nats.StallWait(stallWaitDuration))
+	if err != nil {
+		return err
+	}
 
+	select {
+	case <-paf.Ok():
+		return nil
+	case err = <-paf.Err():
+		return err
+	}
 }
 
 // ProducerOpts.produce - produces a message into a station using a configuration struct.
 func (opts *ProduceOpts) produce(p *Producer) error {
-	var header map[string][]string
-	if opts.StationName == "" {
-		header = map[string][]string{"connectionId": {p.conn.ConnId}, "producedBy": {p.Name}}
-	} else {
-		header = map[string][]string{"producedBy": {p.Name}, "stationName": {opts.StationName}, "connectionId": {p.conn.ConnId}}
-
-	}
 	natsMessage := nats.Msg{
-		Header:  header,
+		Header:  map[string][]string{"connectionId": {p.conn.ConnId}, "producedBy": {p.Name}},
 		Subject: p.stationName + ".final",
 		Data:    opts.Message,
 	}
 
-	stallWaitDuration := time.Second * time.Duration(opts.AckWaitSec)
+	stallWaitDuration := opts.AckWaitSec
 	paf, err := p.conn.brokerPublish(&natsMessage, nats.StallWait(stallWaitDuration))
 	if err != nil {
 		return err
@@ -156,7 +166,7 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 }
 
 // AckWaitSec - max time in seconds to wait for an ack from memphis.
-func AckWaitSec(ackWaitSec int) ProduceOpt {
+func AckWaitSec(ackWaitSec time.Duration) ProduceOpt {
 	return func(opts *ProduceOpts) error {
 		opts.AckWaitSec = ackWaitSec
 		return nil
