@@ -116,7 +116,7 @@ func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
 func (opts *ProduceOpts) produce(p *Producer) error {
 	natsMessage := nats.Msg{
 		Header:  map[string][]string{"connectionId": {p.conn.ConnId}, "producedBy": {p.Name}},
-		Subject: p.stationName + ".final",
+		Subject: getInternalStationName(p.stationName) + ".final",
 		Data:    opts.Message,
 	}
 

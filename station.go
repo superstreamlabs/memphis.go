@@ -23,6 +23,11 @@ import (
 	"time"
 )
 
+const (
+	delimToReplace   = "."
+	delimReplacement = "#"
+)
+
 // Station - memphis station object.
 type Station struct {
 	Name           string
@@ -219,4 +224,8 @@ func DedupWindow(dedupWindow time.Duration) StationOpt {
 		opts.DedupWindow = dedupWindow
 		return nil
 	}
+}
+
+func getInternalStationName(stationName string) string {
+	return strings.Replace(stationName, delimToReplace, delimReplacement, -1)
 }
