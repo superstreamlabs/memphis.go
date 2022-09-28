@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -30,6 +31,8 @@ import (
 const (
 	consumerDefaultPingInterval = 30 * time.Second
 	dlqSubjPrefix               = "$memphis_dlq"
+	delimToReplace              = "."
+	delimReplacement            = "#"
 )
 
 // Consumer - memphis consumer object.
@@ -152,7 +155,8 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	consumer.pingInterval = consumerDefaultPingInterval
 
-	subj := consumer.stationName + ".final"
+	subjInternalName := strings.Replace(consumer.stationName, delimToReplace, delimReplacement, -1)
+	subj := subjInternalName + ".final"
 
 	consumer.subscription, err = c.brokerPullSubscribe(subj,
 		consumer.ConsumerGroup,
