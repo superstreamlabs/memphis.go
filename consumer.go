@@ -326,7 +326,9 @@ func (c *Consumer) createDlqMsgHandler() nats.MsgHandler {
 }
 
 func (c *Consumer) getDlqSubjName() string {
-	return fmt.Sprintf("%v_%v_%v", dlqSubjPrefix, c.stationName, c.ConsumerGroup)
+	stationName := getInternalName(c.stationName)
+	consumerGroup := getInternalName(c.ConsumerGroup)
+	return fmt.Sprintf("%v_%v_%v", dlqSubjPrefix, stationName, consumerGroup)
 }
 
 func (c *Consumer) getDlqQueueName() string {
