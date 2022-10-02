@@ -152,10 +152,12 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	consumer.pingInterval = consumerDefaultPingInterval
 
-	subj := consumer.stationName + ".final"
+	subjInternalName := getInternalName(consumer.stationName)
+	subj := subjInternalName + ".final"
 
+	durable := getInternalName(consumer.ConsumerGroup)
 	consumer.subscription, err = c.brokerPullSubscribe(subj,
-		consumer.ConsumerGroup,
+		durable,
 		nats.ManualAck(),
 		nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
 		nats.MaxRequestBatch(opts.BatchSize),
@@ -324,7 +326,9 @@ func (c *Consumer) createDlqMsgHandler() nats.MsgHandler {
 }
 
 func (c *Consumer) getDlqSubjName() string {
-	return fmt.Sprintf("%v_%v_%v", dlqSubjPrefix, c.stationName, c.ConsumerGroup)
+	stationName := getInternalName(c.stationName)
+	consumerGroup := getInternalName(c.ConsumerGroup)
+	return fmt.Sprintf("%v_%v_%v", dlqSubjPrefix, stationName, consumerGroup)
 }
 
 func (c *Consumer) getDlqQueueName() string {
