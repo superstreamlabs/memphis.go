@@ -115,7 +115,7 @@ func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
 // ProducerOpts.produce - produces a message into a station using a configuration struct.
 func (opts *ProduceOpts) produce(p *Producer) error {
 	natsMessage := nats.Msg{
-		Header:  map[string][]string{"connectionId": {p.conn.ConnId}, "producedBy": {p.Name}},
+		Header:  map[string][]string{"$memphisconnectionId": {p.conn.ConnId}, "$memphisproducedBy": {p.Name}},
 		Subject: getInternalName(p.stationName) + ".final",
 		Data:    opts.Message,
 	}
