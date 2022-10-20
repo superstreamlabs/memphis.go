@@ -43,15 +43,51 @@ type removeProducerReq struct {
 	StationName string `json:"station_name"`
 }
 
+// ProducerOpts - configuration options for producer creation.
+type ProducerOpts struct {
+	GenUniqueSuffix bool
+}
+
+// ProducerOpt - a function on the options for producer creation.
+type ProducerOpt func(*ProducerOpts) error
+
+// getDefaultProducerOpts - returns default configuration options for producer creation.
+func getDefaultProducerOpts() ProducerOpts {
+	return ProducerOpts{GenUniqueSuffix: false}
+}
+
+func extendNameWithRandSuffix(name string) (string, error) {
+	suffix, err := randomHex(4)
+	if err != nil {
+		return "", err
+	}
+	return name + "_" + suffix, err
+}
+
 // CreateProducer - creates a producer.
-func (c *Conn) CreateProducer(stationName, name string) (*Producer, error) {
+func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*Producer, error) {
+	defaultOpts := getDefaultProducerOpts()
+	var err error
+	for _, opt := range opts {
+		if err = opt(&defaultOpts); err != nil {
+			return nil, err
+		}
+	}
+
+	if defaultOpts.GenUniqueSuffix {
+		name, err = extendNameWithRandSuffix(name)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	p := Producer{Name: name, stationName: stationName, conn: c}
 	return &p, c.create(&p)
 }
 
 // Station.CreateProducer - creates a producer attached to this station.
-func (s *Station) CreateProducer(name string) (*Producer, error) {
-	return s.conn.CreateProducer(s.Name, name)
+func (s *Station) CreateProducer(name string, opts ...ProducerOpt) (*Producer, error) {
+	return s.conn.CreateProducer(s.Name, name, opts...)
 }
 
 func (p *Producer) getCreationSubject() string {
@@ -131,6 +167,14 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 		return nil
 	case err = <-paf.Err():
 		return err
+	}
+}
+
+// ProducerGenUniqueSuffix - whether to generate a unique suffix for this producer.
+func ProducerGenUniqueSuffix() ProducerOpt {
+	return func(opts *ProducerOpts) error {
+		opts.GenUniqueSuffix = true
+		return nil
 	}
 }
 

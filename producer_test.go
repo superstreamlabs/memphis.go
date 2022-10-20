@@ -16,6 +16,7 @@ func TestCreateProducer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	defer s.Destroy()
 
 	_, err = s.CreateProducer("producer_name_a")
 	if err != nil {
@@ -25,6 +26,15 @@ func TestCreateProducer(t *testing.T) {
 	_, err = s.CreateProducer("producer_name_a")
 	if err == nil {
 		t.Error("Producer names has to be unique")
+	}
+
+	_, err = s.CreateProducer("producer_name_a", ProducerGenUniqueSuffix())
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = s.CreateProducer("producer_name_a", ProducerGenUniqueSuffix())
+	if err != nil {
+		t.Error(err)
 	}
 
 	_, err = c.CreateProducer("station_name_1", "producer_name_b")
@@ -42,7 +52,6 @@ func TestCreateProducer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	c.destroy(&Station{Name: "station_name_2"})
 }
 
 func TestProduce(t *testing.T) {
@@ -56,6 +65,7 @@ func TestProduce(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	defer s.Destroy()
 
 	p, err := s.CreateProducer("producer_name_a")
 	if err != nil {
@@ -80,6 +90,7 @@ func TestRemoveProducer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	defer s.Destroy()
 
 	p, err := s.CreateProducer("producer_name_a")
 	if err != nil {
@@ -104,6 +115,7 @@ func TestFetch(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	defer s.Destroy()
 
 	p, err := s.CreateProducer("producer_name_a")
 	if err != nil {
@@ -150,6 +162,7 @@ func TestConsume(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	defer s.Destroy()
 
 	p, err := s.CreateProducer("producer_name_a")
 	if err != nil {
@@ -195,6 +208,7 @@ func TestCreateConsumer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	defer s.Destroy()
 
 	_, err = s.CreateConsumer("consumer_name_a")
 	if err != nil {
@@ -209,6 +223,16 @@ func TestCreateConsumer(t *testing.T) {
 	_, err = c.CreateConsumer("station_name_1", "consumer_name_b", ConsumerGroup("consumer_group_g"), PullInterval(1*time.Second), BatchSize(10), BatchMaxWaitTime(5*time.Second), MaxAckTime(30*time.Second), MaxMsgDeliveries(10))
 	if err != nil {
 		t.Error("Consumer names has to be unique")
+	}
+
+	_, err = s.CreateConsumer("consumer_name_a", ConsumerGenUniqueSuffix())
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = s.CreateConsumer("consumer_name_a", ConsumerGenUniqueSuffix())
+	if err != nil {
+		t.Error(err)
 	}
 
 	_, err = c.CreateConsumer("station_name_1", "consumer_name_b")
@@ -286,6 +310,7 @@ func TestFullFlow(t *testing.T) {
 		t.Errorf("Station creation failed: %v\n", err)
 
 	}
+	defer station.Destroy()
 
 	p, err := conn.CreateProducer(station.Name, "test_producer")
 	if err != nil {

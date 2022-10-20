@@ -93,6 +93,7 @@ type ConsumerOpts struct {
 	BatchMaxTimeToWait time.Duration
 	MaxAckTime         time.Duration
 	MaxMsgDeliveries   int
+	GenUniqueSuffix    bool
 }
 
 // getDefaultConsumerOptions - returns default configuration options for consumers.
@@ -103,6 +104,7 @@ func getDefaultConsumerOptions() ConsumerOpts {
 		BatchMaxTimeToWait: 5 * time.Second,
 		MaxAckTime:         30 * time.Second,
 		MaxMsgDeliveries:   10,
+		GenUniqueSuffix:    false,
 	}
 }
 
@@ -130,6 +132,15 @@ func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...Consumer
 
 // ConsumerOpts.createConsumer - creates a consumer using a configuration struct.
 func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
+	var err error
+
+	if opts.GenUniqueSuffix {
+		opts.Name, err = extendNameWithRandSuffix(opts.Name)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	consumer := Consumer{Name: opts.Name,
 		ConsumerGroup:      opts.ConsumerGroup,
 		PullInterval:       opts.PullInterval,
@@ -140,7 +151,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		conn:               c,
 		stationName:        opts.StationName}
 
-	err := c.create(&consumer)
+	err = c.create(&consumer)
 	if err != nil {
 		return nil, err
 	}
@@ -431,6 +442,14 @@ func MaxAckTime(maxAckTime time.Duration) ConsumerOpt {
 func MaxMsgDeliveries(maxMsgDeliveries int) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.MaxMsgDeliveries = maxMsgDeliveries
+		return nil
+	}
+}
+
+// ConsumerGenUniqueSuffix - whether to generate a unique suffix for this consumer.
+func ConsumerGenUniqueSuffix() ConsumerOpt {
+	return func(opts *ConsumerOpts) error {
+		opts.GenUniqueSuffix = true
 		return nil
 	}
 }

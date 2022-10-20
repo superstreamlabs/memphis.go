@@ -12,36 +12,24 @@ func TestCreateStation(t *testing.T) {
 	}
 	defer c.Close()
 
-	_, err = c.CreateStation("station_name_1", RetentionTypeOpt(Messages), RetentionVal(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
+	s1, err := c.CreateStation("station_name_1", RetentionTypeOpt(Messages), RetentionVal(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = c.CreateStation("station_name_1", RetentionTypeOpt(Messages), RetentionVal(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
-	if err == nil {
-		t.Error(err)
-	}
-
-	_, err = c.CreateStation("station_name_1", RetentionTypeOpt(Messages), RetentionVal(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
-	if err == nil {
-		t.Error(err)
-	}
-
-	_, err = c.CreateStation("station_name_2", RetentionTypeOpt(Messages), RetentionVal(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
+	s2, err := c.CreateStation("station_name_2", RetentionTypeOpt(Messages), RetentionVal(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
 	if err != nil {
 		t.Error(err)
 	}
 
-	// station name is a globally unique identifier so next creation should fail
-	_, err = c.CreateStation("station_name_1")
-	if err == nil {
-		t.Error(err)
-	}
-
-	_, err = c.CreateStation("station_name_3")
+	s3, err := c.CreateStation("station_name_3")
 	if err != nil {
 		t.Error(err)
 	}
+
+	s1.Destroy()
+	s2.Destroy()
+	s3.Destroy()
 }
 
 func TestRemoveStation(t *testing.T) {
@@ -69,8 +57,9 @@ func TestCreateStationWithDefaults(t *testing.T) {
 	}
 	defer c.Close()
 
-	_, err = c.CreateStation("station_name_1")
+	s, err := c.CreateStation("station_name_1")
 	if err != nil {
 		t.Error(err)
 	}
+	s.Destroy()
 }
