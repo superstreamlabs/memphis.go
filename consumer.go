@@ -32,6 +32,11 @@ const (
 	dlqSubjPrefix               = "$memphis_dlq"
 )
 
+var (
+	ConsumerErrStationUnreachable = errors.New("Station unreachable")
+	ConsumerErrConsumeInactive    = errors.New("Consumer is inactive")
+)
+
 // Consumer - memphis consumer object.
 type Consumer struct {
 	Name               string
@@ -51,6 +56,7 @@ type Consumer struct {
 	dlqCh              chan *nats.Msg
 	consumeQuit        chan struct{}
 	pingQuit           chan struct{}
+	errHandler         ConsumerErrHandler
 }
 
 // Msg - a received message, can be acked.
@@ -67,6 +73,9 @@ func (m *Msg) Data() []byte {
 func (m *Msg) Ack() error {
 	return m.msg.Ack()
 }
+
+// ConsumerErrHandler is used to process asynchronous errors.
+type ConsumerErrHandler func(*Consumer, error)
 
 type createConsumerReq struct {
 	Name             string `json:"name"`
@@ -94,6 +103,7 @@ type ConsumerOpts struct {
 	MaxAckTime         time.Duration
 	MaxMsgDeliveries   int
 	GenUniqueSuffix    bool
+	ErrHandler         ConsumerErrHandler
 }
 
 // getDefaultConsumerOptions - returns default configuration options for consumers.
@@ -105,6 +115,7 @@ func getDefaultConsumerOptions() ConsumerOpts {
 		MaxAckTime:         30 * time.Second,
 		MaxMsgDeliveries:   10,
 		GenUniqueSuffix:    false,
+		ErrHandler:         DefaultConsumerErrHandler,
 	}
 }
 
@@ -149,7 +160,9 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		MaxMsgDeliveries:   opts.MaxMsgDeliveries,
 		BatchMaxTimeToWait: opts.BatchMaxTimeToWait,
 		conn:               c,
-		stationName:        opts.StationName}
+		stationName:        opts.StationName,
+		errHandler:         opts.ErrHandler,
+	}
 
 	err = c.create(&consumer)
 	if err != nil {
@@ -189,6 +202,16 @@ func (s *Station) CreateConsumer(name string, opts ...ConsumerOpt) (*Consumer, e
 	return s.conn.CreateConsumer(s.Name, name, opts...)
 }
 
+func DefaultConsumerErrHandler(c *Consumer, err error) {
+	log.Printf("Consumer %v: %v", c.Name, err.Error())
+}
+
+func (c *Consumer) callErrHandler(err error) {
+	if c.errHandler != nil {
+		c.errHandler(c, err)
+	}
+}
+
 func (c *Consumer) pingConsumer() {
 	ticker := time.NewTicker(c.pingInterval)
 	if !c.subscriptionActive {
@@ -201,7 +224,8 @@ func (c *Consumer) pingConsumer() {
 			_, err := c.subscription.ConsumerInfo()
 			if err != nil {
 				c.subscriptionActive = false
-				log.Print("Station unreachable")
+				c.callErrHandler(ConsumerErrStationUnreachable)
+				c.StopConsume()
 				return
 			}
 		case <-c.pingQuit:
@@ -262,7 +286,7 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
 // StopConsume - stops the continuous consume operation.
 func (c *Consumer) StopConsume() {
 	if !c.consumeActive {
-		log.Print("consume is inactive")
+		c.callErrHandler(ConsumerErrConsumeInactive)
 		return
 	}
 	c.consumeQuit <- struct{}{}
@@ -450,6 +474,14 @@ func MaxMsgDeliveries(maxMsgDeliveries int) ConsumerOpt {
 func ConsumerGenUniqueSuffix() ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.GenUniqueSuffix = true
+		return nil
+	}
+}
+
+// ConsumerErrorHandler - handler for consumer errors.
+func ConsumerErrorHandler(ceh ConsumerErrHandler) ConsumerOpt {
+	return func(opts *ConsumerOpts) error {
+		opts.ErrHandler = ceh
 		return nil
 	}
 }
