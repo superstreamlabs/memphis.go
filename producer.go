@@ -19,9 +19,12 @@
 package memphis
 
 import (
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"golang.org/x/exp/maps"
 )
 
 // Producer - memphis producer object.
@@ -84,6 +87,7 @@ func (p *Producer) Destroy() error {
 type ProduceOpts struct {
 	Message    []byte
 	AckWaitSec int
+	Header     map[string][]string
 }
 
 // ProduceOpt - a function on the options for produce operations.
@@ -95,10 +99,11 @@ func getDefaultProduceOpts() ProduceOpts {
 }
 
 // Producer.Produce - produces a message into a station.
-func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
+func (p *Producer) Produce(message []byte, header map[string][]string, opts ...ProduceOpt) error {
 	defaultOpts := getDefaultProduceOpts()
 
 	defaultOpts.Message = message
+	defaultOpts.Header = header
 
 	for _, opt := range opts {
 		if opt != nil {
@@ -112,10 +117,27 @@ func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
 
 }
 
+func (opts *ProduceOpts) validateHeaderKey() error {
+	for i, _ := range opts.Header {
+		if strings.HasPrefix(i, "$memphis") {
+			return errors.New("Keys in headers should not start with $memphis")
+		}
+	}
+	return nil
+}
+
 // ProducerOpts.produce - produces a message into a station using a configuration struct.
 func (opts *ProduceOpts) produce(p *Producer) error {
+	memphisHeader := map[string][]string{"$memphisconnectionId": {p.conn.ConnId}, "$memphisproducedBy": {p.Name}}
+
+	err := opts.validateHeaderKey()
+	if err != nil {
+		return err
+	}
+	maps.Copy(memphisHeader, opts.Header)
+
 	natsMessage := nats.Msg{
-		Header:  map[string][]string{"$memphisconnectionId": {p.conn.ConnId}, "$memphisproducedBy": {p.Name}},
+		Header:  memphisHeader,
 		Subject: getInternalName(p.stationName) + ".final",
 		Data:    opts.Message,
 	}

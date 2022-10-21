@@ -13,9 +13,8 @@ func main() {
 		os.Exit(1)
 	}
 	defer conn.Close()
-
 	p, err := conn.CreateProducer("<station-name>", "<producer-name>")
-	err = p.Produce([]byte("You have a message!"))
+	err = p.Produce([]byte("You have a message!"), map[string][]string{"<key>": {"<value>"}, "<key1>": {"<value1>"}})
 
 	if err != nil {
 		fmt.Errorf("Produce failed: %v", err)
