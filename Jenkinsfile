@@ -22,7 +22,7 @@ node ("small-ec2-fleet") {
 
   } catch (e) {
       currentBuild.result = "FAILED"
-      cleanWs()
+      //cleanWs()
       notifyFailed()
       throw e
   }
