@@ -8,7 +8,7 @@ node ("small-ec2-fleet") {
   
   try{
     stage ('Install GoLang') {
-      sh 'wget https://go.dev/dl/go1.18.4.linux-amd64.tar.gz'
+      sh 'wget -q https://go.dev/dl/go1.18.4.linux-amd64.tar.gz'
       sh 'sudo  tar -C /usr/local -xzf go1.18.4.linux-amd64.tar.gz'
     }
     
