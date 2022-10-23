@@ -10,13 +10,12 @@ node ("small-ec2-fleet") {
     stage ('Install GoLang') {
       sh 'wget https://go.dev/dl/go1.18.4.linux-amd64.tar.gz'
       sh 'sudo  tar -C /usr/local -xzf go1.18.4.linux-amd64.tar.gz'
-      sh 'sudo ln -s /usr/local/go/bin/go /usr/bin/go'
     }
     
     stage('Deploy GO SDK') {
       sh 'git tag v${versionTag}'
       sh 'git push origin v${versionTag}'
-      sh 'GOPROXY=proxy.golang.org go list -m github.com/memphisdev/memphis.go@v${versionTag}'
+      sh 'GOPROXY=proxy.golang.org /usr/local/go/bin/go list -m github.com/memphisdev/memphis.go@v${versionTag}'
     }
     
     notifySuccessful()
