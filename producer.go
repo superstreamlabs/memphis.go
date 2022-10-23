@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"golang.org/x/exp/maps"
 )
 
 // Producer - memphis producer object.
@@ -83,11 +82,20 @@ func (p *Producer) Destroy() error {
 	return p.conn.destroy(p)
 }
 
+type Header struct {
+	Key   string
+	Value string
+}
+
+type UserHeaders struct {
+	Headers []Header
+}
+
 // ProduceOpts - configuration options for produce operations.
 type ProduceOpts struct {
 	Message    []byte
 	AckWaitSec int
-	Header     map[string][]string
+	Headers    UserHeaders
 }
 
 // ProduceOpt - a function on the options for produce operations.
@@ -95,15 +103,15 @@ type ProduceOpt func(*ProduceOpts) error
 
 // getDefaultProduceOpts - returns default configuration options for produce operations.
 func getDefaultProduceOpts() ProduceOpts {
-	return ProduceOpts{AckWaitSec: 15}
+	return ProduceOpts{AckWaitSec: 15, Headers: UserHeaders{}}
+
 }
 
 // Producer.Produce - produces a message into a station.
-func (p *Producer) Produce(message []byte, header map[string][]string, opts ...ProduceOpt) error {
+func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
 	defaultOpts := getDefaultProduceOpts()
 
 	defaultOpts.Message = message
-	defaultOpts.Header = header
 
 	for _, opt := range opts {
 		if opt != nil {
@@ -117,27 +125,44 @@ func (p *Producer) Produce(message []byte, header map[string][]string, opts ...P
 
 }
 
-func (opts *ProduceOpts) validateHeaderKey() error {
-	for i, _ := range opts.Header {
-		if strings.HasPrefix(i, "$memphis") {
-			return errors.New("Keys in headers should not start with $memphis")
-		}
+func (hdr *UserHeaders) validateHeaderKey(key string) error {
+	if strings.HasPrefix(key, "$memphis") {
+		return errors.New("Keys in headers should not start with $memphis")
 	}
+	return nil
+}
+
+func (hdr *UserHeaders) Add(key, value string) error {
+
+	err := hdr.validateHeaderKey(key)
+	if err != nil {
+		return err
+	}
+
+	header := Header{Key: key, Value: value}
+	hdr.Headers = append(hdr.Headers, header)
 	return nil
 }
 
 // ProducerOpts.produce - produces a message into a station using a configuration struct.
 func (opts *ProduceOpts) produce(p *Producer) error {
-	memphisHeader := map[string][]string{"$memphisconnectionId": {p.conn.ConnId}, "$memphisproducedBy": {p.Name}}
+	var hdrs []Header
+	hdrs = append(hdrs, Header{Key: "$memphis_connectionId", Value: p.conn.ConnId}, Header{Key: "$memphis_producedBy", Value: p.Name})
 
-	err := opts.validateHeaderKey()
-	if err != nil {
-		return err
+	for _, userHdr := range opts.Headers.Headers {
+		hdrs = append(hdrs, userHdr)
 	}
-	maps.Copy(memphisHeader, opts.Header)
+
+	headersMap := map[string][]string{}
+
+	for _, hdr := range hdrs {
+		var values []string
+		values = append(values, hdr.Value)
+		headersMap[hdr.Key] = values
+	}
 
 	natsMessage := nats.Msg{
-		Header:  memphisHeader,
+		Header:  headersMap,
 		Subject: getInternalName(p.stationName) + ".final",
 		Data:    opts.Message,
 	}
@@ -160,6 +185,13 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 func AckWaitSec(ackWaitSec int) ProduceOpt {
 	return func(opts *ProduceOpts) error {
 		opts.AckWaitSec = ackWaitSec
+		return nil
+	}
+}
+
+func Headers(hdrs UserHeaders) ProduceOpt {
+	return func(opts *ProduceOpts) error {
+		opts.Headers = hdrs
 		return nil
 	}
 }
