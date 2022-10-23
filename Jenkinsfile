@@ -20,6 +20,14 @@ node ("small-ec2-fleet") {
       sh "GOPROXY=proxy.golang.org /usr/local/go/bin/go list -m github.com/memphisdev/memphis.go@v$versionTag"
     }
     
+     stage('Checkout to version branch'){
+      withCredentials([sshUserPrivateKey(keyFileVariable:'check',credentialsId: 'main-github')]) {
+        sh "git reset --hard origin/latest"
+        sh "GIT_SSH_COMMAND='ssh -i $check'  git checkout -b $versionTag"
+        sh "GIT_SSH_COMMAND='ssh -i $check' git push --set-upstream origin $versionTag"
+      }
+    }
+    
     notifySuccessful()
 
   } catch (e) {
