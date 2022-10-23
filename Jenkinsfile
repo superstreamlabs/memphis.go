@@ -4,15 +4,21 @@ def repoUrlPrefix = "memphisos"
 
 node ("small-ec2-fleet") {
   git credentialsId: 'main-github', url: gitURL, branch: gitBranch
+  def versionTag = readFile "./version.conf"
   
   try{
-    
-   stage('Deploy GO SDK') {
-
+    stage ('Install GoLang') {
+      wget https://go.dev/dl/go1.18.4.linux-amd64.tar.gz
+      sudo  tar -C /usr/local -xzf go1.18.4.linux-amd64.tar.gz
+      sudo ln -s /usr/local/go/bin/go /usr/bin/go
     }
     
-
-
+    stage('Deploy GO SDK') {
+      sh 'git tag v${versionTag}'
+      sh 'git push origin v${versionTag}'
+      sh 'GOPROXY=proxy.golang.org go list -m github.com/memphisdev/memphis.go@v${versionTag}'
+    }
+    
     notifySuccessful()
 
   } catch (e) {
