@@ -13,16 +13,16 @@ node ("small-ec2-fleet") {
     }
     
     stage('Deploy GO SDK') {
-      sh 'git tag v$versionTag'
-      sh 'git push origin v$versionTag'
-      sh 'GOPROXY=proxy.golang.org /usr/local/go/bin/go list -m github.com/memphisdev/memphis.go@v$versionTag'
+      sh "git tag v$versionTag"
+      sh "git push origin v$versionTag"
+      sh "GOPROXY=proxy.golang.org /usr/local/go/bin/go list -m github.com/memphisdev/memphis.go@v$versionTag"
     }
     
     notifySuccessful()
 
   } catch (e) {
       currentBuild.result = "FAILED"
-      //cleanWs()
+      cleanWs()
       notifyFailed()
       throw e
   }
