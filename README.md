@@ -161,6 +161,15 @@ p.Produce("<message in []byte>",
             ackWait(<ack time.Duration>)) // defaults to 15 seconds
 ```
 
+### Add Headers
+
+```go
+hdrs := memphis.Headers{}
+err := hdrs.Add("key", "value")
+p.Produce("<message in []byte>",
+            ackWait(<ack time.Duration>), msgHeaders(<hdrs Header>)) // defaults to empty struct
+```
+
 ### Destroying a Producer
 
 ```go

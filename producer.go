@@ -19,6 +19,8 @@
 package memphis
 
 import (
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -116,10 +118,20 @@ func (p *Producer) Destroy() error {
 	return p.conn.destroy(p)
 }
 
+type Header struct {
+	Key   string
+	Value string
+}
+
+type Headers struct {
+	Headers []Header
+}
+
 // ProduceOpts - configuration options for produce operations.
 type ProduceOpts struct {
 	Message    []byte
 	AckWaitSec int
+	MsgHeaders Headers
 }
 
 // ProduceOpt - a function on the options for produce operations.
@@ -127,7 +139,8 @@ type ProduceOpt func(*ProduceOpts) error
 
 // getDefaultProduceOpts - returns default configuration options for produce operations.
 func getDefaultProduceOpts() ProduceOpts {
-	return ProduceOpts{AckWaitSec: 15}
+	return ProduceOpts{AckWaitSec: 15, MsgHeaders: Headers{}}
+
 }
 
 // Producer.Produce - produces a message into a station.
@@ -148,10 +161,36 @@ func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
 
 }
 
+func (hdr *Headers) validateHeaderKey(key string) error {
+	if strings.HasPrefix(key, "$memphis") {
+		return errors.New("Keys in headers should not start with $memphis")
+	}
+	return nil
+}
+
+func (hdr *Headers) Add(key, value string) error {
+	err := hdr.validateHeaderKey(key)
+	if err != nil {
+		return err
+	}
+
+	header := Header{Key: key, Value: value}
+	hdr.Headers = append(hdr.Headers, header)
+	return nil
+}
+
 // ProducerOpts.produce - produces a message into a station using a configuration struct.
 func (opts *ProduceOpts) produce(p *Producer) error {
+	headersMap := map[string][]string{"$memphis_connectionId": {p.conn.ConnId}, "$memphis_producedBy": {p.Name}}
+
+	for _, userHdr := range opts.MsgHeaders.Headers {
+		var values []string
+		values = append(values, userHdr.Value)
+		headersMap[userHdr.Key] = values
+	}
+
 	natsMessage := nats.Msg{
-		Header:  map[string][]string{"connectionId": {p.conn.ConnId}, "producedBy": {p.Name}},
+		Header:  headersMap,
 		Subject: getInternalName(p.stationName) + ".final",
 		Data:    opts.Message,
 	}
@@ -182,6 +221,13 @@ func ProducerGenUniqueSuffix() ProducerOpt {
 func AckWaitSec(ackWaitSec int) ProduceOpt {
 	return func(opts *ProduceOpts) error {
 		opts.AckWaitSec = ackWaitSec
+		return nil
+	}
+}
+
+func MsgHeaders(hdrs Headers) ProduceOpt {
+	return func(opts *ProduceOpts) error {
+		opts.MsgHeaders = hdrs
 		return nil
 	}
 }
