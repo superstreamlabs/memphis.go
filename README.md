@@ -157,8 +157,7 @@ p1, err := s.CreateProducer("<producer-name>")
 ### Producing a Message
 
 ```go
-p.Produce("<message in []byte>",
-            ackWait(<ack time.Duration>)) // defaults to 15 seconds
+p.Produce("<message in []byte>", memphis.ackWait(<ack time.Duration>)) // defaults to 15 seconds
 ```
 
 ### Add Headers
@@ -166,8 +165,11 @@ p.Produce("<message in []byte>",
 ```go
 hdrs := memphis.Headers{}
 err := hdrs.Add("key", "value")
-p.Produce("<message in []byte>",
-            ackWait(<ack time.Duration>), msgHeaders(<hdrs Header>)) // defaults to empty struct
+p.Produce(
+	"<message in []byte>",
+    memphis.ackWait(<ack time.Duration>),
+	memphis.msgHeaders(<hdrs Header>) // defaults to empty
+)
 ```
 
 ### Destroying a Producer
