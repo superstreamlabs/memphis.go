@@ -87,7 +87,7 @@ type Header struct {
 	Value string
 }
 
-type UserHeaders struct {
+type Headers struct {
 	Headers []Header
 }
 
@@ -95,7 +95,7 @@ type UserHeaders struct {
 type ProduceOpts struct {
 	Message    []byte
 	AckWaitSec int
-	Headers    UserHeaders
+	MsgHeaders Headers
 }
 
 // ProduceOpt - a function on the options for produce operations.
@@ -103,7 +103,7 @@ type ProduceOpt func(*ProduceOpts) error
 
 // getDefaultProduceOpts - returns default configuration options for produce operations.
 func getDefaultProduceOpts() ProduceOpts {
-	return ProduceOpts{AckWaitSec: 15, Headers: UserHeaders{}}
+	return ProduceOpts{AckWaitSec: 15, MsgHeaders: Headers{}}
 
 }
 
@@ -125,15 +125,14 @@ func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
 
 }
 
-func (hdr *UserHeaders) validateHeaderKey(key string) error {
+func (hdr *Headers) validateHeaderKey(key string) error {
 	if strings.HasPrefix(key, "$memphis") {
 		return errors.New("Keys in headers should not start with $memphis")
 	}
 	return nil
 }
 
-func (hdr *UserHeaders) Add(key, value string) error {
-
+func (hdr *Headers) Add(key, value string) error {
 	err := hdr.validateHeaderKey(key)
 	if err != nil {
 		return err
@@ -146,19 +145,12 @@ func (hdr *UserHeaders) Add(key, value string) error {
 
 // ProducerOpts.produce - produces a message into a station using a configuration struct.
 func (opts *ProduceOpts) produce(p *Producer) error {
-	var hdrs []Header
-	hdrs = append(hdrs, Header{Key: "$memphis_connectionId", Value: p.conn.ConnId}, Header{Key: "$memphis_producedBy", Value: p.Name})
+	headersMap := map[string][]string{"$memphis_connectionId": {p.conn.ConnId}, "$memphis_producedBy": {p.Name}}
 
-	for _, userHdr := range opts.Headers.Headers {
-		hdrs = append(hdrs, userHdr)
-	}
-
-	headersMap := map[string][]string{}
-
-	for _, hdr := range hdrs {
+	for _, userHdr := range opts.MsgHeaders.Headers {
 		var values []string
-		values = append(values, hdr.Value)
-		headersMap[hdr.Key] = values
+		values = append(values, userHdr.Value)
+		headersMap[userHdr.Key] = values
 	}
 
 	natsMessage := nats.Msg{
@@ -189,9 +181,9 @@ func AckWaitSec(ackWaitSec int) ProduceOpt {
 	}
 }
 
-func Headers(hdrs UserHeaders) ProduceOpt {
+func MsgHeaders(hdrs Headers) ProduceOpt {
 	return func(opts *ProduceOpts) error {
-		opts.Headers = hdrs
+		opts.MsgHeaders = hdrs
 		return nil
 	}
 }

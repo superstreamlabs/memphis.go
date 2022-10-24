@@ -15,15 +15,15 @@ func main() {
 	defer conn.Close()
 	p, err := conn.CreateProducer("<station-name>", "<producer-name>")
 
-	hdr := memphis.UserHeaders{}
-	err = hdr.Add("<key>", "<value>")
+	hdrs := memphis.Headers{}
+	err = hdrs.Add("<key>", "<value>")
 
 	if err != nil {
 		fmt.Errorf("Header failed: %v", err)
 		os.Exit(1)
 	}
 
-	err = p.Produce([]byte("You have a message!"), memphis.Headers(hdr))
+	err = p.Produce([]byte("You have a message!"), memphis.MsgHeaders(hdrs))
 
 	if err != nil {
 		fmt.Errorf("Produce failed: %v", err)
