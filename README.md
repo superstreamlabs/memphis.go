@@ -164,11 +164,12 @@ p.Produce("<message in []byte>", memphis.ackWait(<ack time.Duration>)) // defaul
 
 ```go
 hdrs := memphis.Headers{}
+hdrs.New()
 err := hdrs.Add("key", "value")
 p.Produce(
 	"<message in []byte>",
     memphis.ackWait(<ack time.Duration>),
-	memphis.msgHeaders(<hdrs Header>) // defaults to empty
+	memphis.msgHeaders(<hdrs Headers>) // defaults to empty
 )
 ```
 
