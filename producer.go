@@ -118,13 +118,8 @@ func (p *Producer) Destroy() error {
 	return p.conn.destroy(p)
 }
 
-type Header struct {
-	Key   string
-	Value string
-}
-
 type Headers struct {
-	Headers []Header
+	MsgHeaders map[string][]string
 }
 
 // ProduceOpts - configuration options for produce operations.
@@ -168,29 +163,27 @@ func (hdr *Headers) validateHeaderKey(key string) error {
 	return nil
 }
 
+func (hdr *Headers) New() {
+	hdr.MsgHeaders = map[string][]string{}
+}
+
 func (hdr *Headers) Add(key, value string) error {
 	err := hdr.validateHeaderKey(key)
 	if err != nil {
 		return err
 	}
 
-	header := Header{Key: key, Value: value}
-	hdr.Headers = append(hdr.Headers, header)
+	hdr.MsgHeaders[key] = []string{value}
 	return nil
 }
 
 // ProducerOpts.produce - produces a message into a station using a configuration struct.
 func (opts *ProduceOpts) produce(p *Producer) error {
-	headersMap := map[string][]string{"$memphis_connectionId": {p.conn.ConnId}, "$memphis_producedBy": {p.Name}}
-
-	for _, userHdr := range opts.MsgHeaders.Headers {
-		var values []string
-		values = append(values, userHdr.Value)
-		headersMap[userHdr.Key] = values
-	}
+	opts.MsgHeaders.MsgHeaders["$memphis_connectionId"] = []string{p.conn.ConnId}
+	opts.MsgHeaders.MsgHeaders["$memphis_producedBy"] = []string{p.Name}
 
 	natsMessage := nats.Msg{
-		Header:  headersMap,
+		Header:  opts.MsgHeaders.MsgHeaders,
 		Subject: getInternalName(p.stationName) + ".final",
 		Data:    opts.Message,
 	}

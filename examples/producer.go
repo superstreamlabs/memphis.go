@@ -16,6 +16,7 @@ func main() {
 	p, err := conn.CreateProducer("<station-name>", "<producer-name>")
 
 	hdrs := memphis.Headers{}
+    hdrs.New()
 	err = hdrs.Add("<key>", "<value>")
 
 	if err != nil {
