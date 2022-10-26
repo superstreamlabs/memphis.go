@@ -124,9 +124,10 @@ type Headers struct {
 
 // ProduceOpts - configuration options for produce operations.
 type ProduceOpts struct {
-	Message    []byte
-	AckWaitSec int
-	MsgHeaders Headers
+	Message      []byte
+	AckWaitSec   int
+	MsgHeaders   Headers
+	AsyncProduce bool
 }
 
 // ProduceOpt - a function on the options for produce operations.
@@ -134,14 +135,13 @@ type ProduceOpt func(*ProduceOpts) error
 
 // getDefaultProduceOpts - returns default configuration options for produce operations.
 func getDefaultProduceOpts() ProduceOpts {
-	return ProduceOpts{AckWaitSec: 15, MsgHeaders: Headers{}}
+	return ProduceOpts{AckWaitSec: 15, MsgHeaders: Headers{}, AsyncProduce: false}
 
 }
 
 // Producer.Produce - produces a message into a station.
 func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
 	defaultOpts := getDefaultProduceOpts()
-
 	defaultOpts.Message = message
 
 	for _, opt := range opts {
@@ -153,7 +153,6 @@ func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
 	}
 
 	return defaultOpts.produce(p)
-
 }
 
 func (hdr *Headers) validateHeaderKey(key string) error {
@@ -194,6 +193,10 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 		return err
 	}
 
+	if opts.AsyncProduce {
+		return nil
+	}
+
 	select {
 	case <-paf.Ok():
 		return nil
@@ -218,9 +221,18 @@ func AckWaitSec(ackWaitSec int) ProduceOpt {
 	}
 }
 
+// MsgHeaders - set headers to a message
 func MsgHeaders(hdrs Headers) ProduceOpt {
 	return func(opts *ProduceOpts) error {
 		opts.MsgHeaders = hdrs
+		return nil
+	}
+}
+
+// AsyncProduce - produce operation won't wait for broker acknowledgement
+func AsyncProduce() ProduceOpt {
+	return func(opts *ProduceOpts) error {
+		opts.AsyncProduce = true
 		return nil
 	}
 }

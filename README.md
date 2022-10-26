@@ -146,8 +146,7 @@ In order to stop receiving messages, you have to call ```consumer.StopConsume()`
 p0, err := c.CreateProducer(
 	"<station-name>",
 	"<producer-name>",
-	memphis.AckWaitSec(15), // defaults to 15 seconds
-	memphis.ProducerGenUniqueSuffix(),
+	memphis.ProducerGenUniqueSuffix()
 ) 
 
 // from a Station
@@ -157,7 +156,7 @@ p1, err := s.CreateProducer("<producer-name>")
 ### Producing a Message
 
 ```go
-p.Produce("<message in []byte>", memphis.ackWait(<ack time.Duration>)) // defaults to 15 seconds
+p.Produce("<message in []byte>", memphis.AckWaitSec(15)) // defaults to 15 seconds
 ```
 
 ### Add Headers
@@ -168,8 +167,19 @@ hdrs.New()
 err := hdrs.Add("key", "value")
 p.Produce(
 	"<message in []byte>",
-    memphis.ackWait(<ack time.Duration>),
-	memphis.msgHeaders(<hdrs Headers>) // defaults to empty
+    memphis.AckWaitSec(15),
+	memphis.MsgHeaders(hdrs) // defaults to empty
+)
+```
+
+### Async produce
+Meaning your application won't wait for broker acknowledgement - use only in case you are tolerant for data loss
+
+```go
+p.Produce(
+	"<message in []byte>",
+    memphis.AckWaitSec(15),
+	memphis.AsyncProduce()
 )
 ```
 
