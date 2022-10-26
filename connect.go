@@ -235,9 +235,16 @@ func Timeout(timeout time.Duration) Option {
 type directObj interface {
 	getCreationSubject() string
 	getCreationReq() any
-
+	handleCreationResp([]byte) error
 	getDestructionSubject() string
 	getDestructionReq() any
+}
+
+func defaultHandleCreationResp(resp []byte) error {
+	if len(resp) > 0 {
+		return errors.New(string(resp))
+	}
+	return nil
 }
 
 func (c *Conn) create(do directObj) error {
@@ -253,11 +260,8 @@ func (c *Conn) create(do directObj) error {
 	if err != nil {
 		return err
 	}
-	if len(msg.Data) > 0 {
-		return errors.New(string(msg.Data))
-	}
 
-	return nil
+	return do.handleCreationResp(msg.Data)
 }
 
 func (c *Conn) destroy(o directObj) error {

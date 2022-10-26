@@ -19,6 +19,7 @@
 package memphis
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -28,9 +29,15 @@ import (
 
 // Producer - memphis producer object.
 type Producer struct {
-	Name        string
-	stationName string
-	conn        *Conn
+	Name          string
+	stationName   string
+	conn          *Conn
+	schemaDetails struct {
+		name            string
+		schemaVersions  []SchemaVersion
+		activeSchemaIdx int
+		schemaType      string
+	}
 }
 
 type createProducerReq struct {
@@ -38,6 +45,23 @@ type createProducerReq struct {
 	StationName  string `json:"station_name"`
 	ConnectionId string `json:"connection_id"`
 	ProducerType string `json:"producer_type"`
+}
+
+type createProducerResp struct {
+	SchemaUpdate SchemaUpdate `json:"schema_update"`
+	Err          string       `json:"error"`
+}
+
+type SchemaUpdate struct {
+	SchemaName       string          `json:"schema_name"`
+	Versions         []SchemaVersion `json:"versions"`
+	ActiveVersionIdx int             `json:"active_index"`
+	SchemaType       string          `json:"type"`
+}
+
+type SchemaVersion struct {
+	VersionNumber int    `json:"version_number"`
+	Descriptor    string `json:"schema_content"`
 }
 
 type removeProducerReq struct {
@@ -103,6 +127,26 @@ func (p *Producer) getCreationReq() any {
 		ConnectionId: p.conn.ConnId,
 		ProducerType: "application",
 	}
+}
+
+func (p *Producer) handleCreationResp(resp []byte) error {
+	cr := &createProducerResp{}
+	err := json.Unmarshal(resp, cr)
+	if err != nil {
+		return err
+	}
+
+	if cr.Err != "" {
+		return errors.New(cr.Err)
+	}
+
+	sd := &p.schemaDetails
+	sd.name = cr.SchemaUpdate.SchemaName
+	sd.schemaVersions = cr.SchemaUpdate.Versions
+	sd.activeSchemaIdx = cr.SchemaUpdate.ActiveVersionIdx
+	sd.schemaType = cr.SchemaUpdate.SchemaType
+
+	return nil
 }
 
 func (p *Producer) getDestructionSubject() string {

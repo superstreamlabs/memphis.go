@@ -157,6 +157,10 @@ func (s *Station) getCreationReq() any {
 	}
 }
 
+func (s *Station) handleCreationResp(resp []byte) error {
+	return defaultHandleCreationResp(resp)
+}
+
 func (s *Station) getDestructionSubject() string {
 	return "$memphis_station_destructions"
 }
