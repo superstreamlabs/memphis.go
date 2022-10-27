@@ -74,6 +74,15 @@ func (m *Msg) Ack() error {
 	return m.msg.Ack()
 }
 
+// Msg.GetHeaders - get headers per message
+func (m *Msg) GetHeaders() map[string]string {
+	headers := map[string]string{}
+	for key, value := range m.msg.Header {
+		headers[key] = value[0]
+	}
+	return headers
+}
+
 // ConsumerErrHandler is used to process asynchronous errors.
 type ConsumerErrHandler func(*Consumer, error)
 

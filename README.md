@@ -238,6 +238,11 @@ Acknowledging a message indicates to the Memphis server to not <br>re-send the s
 message.Ack();
 ```
 
+### Get headers 
+Get headers per message
+```go
+headers := msg.GetHeaders()
+```
 ### Destroying a Consumer
 
 ```shell

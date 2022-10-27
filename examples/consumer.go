@@ -31,6 +31,8 @@ func main() {
 		for _, msg := range msgs {
 			fmt.Println(string(msg.Data()))
 			msg.Ack()
+			headers := msg.GetHeaders()
+			fmt.Println(headers)
 		}
 	}
 
