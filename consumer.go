@@ -74,6 +74,14 @@ func (m *Msg) Ack() error {
 	return m.msg.Ack()
 }
 
+func (m *Msg) GetHeaders() map[string]string {
+	jsonMsgHeaders := map[string]string{}
+	for key, value := range m.msg.Header {
+		jsonMsgHeaders[key] = value[0]
+	}
+	return jsonMsgHeaders
+}
+
 // ConsumerErrHandler is used to process asynchronous errors.
 type ConsumerErrHandler func(*Consumer, error)
 
