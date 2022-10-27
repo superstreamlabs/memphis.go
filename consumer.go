@@ -74,6 +74,7 @@ func (m *Msg) Ack() error {
 	return m.msg.Ack()
 }
 
+// Msg.GetHeaders - get headers per message
 func (m *Msg) GetHeaders() map[string]string {
 	headers := map[string]string{}
 	for key, value := range m.msg.Header {
