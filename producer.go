@@ -95,7 +95,7 @@ type SchemaUpdateChangeVersion struct {
 
 type SchemaVersion struct {
 	VersionNumber int    `json:"version_number"`
-	Descriptor    string `json:"schema_content"`
+	Descriptor    string `json:"descriptor"`
 }
 
 type removeProducerReq struct {
@@ -158,7 +158,7 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 	}
 
 	if err = c.create(&p); err != nil {
-		if err = p.schemaUpdateSub.Unsubscribe(); err != nil {
+		if err := p.schemaUpdateSub.Unsubscribe(); err != nil {
 			log.Printf("unsubscribe failed: %v\n", err)
 		}
 		close(p.schemaUpdateCh)
@@ -181,7 +181,7 @@ func (p *Producer) schemaUpdatesHandler() {
 				log.Printf("schema update unmarshal error: %v\n", err)
 				continue
 			}
-
+			p.handleSchemaUpdate(update)
 		}
 	}
 }
@@ -235,6 +235,7 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 
 func (sd *schemaDetails) handleSchemaUpdateInit(sui SchemaUpdateInit) {
 	sd.name = sui.SchemaName
+	sd.schemaVersions = make(map[int]string)
 	for i, version := range sui.Versions {
 		sd.schemaVersions[version.VersionNumber] = version.Descriptor
 		if i == sui.ActiveVersionIdx {
@@ -299,8 +300,8 @@ type ProduceOpt func(*ProduceOpts) error
 
 // getDefaultProduceOpts - returns default configuration options for produce operations.
 func getDefaultProduceOpts() ProduceOpts {
-	return ProduceOpts{AckWaitSec: 15, MsgHeaders: Headers{}, AsyncProduce: false}
-
+	msgHeaders := make(map[string][]string)
+	return ProduceOpts{AckWaitSec: 15, MsgHeaders: Headers{MsgHeaders: msgHeaders}, AsyncProduce: false}
 }
 
 // Producer.Produce - produces a message into a station.
