@@ -21,8 +21,6 @@ package memphis
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -35,19 +33,9 @@ const (
 
 // Producer - memphis producer object.
 type Producer struct {
-	Name            string
-	stationName     string
-	conn            *Conn
-	schemaUpdateCh  chan *nats.Msg
-	schemaUpdateSub *nats.Subscription
-	schemaDetails   schemaDetails
-}
-
-type schemaDetails struct {
-	name                string
-	schemaVersions      map[int]string
-	activeSchemaVersion int
-	schemaType          string
+	Name        string
+	stationName string
+	conn        *Conn
 }
 
 type createProducerReq struct {
@@ -66,16 +54,12 @@ type SchemaUpdateType int
 
 const (
 	SchemaUpdateTypeInit SchemaUpdateType = iota + 1
-	SchemaUpdateTypeNewVersion
-	SchemaUpdateTypeChangeVersion
 	SchemaUpdateTypeDrop
 )
 
 type SchemaUpdate struct {
-	UpdateType    SchemaUpdateType
-	Init          SchemaUpdateInit          `json:"init,omitempty"`
-	NewVersion    SchemaUpdateNewVersion    `json:"new_version,omitempty"`
-	ChangeVersion SchemaUpdateChangeVersion `json:"change_version,omitempty"`
+	UpdateType SchemaUpdateType
+	Init       SchemaUpdateInit `json:"init,omitempty"`
 }
 
 type SchemaUpdateInit struct {
@@ -85,17 +69,10 @@ type SchemaUpdateInit struct {
 	SchemaType       string          `json:"type"`
 }
 
-type SchemaUpdateNewVersion struct {
-	Version SchemaVersion `json:"version_details"`
-}
-
-type SchemaUpdateChangeVersion struct {
-	VersionNumber int `json:"version_number"`
-}
-
 type SchemaVersion struct {
-	VersionNumber int    `json:"version_number"`
-	Descriptor    string `json:"descriptor"`
+	VersionNumber     int    `json:"version_number"`
+	Descriptor        string `json:"descriptor"`
+	MessageStructName string `json:"message_struct_name"`
 }
 
 type removeProducerReq struct {
@@ -141,63 +118,25 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 		}
 	}
 
-	schemaUpdatesSubject := fmt.Sprintf(schemaUpdatesSubjectTemplate, getInternalName(stationName))
-
 	p := Producer{
-		Name:           name,
-		stationName:    stationName,
-		conn:           c,
-		schemaUpdateCh: make(chan *nats.Msg),
+		Name:        name,
+		stationName: stationName,
+		conn:        c,
 	}
 
-	go p.schemaUpdatesHandler()
-	p.schemaUpdateSub, err = c.brokerConn.ChanSubscribe(schemaUpdatesSubject, p.schemaUpdateCh)
+	err = c.listenToSchemaUpdates(stationName)
 	if err != nil {
-		close(p.schemaUpdateCh)
 		return nil, err
 	}
 
 	if err = c.create(&p); err != nil {
-		if err := p.schemaUpdateSub.Unsubscribe(); err != nil {
-			log.Printf("unsubscribe failed: %v\n", err)
+		if err := c.removeSchemaUpdatesListener(stationName); err != nil {
+			panic(err)
 		}
-		close(p.schemaUpdateCh)
 		return nil, err
 	}
 
 	return &p, nil
-}
-
-func (p *Producer) schemaUpdatesHandler() {
-	for {
-		select {
-		case msg, ok := <-p.schemaUpdateCh:
-			if !ok {
-				return
-			}
-			var update SchemaUpdate
-			err := json.Unmarshal(msg.Data, &update)
-			if err != nil {
-				log.Printf("schema update unmarshal error: %v\n", err)
-				continue
-			}
-			p.handleSchemaUpdate(update)
-		}
-	}
-}
-
-func (p *Producer) handleSchemaUpdate(su SchemaUpdate) {
-	sd := &p.schemaDetails
-	switch su.UpdateType {
-	case SchemaUpdateTypeInit:
-		sd.handleSchemaUpdateInit(su.Init)
-	case SchemaUpdateTypeNewVersion:
-		sd.handleSchemaUpdateNewVersion(su.NewVersion)
-	case SchemaUpdateTypeChangeVersion:
-		sd.handleSchemaUpdateChangeVersion(su.ChangeVersion)
-	case SchemaUpdateTypeDrop:
-		sd.handleSchemaUpdatfeDrop()
-	}
 }
 
 // Station.CreateProducer - creates a producer attached to this station.
@@ -229,45 +168,12 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 		return errors.New(cr.Err)
 	}
 
-	p.schemaDetails.handleSchemaUpdateInit(cr.SchemaUpdateInit)
+	p.conn.stationUpdatesSubs[p.stationName].schemaUpdateCh <- SchemaUpdate{
+		UpdateType: SchemaUpdateTypeInit,
+		Init:       cr.SchemaUpdateInit,
+	}
+
 	return nil
-}
-
-func (sd *schemaDetails) handleSchemaUpdateInit(sui SchemaUpdateInit) {
-	sd.name = sui.SchemaName
-	sd.schemaVersions = make(map[int]string)
-	for i, version := range sui.Versions {
-		sd.schemaVersions[version.VersionNumber] = version.Descriptor
-		if i == sui.ActiveVersionIdx {
-			sd.activeSchemaVersion = version.VersionNumber
-		}
-	}
-	sd.schemaType = sui.SchemaType
-}
-
-func (sd *schemaDetails) handleSchemaUpdateNewVersion(sunv SchemaUpdateNewVersion) {
-	nv := sunv.Version
-	_, ok := sd.schemaVersions[nv.VersionNumber]
-	if ok {
-		if sd.schemaVersions[nv.VersionNumber] != nv.Descriptor {
-			panic("received different descriptor for existing version number")
-		}
-		return
-	}
-
-	sd.schemaVersions[nv.VersionNumber] = nv.Descriptor
-}
-
-func (sd *schemaDetails) handleSchemaUpdateChangeVersion(sucv SchemaUpdateChangeVersion) {
-	_, ok := sd.schemaVersions[sucv.VersionNumber]
-	if !ok {
-		panic("activating non-existing version number")
-	}
-	sd.activeSchemaVersion = sucv.VersionNumber
-}
-
-func (sd *schemaDetails) handleSchemaUpdatfeDrop() {
-	sd = &schemaDetails{}
 }
 
 func (p *Producer) getDestructionSubject() string {
@@ -280,6 +186,9 @@ func (p *Producer) getDestructionReq() any {
 
 // Destroy - destoy this producer.
 func (p *Producer) Destroy() error {
+	if err := p.conn.removeSchemaUpdatesListener(p.stationName); err != nil {
+		panic(err)
+	}
 	return p.conn.destroy(p)
 }
 

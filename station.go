@@ -19,8 +19,15 @@
 package memphis
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/nats-io/nats.go"
 )
 
 // Station - memphis station object.
@@ -223,4 +230,123 @@ func DedupWindow(dedupWindow time.Duration) StationOpt {
 		opts.DedupWindow = dedupWindow
 		return nil
 	}
+}
+
+// Station schema updates related
+
+type stationUpdateSub struct {
+	refCount        int
+	schemaUpdateCh  chan SchemaUpdate
+	schemaUpdateSub *nats.Subscription
+	schemaDetails   schemaDetails
+}
+
+type schemaDetails struct {
+	name                string
+	schemaVersions      map[int]string
+	activeSchemaVersion int
+	schemaType          string
+}
+
+func (c *Conn) listenToSchemaUpdates(stationName string) error {
+	sus, ok := c.stationUpdatesSubs[stationName]
+	if !ok {
+		c.stationUpdatesSubs[stationName] = &stationUpdateSub{
+			refCount:       1,
+			schemaUpdateCh: make(chan SchemaUpdate),
+			schemaDetails:  schemaDetails{},
+		}
+		sus := c.stationUpdatesSubs[stationName]
+		schemaUpdatesSubject := fmt.Sprintf(schemaUpdatesSubjectTemplate, getInternalName(stationName))
+		go sus.schemaUpdatesHandler(&c.stationUpdatesMu)
+		var err error
+		sus.schemaUpdateSub, err = c.brokerConn.Subscribe(schemaUpdatesSubject, sus.createMsgHandler())
+		if err != nil {
+			close(sus.schemaUpdateCh)
+			return err
+		}
+
+		return nil
+	}
+	sus.refCount++
+	return nil
+}
+
+func (sus *stationUpdateSub) createMsgHandler() nats.MsgHandler {
+	return func(msg *nats.Msg) {
+		var update SchemaUpdate
+		err := json.Unmarshal(msg.Data, &update)
+		if err != nil {
+			log.Printf("schema update unmarshal error: %v\n", err)
+			return
+		}
+		sus.schemaUpdateCh <- update
+	}
+}
+
+func (c *Conn) removeSchemaUpdatesListener(stationName string) error {
+	c.stationUpdatesMu.Lock()
+	defer c.stationUpdatesMu.Unlock()
+	sus, ok := c.stationUpdatesSubs[stationName]
+	if !ok {
+		return errors.New("listener doesn't exist")
+	}
+
+	sus.refCount--
+	if sus.refCount <= 0 {
+		close(sus.schemaUpdateCh)
+		if err := sus.schemaUpdateSub.Unsubscribe(); err != nil {
+			return err
+		}
+		delete(c.stationUpdatesSubs, stationName)
+	}
+
+	return nil
+}
+
+func (c *Conn) getSchemaDetails(stationName string) (schemaDetails, error) {
+	c.stationUpdatesMu.RLock()
+	defer c.stationUpdatesMu.RUnlock()
+
+	sus, ok := c.stationUpdatesSubs[stationName]
+	if !ok {
+		return schemaDetails{}, errors.New("station subscription doesn't exist")
+	}
+
+	return sus.schemaDetails, nil
+}
+
+func (sus *stationUpdateSub) schemaUpdatesHandler(lock *sync.RWMutex) {
+	for {
+		update, ok := <-sus.schemaUpdateCh
+		if !ok {
+			return
+		}
+
+		lock.Lock()
+		sd := &sus.schemaDetails
+		switch update.UpdateType {
+		case SchemaUpdateTypeInit:
+			sd.handleSchemaUpdateInit(update.Init)
+		case SchemaUpdateTypeDrop:
+			sd.handleSchemaUpdateDrop()
+		}
+		lock.Unlock()
+	}
+}
+
+func (sd *schemaDetails) handleSchemaUpdateInit(sui SchemaUpdateInit) {
+	sd.name = sui.SchemaName
+	sd.schemaVersions = make(map[int]string)
+	for i, version := range sui.Versions {
+		sd.schemaVersions[version.VersionNumber] = version.Descriptor
+		if i == sui.ActiveVersionIdx {
+			sd.activeSchemaVersion = version.VersionNumber
+		}
+	}
+	sd.schemaType = sui.SchemaType
+}
+
+func (sd *schemaDetails) handleSchemaUpdateDrop() {
+	*sd = schemaDetails{}
 }
