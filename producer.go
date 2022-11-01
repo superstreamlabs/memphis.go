@@ -131,7 +131,7 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 
 	if err = c.create(&p); err != nil {
 		if err := c.removeSchemaUpdatesListener(stationName); err != nil {
-			panic(err)
+			return nil, err
 		}
 		return nil, err
 	}
