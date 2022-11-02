@@ -21,6 +21,7 @@ package memphis
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -198,7 +199,7 @@ type Headers struct {
 
 // ProduceOpts - configuration options for produce operations.
 type ProduceOpts struct {
-	Message      []byte
+	Message      any
 	AckWaitSec   int
 	MsgHeaders   Headers
 	AsyncProduce bool
@@ -214,7 +215,7 @@ func getDefaultProduceOpts() ProduceOpts {
 }
 
 // Producer.Produce - produces a message into a station.
-func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
+func (p *Producer) Produce(message any, opts ...ProduceOpt) error {
 	defaultOpts := getDefaultProduceOpts()
 	defaultOpts.Message = message
 
@@ -255,10 +256,15 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	opts.MsgHeaders.MsgHeaders["$memphis_connectionId"] = []string{p.conn.ConnId}
 	opts.MsgHeaders.MsgHeaders["$memphis_producedBy"] = []string{p.Name}
 
+	data, err := p.validateMsg(opts.Message)
+	if err != nil {
+		return err
+	}
+
 	natsMessage := nats.Msg{
 		Header:  opts.MsgHeaders.MsgHeaders,
 		Subject: getInternalName(p.stationName) + ".final",
-		Data:    opts.Message,
+		Data:    data,
 	}
 
 	stallWaitDuration := time.Second * time.Duration(opts.AckWaitSec)
@@ -277,6 +283,38 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	case err = <-paf.Err():
 		return err
 	}
+}
+
+func (p *Producer) validateMsg(msg any) ([]byte, error) {
+	sd, err := p.getSchemaDetails()
+	if err != nil {
+		return nil, err
+	}
+
+	if sd.schemaType == "" {
+		switch msg.(type) {
+		case []byte:
+			return msg.([]byte), nil
+		default:
+			return nil, errors.New("Unsupported message type")
+		}
+
+	}
+
+	return sd.validateProtoMsg(msg)
+}
+
+func (p *Producer) getSchemaDetails() (schemaDetails, error) {
+	return p.conn.getSchemaDetails(p.stationName)
+}
+
+func (p *Producer) PrintSchemaDetails() {
+	sd, err := p.getSchemaDetails()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("%v\n", sd)
 }
 
 // ProducerGenUniqueSuffix - whether to generate a unique suffix for this producer.

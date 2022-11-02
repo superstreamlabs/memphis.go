@@ -28,6 +28,12 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 // Station - memphis station object.
@@ -243,9 +249,10 @@ type stationUpdateSub struct {
 
 type schemaDetails struct {
 	name                string
-	schemaVersions      map[int]string
+	schemaVersions      map[int]SchemaVersion
 	activeSchemaVersion int
 	schemaType          string
+	msgDescriptor       protoreflect.MessageDescriptor
 }
 
 func (c *Conn) listenToSchemaUpdates(stationName string) error {
@@ -336,17 +343,84 @@ func (sus *stationUpdateSub) schemaUpdatesHandler(lock *sync.RWMutex) {
 }
 
 func (sd *schemaDetails) handleSchemaUpdateInit(sui SchemaUpdateInit) {
+	if len(sui.Versions) > sui.ActiveVersionIdx &&
+		sd.activeSchemaVersion == sui.Versions[sui.ActiveVersionIdx].VersionNumber {
+		return
+	}
+
 	sd.name = sui.SchemaName
-	sd.schemaVersions = make(map[int]string)
+	sd.schemaVersions = make(map[int]SchemaVersion)
 	for i, version := range sui.Versions {
-		sd.schemaVersions[version.VersionNumber] = version.Descriptor
+		sd.schemaVersions[version.VersionNumber] = version
 		if i == sui.ActiveVersionIdx {
 			sd.activeSchemaVersion = version.VersionNumber
 		}
 	}
 	sd.schemaType = sui.SchemaType
+	if sd.schemaType == "protobuf" {
+		if err := sd.parseDescriptor(); err != nil {
+			log.Println(err.Error())
+		}
+	}
 }
 
 func (sd *schemaDetails) handleSchemaUpdateDrop() {
 	*sd = schemaDetails{}
+}
+
+func (sd *schemaDetails) parseDescriptor() error {
+	descriptorSet := descriptorpb.FileDescriptorSet{}
+	activeVersion := sd.schemaVersions[sd.activeSchemaVersion]
+	err := proto.Unmarshal([]byte(activeVersion.Descriptor), &descriptorSet)
+	if err != nil {
+		return err
+	}
+
+	localRegistry, err := protodesc.NewFiles(&descriptorSet)
+	if err != nil {
+		return err
+	}
+
+	filePath := fmt.Sprintf("%v_%v.proto", sd.name, activeVersion.VersionNumber)
+	fileDesc, err := localRegistry.FindFileByPath(filePath)
+	if err != nil {
+		return err
+	}
+
+	msgsDesc := fileDesc.Messages()
+	msgDesc := msgsDesc.ByName(protoreflect.Name(activeVersion.MessageStructName))
+
+	sd.msgDescriptor = msgDesc
+	return nil
+}
+
+func (sd *schemaDetails) validateProtoMsg(msg any) ([]byte, error) {
+	var (
+		msgBytes []byte
+		err      error
+	)
+	switch msg.(type) {
+	case protoreflect.ProtoMessage:
+		msgBytes, err = proto.Marshal(msg.(protoreflect.ProtoMessage))
+		if err != nil {
+			return nil, err
+		}
+	case []byte:
+		msgBytes = msg.([]byte)
+	default:
+		return nil, errors.New("Unsupported message type")
+	}
+
+	protoMsg := dynamicpb.NewMessage(sd.msgDescriptor)
+	err = proto.Unmarshal(msgBytes, protoMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	b := protoMsg.GetUnknown()
+	if len(b) > 0 {
+		return nil, errors.New("validation failed")
+	}
+
+	return msgBytes, nil
 }
