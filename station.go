@@ -248,23 +248,23 @@ type stationUpdateSub struct {
 }
 
 type schemaDetails struct {
-	name                string
-	schemaVersions      map[int]SchemaVersion
-	activeSchemaVersion int
-	schemaType          string
-	msgDescriptor       protoreflect.MessageDescriptor
+	name          string
+	schemaType    string
+	activeVersion SchemaVersion
+	msgDescriptor protoreflect.MessageDescriptor
 }
 
 func (c *Conn) listenToSchemaUpdates(stationName string) error {
-	sus, ok := c.stationUpdatesSubs[stationName]
+	sn := getInternalName(stationName)
+	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
-		c.stationUpdatesSubs[stationName] = &stationUpdateSub{
+		c.stationUpdatesSubs[sn] = &stationUpdateSub{
 			refCount:       1,
 			schemaUpdateCh: make(chan SchemaUpdate),
 			schemaDetails:  schemaDetails{},
 		}
-		sus := c.stationUpdatesSubs[stationName]
-		schemaUpdatesSubject := fmt.Sprintf(schemaUpdatesSubjectTemplate, getInternalName(stationName))
+		sus := c.stationUpdatesSubs[sn]
+		schemaUpdatesSubject := fmt.Sprintf(schemaUpdatesSubjectTemplate, sn)
 		go sus.schemaUpdatesHandler(&c.stationUpdatesMu)
 		var err error
 		sus.schemaUpdateSub, err = c.brokerConn.Subscribe(schemaUpdatesSubject, sus.createMsgHandler())
@@ -292,9 +292,12 @@ func (sus *stationUpdateSub) createMsgHandler() nats.MsgHandler {
 }
 
 func (c *Conn) removeSchemaUpdatesListener(stationName string) error {
+	sn := getInternalName(stationName)
+
 	c.stationUpdatesMu.Lock()
 	defer c.stationUpdatesMu.Unlock()
-	sus, ok := c.stationUpdatesSubs[stationName]
+
+	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
 		return errors.New("listener doesn't exist")
 	}
@@ -305,17 +308,19 @@ func (c *Conn) removeSchemaUpdatesListener(stationName string) error {
 		if err := sus.schemaUpdateSub.Unsubscribe(); err != nil {
 			return err
 		}
-		delete(c.stationUpdatesSubs, stationName)
+		delete(c.stationUpdatesSubs, sn)
 	}
 
 	return nil
 }
 
 func (c *Conn) getSchemaDetails(stationName string) (schemaDetails, error) {
+	sn := getInternalName(stationName)
+
 	c.stationUpdatesMu.RLock()
 	defer c.stationUpdatesMu.RUnlock()
 
-	sus, ok := c.stationUpdatesSubs[stationName]
+	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
 		return schemaDetails{}, errors.New("station subscription doesn't exist")
 	}
@@ -343,20 +348,9 @@ func (sus *stationUpdateSub) schemaUpdatesHandler(lock *sync.RWMutex) {
 }
 
 func (sd *schemaDetails) handleSchemaUpdateInit(sui SchemaUpdateInit) {
-	if len(sui.Versions) > sui.ActiveVersionIdx &&
-		sd.activeSchemaVersion == sui.Versions[sui.ActiveVersionIdx].VersionNumber {
-		return
-	}
-
 	sd.name = sui.SchemaName
-	sd.schemaVersions = make(map[int]SchemaVersion)
-	for i, version := range sui.Versions {
-		sd.schemaVersions[version.VersionNumber] = version
-		if i == sui.ActiveVersionIdx {
-			sd.activeSchemaVersion = version.VersionNumber
-		}
-	}
 	sd.schemaType = sui.SchemaType
+	sd.activeVersion = sui.ActiveVersion
 	if sd.schemaType == "protobuf" {
 		if err := sd.parseDescriptor(); err != nil {
 			log.Println(err.Error())
@@ -370,8 +364,7 @@ func (sd *schemaDetails) handleSchemaUpdateDrop() {
 
 func (sd *schemaDetails) parseDescriptor() error {
 	descriptorSet := descriptorpb.FileDescriptorSet{}
-	activeVersion := sd.schemaVersions[sd.activeSchemaVersion]
-	err := proto.Unmarshal([]byte(activeVersion.Descriptor), &descriptorSet)
+	err := proto.Unmarshal([]byte(sd.activeVersion.Descriptor), &descriptorSet)
 	if err != nil {
 		return err
 	}
@@ -381,17 +374,26 @@ func (sd *schemaDetails) parseDescriptor() error {
 		return err
 	}
 
-	filePath := fmt.Sprintf("%v_%v.proto", sd.name, activeVersion.VersionNumber)
+	filePath := fmt.Sprintf("%v_%v.proto", sd.name, sd.activeVersion.VersionNumber)
 	fileDesc, err := localRegistry.FindFileByPath(filePath)
 	if err != nil {
 		return err
 	}
 
 	msgsDesc := fileDesc.Messages()
-	msgDesc := msgsDesc.ByName(protoreflect.Name(activeVersion.MessageStructName))
+	msgDesc := msgsDesc.ByName(protoreflect.Name(sd.activeVersion.MessageStructName))
 
 	sd.msgDescriptor = msgDesc
 	return nil
+}
+
+func (sd *schemaDetails) validateMsg(msg any) ([]byte, error) {
+	switch sd.schemaType {
+	case "protobuf":
+		return sd.validateProtoMsg(msg)
+	default:
+		return nil, errors.New("Invalid schema type")
+	}
 }
 
 func (sd *schemaDetails) validateProtoMsg(msg any) ([]byte, error) {
@@ -415,11 +417,6 @@ func (sd *schemaDetails) validateProtoMsg(msg any) ([]byte, error) {
 	err = proto.Unmarshal(msgBytes, protoMsg)
 	if err != nil {
 		return nil, err
-	}
-
-	b := protoMsg.GetUnknown()
-	if len(b) > 0 {
-		return nil, errors.New("validation failed")
 	}
 
 	return msgBytes, nil

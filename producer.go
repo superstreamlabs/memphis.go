@@ -21,7 +21,6 @@ package memphis
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -29,7 +28,8 @@ import (
 )
 
 const (
-	schemaUpdatesSubjectTemplate = "$memphis_schema_updates_%s"
+	schemaUpdatesSubjectTemplate   = "$memphis_schema_updates_%s"
+	lastProducerCreationReqVersion = 1
 )
 
 // Producer - memphis producer object.
@@ -40,10 +40,11 @@ type Producer struct {
 }
 
 type createProducerReq struct {
-	Name         string `json:"name"`
-	StationName  string `json:"station_name"`
-	ConnectionId string `json:"connection_id"`
-	ProducerType string `json:"producer_type"`
+	Name           string `json:"name"`
+	StationName    string `json:"station_name"`
+	ConnectionId   string `json:"connection_id"`
+	ProducerType   string `json:"producer_type"`
+	RequestVersion int    `json:"req_version"`
 }
 
 type createProducerResp struct {
@@ -64,15 +65,15 @@ type SchemaUpdate struct {
 }
 
 type SchemaUpdateInit struct {
-	SchemaName       string          `json:"schema_name"`
-	Versions         []SchemaVersion `json:"versions"`
-	ActiveVersionIdx int             `json:"active_index"`
-	SchemaType       string          `json:"type"`
+	SchemaName    string        `json:"schema_name"`
+	ActiveVersion SchemaVersion `json:"active_version"`
+	SchemaType    string        `json:"type"`
 }
 
 type SchemaVersion struct {
 	VersionNumber     int    `json:"version_number"`
 	Descriptor        string `json:"descriptor"`
+	Content           string `json:"schema_content"`
 	MessageStructName string `json:"message_struct_name"`
 }
 
@@ -151,10 +152,11 @@ func (p *Producer) getCreationSubject() string {
 
 func (p *Producer) getCreationReq() any {
 	return createProducerReq{
-		Name:         p.Name,
-		StationName:  p.stationName,
-		ConnectionId: p.conn.ConnId,
-		ProducerType: "application",
+		Name:           p.Name,
+		StationName:    p.stationName,
+		ConnectionId:   p.conn.ConnId,
+		ProducerType:   "application",
+		RequestVersion: lastProducerCreationReqVersion,
 	}
 }
 
@@ -162,14 +164,16 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 	cr := &createProducerResp{}
 	err := json.Unmarshal(resp, cr)
 	if err != nil {
-		return err
+		// unmarshal failed, we may be dealing with an old broker
+		return defaultHandleCreationResp(resp)
 	}
 
 	if cr.Err != "" {
 		return errors.New(cr.Err)
 	}
 
-	p.conn.stationUpdatesSubs[p.stationName].schemaUpdateCh <- SchemaUpdate{
+	sn := getInternalName(p.stationName)
+	p.conn.stationUpdatesSubs[sn].schemaUpdateCh <- SchemaUpdate{
 		UpdateType: SchemaUpdateTypeInit,
 		Init:       cr.SchemaUpdateInit,
 	}
@@ -291,6 +295,8 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 		return nil, err
 	}
 
+	// empty schema type means there is no schema and validation is not needed
+	// so we just verify the type is byte slice
 	if sd.schemaType == "" {
 		switch msg.(type) {
 		case []byte:
@@ -301,20 +307,11 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 
 	}
 
-	return sd.validateProtoMsg(msg)
+	return sd.validateMsg(msg)
 }
 
 func (p *Producer) getSchemaDetails() (schemaDetails, error) {
 	return p.conn.getSchemaDetails(p.stationName)
-}
-
-func (p *Producer) PrintSchemaDetails() {
-	sd, err := p.getSchemaDetails()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Printf("%v\n", sd)
 }
 
 // ProducerGenUniqueSuffix - whether to generate a unique suffix for this producer.
