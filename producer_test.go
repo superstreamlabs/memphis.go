@@ -52,6 +52,8 @@ func TestCreateProducer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
+	c.destroy(&Station{Name: "station_name_2"})
 }
 
 func TestProduce(t *testing.T) {

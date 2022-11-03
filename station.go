@@ -19,8 +19,21 @@
 package memphis
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/nats-io/nats.go"
+
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 // Station - memphis station object.
@@ -157,6 +170,10 @@ func (s *Station) getCreationReq() any {
 	}
 }
 
+func (s *Station) handleCreationResp(resp []byte) error {
+	return defaultHandleCreationResp(resp)
+}
+
 func (s *Station) getDestructionSubject() string {
 	return "$memphis_station_destructions"
 }
@@ -219,4 +236,188 @@ func DedupWindow(dedupWindow time.Duration) StationOpt {
 		opts.DedupWindow = dedupWindow
 		return nil
 	}
+}
+
+// Station schema updates related
+
+type stationUpdateSub struct {
+	refCount        int
+	schemaUpdateCh  chan SchemaUpdate
+	schemaUpdateSub *nats.Subscription
+	schemaDetails   schemaDetails
+}
+
+type schemaDetails struct {
+	name          string
+	schemaType    string
+	activeVersion SchemaVersion
+	msgDescriptor protoreflect.MessageDescriptor
+}
+
+func (c *Conn) listenToSchemaUpdates(stationName string) error {
+	sn := getInternalName(stationName)
+	sus, ok := c.stationUpdatesSubs[sn]
+	if !ok {
+		c.stationUpdatesSubs[sn] = &stationUpdateSub{
+			refCount:       1,
+			schemaUpdateCh: make(chan SchemaUpdate),
+			schemaDetails:  schemaDetails{},
+		}
+		sus := c.stationUpdatesSubs[sn]
+		schemaUpdatesSubject := fmt.Sprintf(schemaUpdatesSubjectTemplate, sn)
+		go sus.schemaUpdatesHandler(&c.stationUpdatesMu)
+		var err error
+		sus.schemaUpdateSub, err = c.brokerConn.Subscribe(schemaUpdatesSubject, sus.createMsgHandler())
+		if err != nil {
+			close(sus.schemaUpdateCh)
+			return err
+		}
+
+		return nil
+	}
+	sus.refCount++
+	return nil
+}
+
+func (sus *stationUpdateSub) createMsgHandler() nats.MsgHandler {
+	return func(msg *nats.Msg) {
+		var update SchemaUpdate
+		err := json.Unmarshal(msg.Data, &update)
+		if err != nil {
+			log.Printf("schema update unmarshal error: %v\n", err)
+			return
+		}
+		sus.schemaUpdateCh <- update
+	}
+}
+
+func (c *Conn) removeSchemaUpdatesListener(stationName string) error {
+	sn := getInternalName(stationName)
+
+	c.stationUpdatesMu.Lock()
+	defer c.stationUpdatesMu.Unlock()
+
+	sus, ok := c.stationUpdatesSubs[sn]
+	if !ok {
+		return errors.New("listener doesn't exist")
+	}
+
+	sus.refCount--
+	if sus.refCount <= 0 {
+		close(sus.schemaUpdateCh)
+		if err := sus.schemaUpdateSub.Unsubscribe(); err != nil {
+			return err
+		}
+		delete(c.stationUpdatesSubs, sn)
+	}
+
+	return nil
+}
+
+func (c *Conn) getSchemaDetails(stationName string) (schemaDetails, error) {
+	sn := getInternalName(stationName)
+
+	c.stationUpdatesMu.RLock()
+	defer c.stationUpdatesMu.RUnlock()
+
+	sus, ok := c.stationUpdatesSubs[sn]
+	if !ok {
+		return schemaDetails{}, errors.New("station subscription doesn't exist")
+	}
+
+	return sus.schemaDetails, nil
+}
+
+func (sus *stationUpdateSub) schemaUpdatesHandler(lock *sync.RWMutex) {
+	for {
+		update, ok := <-sus.schemaUpdateCh
+		if !ok {
+			return
+		}
+
+		lock.Lock()
+		sd := &sus.schemaDetails
+		switch update.UpdateType {
+		case SchemaUpdateTypeInit:
+			sd.handleSchemaUpdateInit(update.Init)
+		case SchemaUpdateTypeDrop:
+			sd.handleSchemaUpdateDrop()
+		}
+		lock.Unlock()
+	}
+}
+
+func (sd *schemaDetails) handleSchemaUpdateInit(sui SchemaUpdateInit) {
+	sd.name = sui.SchemaName
+	sd.schemaType = sui.SchemaType
+	sd.activeVersion = sui.ActiveVersion
+	if sd.schemaType == "protobuf" {
+		if err := sd.parseDescriptor(); err != nil {
+			log.Println(err.Error())
+		}
+	}
+}
+
+func (sd *schemaDetails) handleSchemaUpdateDrop() {
+	*sd = schemaDetails{}
+}
+
+func (sd *schemaDetails) parseDescriptor() error {
+	descriptorSet := descriptorpb.FileDescriptorSet{}
+	err := proto.Unmarshal([]byte(sd.activeVersion.Descriptor), &descriptorSet)
+	if err != nil {
+		return err
+	}
+
+	localRegistry, err := protodesc.NewFiles(&descriptorSet)
+	if err != nil {
+		return err
+	}
+
+	filePath := fmt.Sprintf("%v_%v.proto", sd.name, sd.activeVersion.VersionNumber)
+	fileDesc, err := localRegistry.FindFileByPath(filePath)
+	if err != nil {
+		return err
+	}
+
+	msgsDesc := fileDesc.Messages()
+	msgDesc := msgsDesc.ByName(protoreflect.Name(sd.activeVersion.MessageStructName))
+
+	sd.msgDescriptor = msgDesc
+	return nil
+}
+
+func (sd *schemaDetails) validateMsg(msg any) ([]byte, error) {
+	switch sd.schemaType {
+	case "protobuf":
+		return sd.validateProtoMsg(msg)
+	default:
+		return nil, errors.New("Invalid schema type")
+	}
+}
+
+func (sd *schemaDetails) validateProtoMsg(msg any) ([]byte, error) {
+	var (
+		msgBytes []byte
+		err      error
+	)
+	switch msg.(type) {
+	case protoreflect.ProtoMessage:
+		msgBytes, err = proto.Marshal(msg.(protoreflect.ProtoMessage))
+		if err != nil {
+			return nil, err
+		}
+	case []byte:
+		msgBytes = msg.([]byte)
+	default:
+		return nil, errors.New("Unsupported message type")
+	}
+
+	protoMsg := dynamicpb.NewMessage(sd.msgDescriptor)
+	err = proto.Unmarshal(msgBytes, protoMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	return msgBytes, nil
 }

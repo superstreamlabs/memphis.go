@@ -19,11 +19,17 @@
 package memphis
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
+)
+
+const (
+	schemaUpdatesSubjectTemplate   = "$memphis_schema_updates_%s"
+	lastProducerCreationReqVersion = 1
 )
 
 // Producer - memphis producer object.
@@ -34,10 +40,41 @@ type Producer struct {
 }
 
 type createProducerReq struct {
-	Name         string `json:"name"`
-	StationName  string `json:"station_name"`
-	ConnectionId string `json:"connection_id"`
-	ProducerType string `json:"producer_type"`
+	Name           string `json:"name"`
+	StationName    string `json:"station_name"`
+	ConnectionId   string `json:"connection_id"`
+	ProducerType   string `json:"producer_type"`
+	RequestVersion int    `json:"req_version"`
+}
+
+type createProducerResp struct {
+	SchemaUpdateInit SchemaUpdateInit `json:"schema_update"`
+	Err              string           `json:"error"`
+}
+
+type SchemaUpdateType int
+
+const (
+	SchemaUpdateTypeInit SchemaUpdateType = iota + 1
+	SchemaUpdateTypeDrop
+)
+
+type SchemaUpdate struct {
+	UpdateType SchemaUpdateType
+	Init       SchemaUpdateInit `json:"init,omitempty"`
+}
+
+type SchemaUpdateInit struct {
+	SchemaName    string        `json:"schema_name"`
+	ActiveVersion SchemaVersion `json:"active_version"`
+	SchemaType    string        `json:"type"`
+}
+
+type SchemaVersion struct {
+	VersionNumber     int    `json:"version_number"`
+	Descriptor        string `json:"descriptor"`
+	Content           string `json:"schema_content"`
+	MessageStructName string `json:"message_struct_name"`
 }
 
 type removeProducerReq struct {
@@ -83,8 +120,25 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 		}
 	}
 
-	p := Producer{Name: name, stationName: stationName, conn: c}
-	return &p, c.create(&p)
+	p := Producer{
+		Name:        name,
+		stationName: stationName,
+		conn:        c,
+	}
+
+	err = c.listenToSchemaUpdates(stationName)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = c.create(&p); err != nil {
+		if err := c.removeSchemaUpdatesListener(stationName); err != nil {
+			return nil, err
+		}
+		return nil, err
+	}
+
+	return &p, nil
 }
 
 // Station.CreateProducer - creates a producer attached to this station.
@@ -98,11 +152,33 @@ func (p *Producer) getCreationSubject() string {
 
 func (p *Producer) getCreationReq() any {
 	return createProducerReq{
-		Name:         p.Name,
-		StationName:  p.stationName,
-		ConnectionId: p.conn.ConnId,
-		ProducerType: "application",
+		Name:           p.Name,
+		StationName:    p.stationName,
+		ConnectionId:   p.conn.ConnId,
+		ProducerType:   "application",
+		RequestVersion: lastProducerCreationReqVersion,
 	}
+}
+
+func (p *Producer) handleCreationResp(resp []byte) error {
+	cr := &createProducerResp{}
+	err := json.Unmarshal(resp, cr)
+	if err != nil {
+		// unmarshal failed, we may be dealing with an old broker
+		return defaultHandleCreationResp(resp)
+	}
+
+	if cr.Err != "" {
+		return errors.New(cr.Err)
+	}
+
+	sn := getInternalName(p.stationName)
+	p.conn.stationUpdatesSubs[sn].schemaUpdateCh <- SchemaUpdate{
+		UpdateType: SchemaUpdateTypeInit,
+		Init:       cr.SchemaUpdateInit,
+	}
+
+	return nil
 }
 
 func (p *Producer) getDestructionSubject() string {
@@ -115,6 +191,9 @@ func (p *Producer) getDestructionReq() any {
 
 // Destroy - destoy this producer.
 func (p *Producer) Destroy() error {
+	if err := p.conn.removeSchemaUpdatesListener(p.stationName); err != nil {
+		panic(err)
+	}
 	return p.conn.destroy(p)
 }
 
@@ -124,7 +203,7 @@ type Headers struct {
 
 // ProduceOpts - configuration options for produce operations.
 type ProduceOpts struct {
-	Message      []byte
+	Message      any
 	AckWaitSec   int
 	MsgHeaders   Headers
 	AsyncProduce bool
@@ -135,12 +214,12 @@ type ProduceOpt func(*ProduceOpts) error
 
 // getDefaultProduceOpts - returns default configuration options for produce operations.
 func getDefaultProduceOpts() ProduceOpts {
-	return ProduceOpts{AckWaitSec: 15, MsgHeaders: Headers{}, AsyncProduce: false}
-
+	msgHeaders := make(map[string][]string)
+	return ProduceOpts{AckWaitSec: 15, MsgHeaders: Headers{MsgHeaders: msgHeaders}, AsyncProduce: false}
 }
 
 // Producer.Produce - produces a message into a station.
-func (p *Producer) Produce(message []byte, opts ...ProduceOpt) error {
+func (p *Producer) Produce(message any, opts ...ProduceOpt) error {
 	defaultOpts := getDefaultProduceOpts()
 	defaultOpts.Message = message
 
@@ -181,10 +260,15 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	opts.MsgHeaders.MsgHeaders["$memphis_connectionId"] = []string{p.conn.ConnId}
 	opts.MsgHeaders.MsgHeaders["$memphis_producedBy"] = []string{p.Name}
 
+	data, err := p.validateMsg(opts.Message)
+	if err != nil {
+		return err
+	}
+
 	natsMessage := nats.Msg{
 		Header:  opts.MsgHeaders.MsgHeaders,
 		Subject: getInternalName(p.stationName) + ".final",
-		Data:    opts.Message,
+		Data:    data,
 	}
 
 	stallWaitDuration := time.Second * time.Duration(opts.AckWaitSec)
@@ -203,6 +287,36 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	case err = <-paf.Err():
 		return err
 	}
+}
+
+func (p *Producer) validateMsg(msg any) ([]byte, error) {
+	sd, err := p.getSchemaDetails()
+	if err != nil {
+		return nil, err
+	}
+
+	// empty schema type means there is no schema and validation is not needed
+	// so we just verify the type is byte slice
+	if sd.schemaType == "" {
+		switch msg.(type) {
+		case []byte:
+			return msg.([]byte), nil
+		default:
+			return nil, errors.New("Unsupported message type")
+		}
+
+	}
+
+	msgBytes, err := sd.validateMsg(msg)
+	if err != nil {
+		return nil, errors.New("Schema validation has failed: " + err.Error())
+	}
+
+	return msgBytes, nil
+}
+
+func (p *Producer) getSchemaDetails() (schemaDetails, error) {
+	return p.conn.getSchemaDetails(p.stationName)
 }
 
 // ProducerGenUniqueSuffix - whether to generate a unique suffix for this producer.

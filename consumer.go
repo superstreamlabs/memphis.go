@@ -407,6 +407,10 @@ func (c *Consumer) getCreationReq() any {
 	}
 }
 
+func (c *Consumer) handleCreationResp(resp []byte) error {
+	return defaultHandleCreationResp(resp)
+}
+
 func (c *Consumer) getDestructionSubject() string {
 	return "$memphis_consumer_destructions"
 }

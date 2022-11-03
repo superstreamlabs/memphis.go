@@ -27,6 +27,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -56,11 +57,13 @@ func (c *Conn) IsConnected() bool {
 
 // Conn - holds the connection with memphis.
 type Conn struct {
-	opts       Options
-	ConnId     string
-	username   string
-	brokerConn *nats.Conn
-	js         nats.JetStreamContext
+	opts               Options
+	ConnId             string
+	username           string
+	brokerConn         *nats.Conn
+	js                 nats.JetStreamContext
+	stationUpdatesMu   sync.RWMutex
+	stationUpdatesSubs map[string]*stationUpdateSub
 }
 
 // getDefaultOptions - returns default configuration options for the client.
@@ -132,6 +135,8 @@ func (opts Options) connect() (*Conn, error) {
 	if err := c.startConn(); err != nil {
 		return nil, err
 	}
+
+	c.stationUpdatesSubs = make(map[string]*stationUpdateSub)
 
 	return &c, nil
 }
@@ -235,9 +240,16 @@ func Timeout(timeout time.Duration) Option {
 type directObj interface {
 	getCreationSubject() string
 	getCreationReq() any
-
+	handleCreationResp([]byte) error
 	getDestructionSubject() string
 	getDestructionReq() any
+}
+
+func defaultHandleCreationResp(resp []byte) error {
+	if len(resp) > 0 {
+		return errors.New(string(resp))
+	}
+	return nil
 }
 
 func (c *Conn) create(do directObj) error {
@@ -253,11 +265,8 @@ func (c *Conn) create(do directObj) error {
 	if err != nil {
 		return err
 	}
-	if len(msg.Data) > 0 {
-		return errors.New(string(msg.Data))
-	}
 
-	return nil
+	return do.handleCreationResp(msg.Data)
 }
 
 func (c *Conn) destroy(o directObj) error {
