@@ -218,7 +218,7 @@ func getDefaultProduceOpts() ProduceOpts {
 	return ProduceOpts{AckWaitSec: 15, MsgHeaders: Headers{MsgHeaders: msgHeaders}, AsyncProduce: false}
 }
 
-// Producer.Produce - produces a message into a station.
+// Producer.Produce - produces a message into a station. message is of type []byte/protoreflect.ProtoMessage in case it is a schema validated station
 func (p *Producer) Produce(message any, opts ...ProduceOpt) error {
 	defaultOpts := getDefaultProduceOpts()
 	defaultOpts.Message = message

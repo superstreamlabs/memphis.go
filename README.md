@@ -153,20 +153,20 @@ p0, err := c.CreateProducer(
 p1, err := s.CreateProducer("<producer-name>")
 ```
 
-### Producing a Message
+### Producing a message
 
 ```go
-p.Produce("<message in []byte>", memphis.AckWaitSec(15)) // defaults to 15 seconds
+p.Produce("<message in []byte/protoreflect.ProtoMessage in case it is a schema validated station>", memphis.AckWaitSec(15)) // defaults to 15 seconds
 ```
 
-### Add Headers
+### Add headers
 
 ```go
 hdrs := memphis.Headers{}
 hdrs.New()
 err := hdrs.Add("key", "value")
 p.Produce(
-	"<message in []byte>",
+	"<message in []byte>/protoreflect.ProtoMessage in case it is a schema validated station",
     memphis.AckWaitSec(15),
 	memphis.MsgHeaders(hdrs) // defaults to empty
 )
@@ -177,7 +177,7 @@ Meaning your application won't wait for broker acknowledgement - use only in cas
 
 ```go
 p.Produce(
-	"<message in []byte>",
+	"<message in []byte>/protoreflect.ProtoMessage in case it is a schema validated station",
     memphis.AckWaitSec(15),
 	memphis.AsyncProduce()
 )
