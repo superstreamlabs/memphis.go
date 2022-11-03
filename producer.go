@@ -307,7 +307,12 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 
 	}
 
-	return sd.validateMsg(msg)
+	msgBytes, err := sd.validateMsg(msg)
+	if err != nil {
+		return nil, errors.New("Schema validation has failed: " + err.Error())
+	}
+
+	return msgBytes, nil
 }
 
 func (p *Producer) getSchemaDetails() (schemaDetails, error) {
