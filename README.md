@@ -12,20 +12,25 @@
 
 <div align="center">
 <h1>Real-Time Data Processing Platform</h1>
+
+<img width="750" alt="Memphis UI" src="https://user-images.githubusercontent.com/70286779/182241744-2016dc1a-c758-48ba-8666-40b883242ea9.png">
+
+
 <a target="_blank" href="https://twitter.com/intent/tweet?text=Probably+The+Easiest+Message+Broker+In+The+World%21+%0D%0Ahttps%3A%2F%2Fgithub.com%2Fmemphisdev%2Fmemphis-broker+%0D%0A%0D%0A%23MemphisDev"><img src="https://user-images.githubusercontent.com/70286779/174467733-e7656c1e-cfeb-4877-a5f3-1bd4fccc8cf1.png" width="60"></a> 
 </div>
  
  <p align="center">
-  <a href="https://memphis.dev/docs/">Docs</a> - <a href="https://twitter.com/Memphis_Dev">Twitter</a> - <a href="https://www.youtube.com/channel/UCVdMDLCSxXOqtgrBaRUHKKg">YouTube</a>
+  <a href="https://demo.memphis.dev/">Playground</a> - <a href="https://sandbox.memphis.dev/" target="_blank">Sandbox</a> - <a href="https://memphis.dev/docs/">Docs</a> - <a href="https://twitter.com/Memphis_Dev">Twitter</a> - <a href="https://www.youtube.com/channel/UCVdMDLCSxXOqtgrBaRUHKKg">YouTube</a>
 </p>
 
 <p align="center">
-<a href="https://discord.gg/WZpysvAeTf"><img src="https://img.shields.io/discord/963333392844328961?color=6557ff&label=discord" alt="Discord"></a> <a href=""><img src="https://img.shields.io/github/issues-closed/memphisdev/memphis-broker?color=6557ff"></a> <a href="https://github.com/memphisdev/memphis-broker/blob/master/CODE_OF_CONDUCT.md"><img src="https://img.shields.io/badge/Code%20of%20Conduct-v1.0-ff69b4.svg?color=ffc633" alt="Code Of Conduct"></a> <a href="https://github.com/memphisdev/memphis-broker/blob/master/LICENSE"><img src="https://img.shields.io/github/license/memphisdev/memphis-broker?color=ffc633" alt="License"></a> <img alt="GitHub release (latest by date)" src="https://img.shields.io/github/v/release/memphisdev/memphis-broker?color=61dfc6"> <img src="https://img.shields.io/github/last-commit/memphisdev/memphis-broker?color=61dfc6&label=last%20commit"> <img src="https://goreportcard.com/badge/github.com/memphisdev/memphis.go">
+<a href="https://discord.gg/WZpysvAeTf"><img src="https://img.shields.io/discord/963333392844328961?color=6557ff&label=discord" alt="Discord"></a> <a href=""><img src="https://img.shields.io/github/issues-closed/memphisdev/memphis-broker?color=6557ff"></a> <a href="https://github.com/memphisdev/memphis-broker/blob/master/CODE_OF_CONDUCT.md"><img src="https://img.shields.io/badge/Code%20of%20Conduct-v1.0-ff69b4.svg?color=ffc633" alt="Code Of Conduct"></a> <a href="https://github.com/memphisdev/memphis-broker/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg"></a> <img alt="GitHub release (latest by date)" src="https://img.shields.io/github/v/release/memphisdev/memphis-broker?color=61dfc6"> <img src="https://img.shields.io/github/last-commit/memphisdev/memphis-broker?color=61dfc6&label=last%20commit">
 </p>
 
-**[Memphis{dev}](https://memphis.dev)** is a Go-based message broker for developers made out of devs' struggles develop around message brokers.<br>Enables devs to achieve all other message brokers' benefits in a fraction of the time.<br>
-Focusing on automatic optimization, schema management, inline processing,  and troubleshooting abilities. All under the same hood.
-Utilizing NATS core.
+**[Memphis{dev}](https://memphis.dev)** is an open-source real-time data processing platform<br>
+that provides end-to-end support for in-app streaming use cases using Memphis distributed message broker.<br>
+Memphis' platform requires zero ops, enables rapid development, extreme cost reduction, <br>
+eliminates coding barriers, and saves a great amount of dev time for data-oriented developers and data engineers.
 
 # Installation
 After installing and running memphis broker,<br>
@@ -138,17 +143,44 @@ In order to stop receiving messages, you have to call ```consumer.StopConsume()`
 
 ```go
 // from a Conn
-p0, err := c.CreateProducer("<station-name>", "<producer-name>") 
+p0, err := c.CreateProducer(
+	"<station-name>",
+	"<producer-name>",
+	memphis.ProducerGenUniqueSuffix()
+) 
 
 // from a Station
 p1, err := s.CreateProducer("<producer-name>")
 ```
 
-### Producing a Message
+### Producing a message
 
 ```go
-p.Produce("<message in []byte>",
-            ackWait(<ack time.Duration>)) // defaults to 15 seconds
+p.Produce("<message in []byte/protoreflect.ProtoMessage in case it is a schema validated station>", memphis.AckWaitSec(15)) // defaults to 15 seconds
+```
+
+### Add headers
+
+```go
+hdrs := memphis.Headers{}
+hdrs.New()
+err := hdrs.Add("key", "value")
+p.Produce(
+	"<message in []byte>/protoreflect.ProtoMessage in case it is a schema validated station",
+    memphis.AckWaitSec(15),
+	memphis.MsgHeaders(hdrs) // defaults to empty
+)
+```
+
+### Async produce
+Meaning your application won't wait for broker acknowledgement - use only in case you are tolerant for data loss
+
+```go
+p.Produce(
+	"<message in []byte>/protoreflect.ProtoMessage in case it is a schema validated station",
+    memphis.AckWaitSec(15),
+	memphis.AsyncProduce()
+)
 ```
 
 ### Destroying a Producer
@@ -162,12 +194,15 @@ p.Destroy();
 ```go
 // creation from a Station
 consumer0, err = s.CreateConsumer("<consumer-name>",
-  ConsumerGroup("<consumer-group>"), // defaults to consumer name
-  PullInterval(<pull interval time.Duration), // defaults to 1 second
-  BatchSize(<batch-size int), // defaults to 10
-  BatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds
-  MaxAckTime(<time.Duration>), // defaults to 30 sec
-  MaxMsgDeliveries(<int>)) // defaults to 10
+  memphis.ConsumerGroup("<consumer-group>"), // defaults to consumer name
+  memphis.PullInterval(<pull interval time.Duration), // defaults to 1 second
+  memphis.BatchSize(<batch-size int), // defaults to 10
+  memphis.BatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds
+  memphis.MaxAckTime(<time.Duration>), // defaults to 30 sec
+  memphis.MaxMsgDeliveries(<int>), // defaults to 10
+  memphis.ConsumerGenUniqueSuffix(),
+  memphis.ConsumerErrorHandler(func(*Consumer, error){})
+)
   
 // creation from a Conn
 consumer1, err = c.CreateConsumer("<station-name>", "<consumer-name>", ...) 
@@ -203,6 +238,11 @@ Acknowledging a message indicates to the Memphis server to not <br>re-send the s
 message.Ack();
 ```
 
+### Get headers 
+Get headers per message
+```go
+headers := msg.GetHeaders()
+```
 ### Destroying a Consumer
 
 ```shell
