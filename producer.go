@@ -173,10 +173,11 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 	}
 
 	sn := getInternalName(p.stationName)
-	p.conn.stationUpdatesSubs[sn].schemaUpdateCh <- SchemaUpdate{
-		UpdateType: SchemaUpdateTypeInit,
-		Init:       cr.SchemaUpdateInit,
-	}
+
+	p.conn.stationUpdatesMu.Lock()
+	sd := &p.conn.stationUpdatesSubs[sn].schemaDetails
+	sd.handleSchemaUpdateInit(cr.SchemaUpdateInit)
+	p.conn.stationUpdatesMu.Unlock()
 
 	return nil
 }
