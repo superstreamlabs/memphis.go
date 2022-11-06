@@ -17,17 +17,17 @@ func main() {
 
 	hdrs := memphis.Headers{}
     hdrs.New()
-	err = hdrs.Add("<key>", "<value>")
+	err = hdrs.Add("key", "value")
 
 	if err != nil {
-		fmt.Errorf("Header failed: %v", err)
+		fmt.Printf("Header failed: %v", err)
 		os.Exit(1)
 	}
 
 	err = p.Produce([]byte("You have a message!"), memphis.MsgHeaders(hdrs))
 
 	if err != nil {
-		fmt.Errorf("Produce failed: %v", err)
+		fmt.Printf("Produce failed: %v", err)
 		os.Exit(1)
 	}
 }

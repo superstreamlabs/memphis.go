@@ -290,6 +290,7 @@ func (c *Conn) destroy(o directObj) error {
 }
 
 func getInternalName(name string) string {
+	name = strings.ToLower(name)
 	return replaceDelimiters(name)
 }
 
