@@ -197,7 +197,7 @@ consumer0, err = s.CreateConsumer("<consumer-name>",
   memphis.ConsumerGroup("<consumer-group>"), // defaults to consumer name
   memphis.PullInterval(<pull interval time.Duration), // defaults to 1 second
   memphis.BatchSize(<batch-size int), // defaults to 10
-  memphis.BatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds
+  memphis.BatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds, has to be at least 1 ms
   memphis.MaxAckTime(<time.Duration>), // defaults to 30 sec
   memphis.MaxMsgDeliveries(<int>), // defaults to 10
   memphis.ConsumerGenUniqueSuffix(),

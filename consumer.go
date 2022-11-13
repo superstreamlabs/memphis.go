@@ -458,6 +458,9 @@ func BatchSize(batchSize int) ConsumerOpt {
 // BatchMaxWaitTime - max time to wait between pulls, defauls is 5 seconds.
 func BatchMaxWaitTime(batchMaxWaitTime time.Duration) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
+		if batchMaxWaitTime < 1*time.Millisecond {
+			batchMaxWaitTime = 1*time.Millisecond
+		}
 		opts.BatchMaxTimeToWait = batchMaxWaitTime
 		return nil
 	}
