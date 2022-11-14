@@ -84,7 +84,7 @@ s0, err = c.CreateStation("<station-name>")
 s1, err = c.CreateStation("<station-name>", 
  RetentionTypeOpt(<Messages/MaxMeMessageAgeSeconds/Bytes>),
  RetentionVal(<int>), 
- StorageTypeOpt(<Memory/File>), 
+ StorageTypeOpt(<Memory/Disk>), 
  Replicas(<int>), 
  EnableDedup(), 
  DedupWindow(<time.Duration>))
@@ -115,10 +115,10 @@ The above means that after maximum number of saved bytes (set in retention value
 Memphis currently supports the following types of messages storage:<br>
 
 ```go
-memphis.File
+memphis.Disk
 ```
 
-The above means that messages persist on the file system.
+The above means that messages persist on disk.
 
 ```go
 memphis.Memory

@@ -61,7 +61,7 @@ func (r RetentionType) String() string {
 type StorageType int
 
 const (
-	File StorageType = iota
+	Disk StorageType = iota
 	Memory
 )
 
@@ -102,7 +102,7 @@ func GetStationDefaultOptions() StationOpts {
 	return StationOpts{
 		RetentionType: MaxMessageAgeSeconds,
 		RetentionVal:  604800,
-		StorageType:   File,
+		StorageType:   Disk,
 		Replicas:      1,
 		DedupEnabled:  false,
 		DedupWindow:   0 * time.Millisecond,
