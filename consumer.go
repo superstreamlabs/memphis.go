@@ -138,7 +138,7 @@ func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...Consumer
 	for _, opt := range opts {
 		if opt != nil {
 			if err := opt(&defaultOpts); err != nil {
-				return nil, err
+				return nil, memphisError(err)
 			}
 		}
 	}
@@ -153,7 +153,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	if opts.GenUniqueSuffix {
 		opts.Name, err = extendNameWithRandSuffix(opts.Name)
 		if err != nil {
-			return nil, err
+			return nil, memphisError(err)
 		}
 	}
 
@@ -171,7 +171,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	err = c.create(&consumer)
 	if err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	consumer.firstFetch = true
@@ -192,7 +192,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		nats.MaxRequestBatch(opts.BatchSize),
 		nats.MaxDeliver(opts.MaxMsgDeliveries))
 	if err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	consumer.subscriptionActive = true
@@ -213,7 +213,7 @@ func DefaultConsumerErrHandler(c *Consumer, err error) {
 
 func (c *Consumer) callErrHandler(err error) {
 	if c.errHandler != nil {
-		c.errHandler(c, err)
+		c.errHandler(c, memphisError(err))
 	}
 }
 
@@ -252,12 +252,12 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
 	if c.firstFetch {
 		err := c.firstFetchInit()
 		if err != nil {
-			return err
+			return memphisError(err)
 		}
 
 		c.firstFetch = false
 		msgs, err := c.fetchSubscription()
-		go handlerFunc(msgs, err)
+		go handlerFunc(msgs, memphisError(err))
 	}
 
 	go func() {
@@ -277,7 +277,7 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
 					msgs = append(msgs, &dlqMsg)
 				}
 
-				go handlerFunc(msgs, err)
+				go handlerFunc(msgs, memphisError(err))
 			case <-c.consumeQuit:
 				ticker.Stop()
 				return
@@ -300,14 +300,14 @@ func (c *Consumer) StopConsume() {
 
 func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 	if !c.subscriptionActive {
-		return nil, errors.New("station unreachable")
+		return nil, memphisError(errors.New("station unreachable"))
 	}
 
 	subscription := c.subscription
 	batchSize := c.BatchSize
 	msgs, err := subscription.Fetch(batchSize)
 	if err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	wrappedMsgs := make([]*Msg, 0, batchSize)
@@ -328,13 +328,13 @@ func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
 	out := make(chan fetchResult, 1)
 	go func() {
 		msgs, err := c.fetchSubscription()
-		out <- fetchResult{msgs: msgs, err: err}
+		out <- fetchResult{msgs: msgs, err: memphisError(err)}
 	}()
 	select {
 	case <-time.After(timeoutDuration):
-		return nil, errors.New("fetch timed out")
+		return nil, memphisError(errors.New("fetch timed out"))
 	case fetchRes := <-out:
-		return fetchRes.msgs, fetchRes.err
+		return fetchRes.msgs, memphisError(fetchRes.err)
 
 	}
 }
@@ -344,7 +344,7 @@ func (c *Consumer) Fetch() ([]*Msg, error) {
 	if c.firstFetch {
 		err := c.firstFetchInit()
 		if err != nil {
-			return nil, err
+			return nil, memphisError(err)
 		}
 
 		c.firstFetch = false
@@ -356,7 +356,7 @@ func (c *Consumer) Fetch() ([]*Msg, error) {
 func (c *Consumer) firstFetchInit() error {
 	var err error
 	_, err = c.conn.brokerQueueSubscribe(c.getDlqSubjName(), c.getDlqQueueName(), c.createDlqMsgHandler())
-	return err
+	return memphisError(err)
 }
 
 func (c *Consumer) createDlqMsgHandler() nats.MsgHandler {

@@ -117,7 +117,7 @@ func (c *Conn) CreateStation(Name string, opts ...StationOpt) (*Station, error) 
 	for _, opt := range opts {
 		if opt != nil {
 			if err := opt(&defaultOpts); err != nil {
-				return nil, err
+				return nil, memphisError(err)
 			}
 		}
 	}
@@ -125,7 +125,7 @@ func (c *Conn) CreateStation(Name string, opts ...StationOpt) (*Station, error) 
 	if err != nil && strings.Contains(err.Error(), "already exist") {
 		return res, nil
 	}
-	return res, err
+	return res, memphisError(err)
 }
 
 func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
@@ -266,7 +266,7 @@ func (c *Conn) listenToSchemaUpdates(stationName string) error {
 		sus.schemaUpdateSub, err = c.brokerConn.Subscribe(schemaUpdatesSubject, sus.createMsgHandler())
 		if err != nil {
 			close(sus.schemaUpdateCh)
-			return err
+			return memphisError(err)
 		}
 
 		return nil
@@ -280,7 +280,7 @@ func (sus *stationUpdateSub) createMsgHandler() nats.MsgHandler {
 		var update SchemaUpdate
 		err := json.Unmarshal(msg.Data, &update)
 		if err != nil {
-			log.Printf("schema update unmarshal error: %v\n", err)
+			log.Printf("schema update unmarshal error: %v\n", memphisError(err))
 			return
 		}
 		sus.schemaUpdateCh <- update
@@ -295,14 +295,14 @@ func (c *Conn) removeSchemaUpdatesListener(stationName string) error {
 
 	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
-		return errors.New("listener doesn't exist")
+		return memphisError(errors.New("listener doesn't exist"))
 	}
 
 	sus.refCount--
 	if sus.refCount <= 0 {
 		close(sus.schemaUpdateCh)
 		if err := sus.schemaUpdateSub.Unsubscribe(); err != nil {
-			return err
+			return memphisError(err)
 		}
 		delete(c.stationUpdatesSubs, sn)
 	}
@@ -318,7 +318,7 @@ func (c *Conn) getSchemaDetails(stationName string) (schemaDetails, error) {
 
 	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
-		return schemaDetails{}, errors.New("station subscription doesn't exist")
+		return schemaDetails{}, memphisError(errors.New("station subscription doesn't exist"))
 	}
 
 	return sus.schemaDetails, nil
@@ -362,18 +362,18 @@ func (sd *schemaDetails) parseDescriptor() error {
 	descriptorSet := descriptorpb.FileDescriptorSet{}
 	err := proto.Unmarshal([]byte(sd.activeVersion.Descriptor), &descriptorSet)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	localRegistry, err := protodesc.NewFiles(&descriptorSet)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	filePath := fmt.Sprintf("%v_%v.proto", sd.name, sd.activeVersion.VersionNumber)
 	fileDesc, err := localRegistry.FindFileByPath(filePath)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	msgsDesc := fileDesc.Messages()
@@ -388,7 +388,7 @@ func (sd *schemaDetails) validateMsg(msg any) ([]byte, error) {
 	case "protobuf":
 		return sd.validateProtoMsg(msg)
 	default:
-		return nil, errors.New("Invalid schema type")
+		return nil, memphisError(errors.New("Invalid schema type"))
 	}
 }
 
@@ -401,18 +401,18 @@ func (sd *schemaDetails) validateProtoMsg(msg any) ([]byte, error) {
 	case protoreflect.ProtoMessage:
 		msgBytes, err = proto.Marshal(msg.(protoreflect.ProtoMessage))
 		if err != nil {
-			return nil, err
+			return nil, memphisError(err)
 		}
 	case []byte:
 		msgBytes = msg.([]byte)
 	default:
-		return nil, errors.New("Unsupported message type")
+		return nil, memphisError(errors.New("Unsupported message type"))
 	}
 
 	protoMsg := dynamicpb.NewMessage(sd.msgDescriptor)
 	err = proto.Unmarshal(msgBytes, protoMsg)
 	if err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	return msgBytes, nil

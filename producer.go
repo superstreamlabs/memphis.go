@@ -94,7 +94,7 @@ func getDefaultProducerOpts() ProducerOpts {
 func extendNameWithRandSuffix(name string) (string, error) {
 	suffix, err := randomHex(4)
 	if err != nil {
-		return "", err
+		return "", memphisError(err)
 	}
 	return name + "_" + suffix, err
 }
@@ -105,14 +105,14 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 	var err error
 	for _, opt := range opts {
 		if err = opt(&defaultOpts); err != nil {
-			return nil, err
+			return nil, memphisError(err)
 		}
 	}
 
 	if defaultOpts.GenUniqueSuffix {
 		name, err = extendNameWithRandSuffix(name)
 		if err != nil {
-			return nil, err
+			return nil, memphisError(err)
 		}
 	}
 
@@ -124,14 +124,14 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 
 	err = c.listenToSchemaUpdates(stationName)
 	if err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	if err = c.create(&p); err != nil {
 		if err := c.removeSchemaUpdatesListener(stationName); err != nil {
-			return nil, err
+			return nil, memphisError(err)
 		}
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	return &p, nil
@@ -165,7 +165,7 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 	}
 
 	if cr.Err != "" {
-		return errors.New(cr.Err)
+		return memphisError(errors.New(cr.Err))
 	}
 
 	sn := getInternalName(p.stationName)
@@ -189,7 +189,7 @@ func (p *Producer) getDestructionReq() any {
 // Destroy - destoy this producer.
 func (p *Producer) Destroy() error {
 	if err := p.conn.removeSchemaUpdatesListener(p.stationName); err != nil {
-		panic(err)
+		return memphisError(err)
 	}
 	return p.conn.destroy(p)
 }
@@ -223,7 +223,7 @@ func (p *Producer) Produce(message any, opts ...ProduceOpt) error {
 	for _, opt := range opts {
 		if opt != nil {
 			if err := opt(&defaultOpts); err != nil {
-				return err
+				return memphisError(err)
 			}
 		}
 	}
@@ -233,7 +233,7 @@ func (p *Producer) Produce(message any, opts ...ProduceOpt) error {
 
 func (hdr *Headers) validateHeaderKey(key string) error {
 	if strings.HasPrefix(key, "$memphis") {
-		return errors.New("Keys in headers should not start with $memphis")
+		return memphisError(errors.New("Keys in headers should not start with $memphis"))
 	}
 	return nil
 }
@@ -245,7 +245,7 @@ func (hdr *Headers) New() {
 func (hdr *Headers) Add(key, value string) error {
 	err := hdr.validateHeaderKey(key)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	hdr.MsgHeaders[key] = []string{value}
@@ -259,7 +259,7 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 
 	data, err := p.validateMsg(opts.Message)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	natsMessage := nats.Msg{
@@ -271,7 +271,7 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	stallWaitDuration := time.Second * time.Duration(opts.AckWaitSec)
 	paf, err := p.conn.brokerPublish(&natsMessage, nats.StallWait(stallWaitDuration))
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	if opts.AsyncProduce {
@@ -282,14 +282,14 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	case <-paf.Ok():
 		return nil
 	case err = <-paf.Err():
-		return err
+		return memphisError(err)
 	}
 }
 
 func (p *Producer) validateMsg(msg any) ([]byte, error) {
 	sd, err := p.getSchemaDetails()
 	if err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	// empty schema type means there is no schema and validation is not needed
@@ -299,14 +299,14 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 		case []byte:
 			return msg.([]byte), nil
 		default:
-			return nil, errors.New("Unsupported message type")
+			return nil, memphisError(errors.New("Unsupported message type"))
 		}
 
 	}
 
 	msgBytes, err := sd.validateMsg(msg)
 	if err != nil {
-		return nil, errors.New("Schema validation has failed: " + err.Error())
+		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
 	}
 
 	return msgBytes, nil

@@ -88,7 +88,7 @@ func Connect(host, username, connectionToken string, options ...Option) (*Conn, 
 	for _, opt := range options {
 		if opt != nil {
 			if err := opt(&opts); err != nil {
-				return nil, err
+				return nil, memphisError(err)
 			}
 		}
 	}
@@ -104,7 +104,7 @@ func normalizeHost(host string) string {
 func randomHex(n int) (string, error) {
 	bytes := make([]byte, n)
 	if _, err := rand.Read(bytes); err != nil {
-		return "", err
+		return "", memphisError(err)
 	}
 	return hex.EncodeToString(bytes), nil
 }
@@ -120,7 +120,7 @@ func (opts Options) connect() (*Conn, error) {
 
 	connId, err := randomHex(12)
 	if err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	c := Conn{
@@ -129,7 +129,7 @@ func (opts Options) connect() (*Conn, error) {
 	}
 
 	if err := c.startConn(); err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	c.stationUpdatesSubs = make(map[string]*stationUpdateSub)
@@ -161,13 +161,13 @@ func (c *Conn) startConn() error {
 	c.brokerConn, err = natsOpts.Connect()
 
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 	c.js, err = c.brokerConn.JetStream()
 
 	if err != nil {
 		c.brokerConn.Close()
-		return err
+		return memphisError(err)
 	}
 	c.username = opts.Username
 	return nil
@@ -243,7 +243,7 @@ type directObj interface {
 
 func defaultHandleCreationResp(resp []byte) error {
 	if len(resp) > 0 {
-		return errors.New(string(resp))
+		return memphisError(errors.New(string(resp)))
 	}
 	return nil
 }
@@ -254,12 +254,12 @@ func (c *Conn) create(do directObj) error {
 
 	b, err := json.Marshal(creationReq)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	msg, err := c.brokerConn.Request(subject, b, 1*time.Second)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	return do.handleCreationResp(msg.Data)
@@ -271,15 +271,15 @@ func (c *Conn) destroy(o directObj) error {
 
 	b, err := json.Marshal(destructionReq)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	msg, err := c.brokerConn.Request(subject, b, 1*time.Second)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 	if len(msg.Data) > 0 && !strings.Contains(string(msg.Data), "not exist") {
-		return errors.New(string(msg.Data))
+		return memphisError(errors.New(string(msg.Data)))
 	}
 
 	return nil
