@@ -439,22 +439,18 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 	var (
 		msgBytes []byte
 		err      error
+		message  interface{}
 	)
 	switch msg.(type) {
 	case map[string]interface{}:
-		msgBytes, err = json.Marshal(msg)
-		if err != nil {
-			return nil, memphisError(err)
-		}
+		message = msg
 	case []byte:
 		msgBytes = msg.([]byte)
+		if err := json.Unmarshal(msgBytes, &message); err != nil {
+			return nil, memphisError(err)
+		}
 	default:
 		return nil, memphisError(errors.New("Unsupported message type"))
-	}
-
-	var message interface{}
-	if err := json.Unmarshal(msgBytes, &message); err != nil {
-		return nil, memphisError(err)
 	}
 
 	if err = sd.jsonSchema.Validate(message); err != nil {
