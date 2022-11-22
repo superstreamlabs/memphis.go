@@ -156,7 +156,7 @@ p1, err := s.CreateProducer("<producer-name>")
 ### Producing a message
 
 ```go
-p.Produce("<message in []byte/protoreflect.ProtoMessage in case it is a schema validated station>", memphis.AckWaitSec(15)) // defaults to 15 seconds
+p.Produce("<message in []byte/protoreflect.ProtoMessage/json schema in case it is a schema validated station>", memphis.AckWaitSec(15)) // defaults to 15 seconds
 ```
 
 ### Add headers
@@ -166,7 +166,7 @@ hdrs := memphis.Headers{}
 hdrs.New()
 err := hdrs.Add("key", "value")
 p.Produce(
-	"<message in []byte>/protoreflect.ProtoMessage in case it is a schema validated station",
+	"<message in []byte>/protoreflect.ProtoMessage/json schema in case it is a schema validated station",
     memphis.AckWaitSec(15),
 	memphis.MsgHeaders(hdrs) // defaults to empty
 )
@@ -177,7 +177,7 @@ Meaning your application won't wait for broker acknowledgement - use only in cas
 
 ```go
 p.Produce(
-	"<message in []byte>/protoreflect.ProtoMessage in case it is a schema validated station",
+	"<message in []byte>/protoreflect.ProtoMessage/json schema in case it is a schema validated station",
     memphis.AckWaitSec(15),
 	memphis.AsyncProduce()
 )

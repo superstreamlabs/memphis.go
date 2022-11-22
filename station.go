@@ -25,6 +25,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	"github.com/santhosh-tekuri/jsonschema/v5"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -248,6 +249,7 @@ type schemaDetails struct {
 	schemaType    string
 	activeVersion SchemaVersion
 	msgDescriptor protoreflect.MessageDescriptor
+	jsonSchema    *jsonschema.Schema
 }
 
 func (c *Conn) listenToSchemaUpdates(stationName string) error {
@@ -351,6 +353,10 @@ func (sd *schemaDetails) handleSchemaUpdateInit(sui SchemaUpdateInit) {
 		if err := sd.parseDescriptor(); err != nil {
 			log.Println(err.Error())
 		}
+	} else if sd.schemaType == "json" {
+		if err := sd.parseJsonSchema(); err != nil {
+			log.Println(err.Error())
+		}
 	}
 }
 
@@ -383,10 +389,21 @@ func (sd *schemaDetails) parseDescriptor() error {
 	return nil
 }
 
+func (sd *schemaDetails) parseJsonSchema() error {
+	sch, err := jsonschema.CompileString(sd.name, sd.activeVersion.Content)
+	if err != nil {
+		return memphisError(err)
+	}
+	sd.jsonSchema = sch
+	return nil
+}
+
 func (sd *schemaDetails) validateMsg(msg any) ([]byte, error) {
 	switch sd.schemaType {
 	case "protobuf":
 		return sd.validateProtoMsg(msg)
+	case "json":
+		return sd.validJsonSchemaMsg(msg)
 	default:
 		return nil, memphisError(errors.New("Invalid schema type"))
 	}
@@ -413,6 +430,36 @@ func (sd *schemaDetails) validateProtoMsg(msg any) ([]byte, error) {
 	err = proto.Unmarshal(msgBytes, protoMsg)
 	if err != nil {
 		return nil, memphisError(err)
+	}
+
+	return msgBytes, nil
+}
+
+func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
+	var (
+		msgBytes []byte
+		err      error
+	)
+	switch msg.(type) {
+	case map[string]interface{}:
+		msgBytes, err = json.Marshal(msg)
+		if err != nil {
+			return nil, memphisError(err)
+		}
+	case []byte:
+		msgBytes = msg.([]byte)
+	default:
+		return nil, memphisError(errors.New("Unsupported message type"))
+	}
+
+	var message interface{}
+	if err := json.Unmarshal(msgBytes, &message); err != nil {
+		return nil, memphisError(err)
+	}
+
+	if err = sd.jsonSchema.Validate(message); err != nil {
+		return nil, memphisError(err)
+
 	}
 
 	return msgBytes, nil
