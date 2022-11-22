@@ -83,6 +83,10 @@ type ProducerOpts struct {
 	GenUniqueSuffix bool
 }
 
+type SchemaFailMsg struct {
+	Msg string
+}
+
 // ProducerOpt - a function on the options for producer creation.
 type ProducerOpt func(*ProducerOpts) error
 
@@ -289,6 +293,11 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 func (p *Producer) validateMsg(msg any) ([]byte, error) {
 	sd, err := p.getSchemaDetails()
 	if err != nil {
+		failMsg := SchemaFailMsg{
+			Msg: "Schema validation has failed at station " + p.stationName + " with producer " + p.Name + ": " + err.Error(),
+		}
+		msgToSlack, _ := json.Marshal(failMsg)
+		p.conn.brokerConn.Publish("$memphis_schema_validation_fail_updates", msgToSlack)
 		return nil, memphisError(err)
 	}
 
@@ -299,6 +308,11 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 		case []byte:
 			return msg.([]byte), nil
 		default:
+			failMsg := SchemaFailMsg{
+				Msg: "Schema validation has failed at station " + p.stationName + " with producer " + p.Name + ": Unsupported message type",
+			}
+			msgToSlack, _ := json.Marshal(failMsg)
+			p.conn.brokerConn.Publish("$memphis_schema_validation_fail_updates", msgToSlack)
 			return nil, memphisError(errors.New("Unsupported message type"))
 		}
 
@@ -306,6 +320,11 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 
 	msgBytes, err := sd.validateMsg(msg)
 	if err != nil {
+		failMsg := SchemaFailMsg{
+			Msg: "Schema validation has failed at station " + p.stationName + " with producer " + p.Name + ": " + err.Error(),
+		}
+		msgToSlack, _ := json.Marshal(failMsg)
+		p.conn.brokerConn.Publish("$memphis_schema_validation_fail_updates", msgToSlack)
 		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
 	}
 
