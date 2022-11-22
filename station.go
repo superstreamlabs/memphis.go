@@ -442,8 +442,14 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 		message  interface{}
 	)
 	switch msg.(type) {
-	case map[string]interface{}:
-		message = msg
+	case interface{}:
+		byteMsg, err := json.Marshal(msg)
+		if err != nil {
+			return nil, memphisError(err)
+		}
+		if err := json.Unmarshal(byteMsg, &message); err != nil {
+			return nil, memphisError(err)
+		}
 	case []byte:
 		msgBytes = msg.([]byte)
 		if err := json.Unmarshal(msgBytes, &message); err != nil {
