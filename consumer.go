@@ -176,7 +176,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	consumer.firstFetch = true
 	consumer.dlqCh = make(chan *nats.Msg, 1)
-	consumer.consumeQuit = make(chan struct{}, 1)
+	consumer.consumeQuit = make(chan struct{})
 	consumer.pingQuit = make(chan struct{}, 1)
 
 	consumer.pingInterval = consumerDefaultPingInterval
@@ -247,21 +247,30 @@ type ConsumeHandler func([]*Msg, error)
 // Consumer.Consume - start consuming messages according to the interval configured in the consumer object.
 // When a batch is consumed the handlerFunc will be called.
 func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
-	ticker := time.NewTicker(c.PullInterval)
+	go func() {
+		if c.firstFetch {
+			err := c.firstFetchInit()
+			if err != nil {
+				handlerFunc(nil, memphisError(err))
+				return
+			}
 
-	if c.firstFetch {
-		err := c.firstFetchInit()
-		if err != nil {
-			return memphisError(err)
+			c.firstFetch = false
+			msgs, err := c.fetchSubscription()
+			handlerFunc(msgs, memphisError(err))
 		}
 
-		c.firstFetch = false
-		msgs, err := c.fetchSubscription()
-		go handlerFunc(msgs, memphisError(err))
-	}
+		ticker := time.NewTicker(c.PullInterval)
+		defer ticker.Stop()
 
-	go func() {
 		for {
+			// give first priority to quit signals
+			select {
+			case <-c.consumeQuit:
+				return
+			default:
+			}
+
 			select {
 			case <-ticker.C:
 				msgs, err := c.fetchSubscription()
@@ -277,9 +286,8 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
 					msgs = append(msgs, &dlqMsg)
 				}
 
-				go handlerFunc(msgs, memphisError(err))
+				handlerFunc(msgs, memphisError(err))
 			case <-c.consumeQuit:
-				ticker.Stop()
 				return
 			}
 		}
@@ -375,7 +383,7 @@ func (c *Consumer) getDlqQueueName() string {
 	return c.getDlqSubjName()
 }
 
-// Destroy - destoy this consumer.
+// Destroy - destroy this consumer.
 func (c *Consumer) Destroy() error {
 	if c.consumeActive {
 		c.StopConsume()
