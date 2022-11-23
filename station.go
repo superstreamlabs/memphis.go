@@ -454,14 +454,13 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 
 		// support msg of type struct, else we support interface{} or map[string]interface{}
 		if msgType != "map[string]interface {}" {
-			invalidJsonSchemaStruct := errors.New("Invalid json schema struct")
 
 			byteMsg, err := json.Marshal(msg)
 			if err != nil {
-				return nil, memphisError(invalidJsonSchemaStruct)
+				return nil, memphisError(err)
 			}
 			if err := json.Unmarshal(byteMsg, &message); err != nil {
-				return nil, memphisError(invalidJsonSchemaStruct)
+				return nil, memphisError(err)
 			}
 		} else {
 			message = msg
