@@ -347,3 +347,10 @@ func AsyncProduce() ProduceOpt {
 		return nil
 	}
 }
+
+func MsgId(id string) ProduceOpt {
+	return func(opts *ProduceOpts) error {
+		opts.MsgHeaders.MsgHeaders["msg-id"] = []string{id}
+		return nil
+	}
+}

@@ -86,8 +86,7 @@ s1, err = c.CreateStation("<station-name>",
  RetentionVal(<int>), 
  StorageTypeOpt(<Memory/Disk>), 
  Replicas(<int>), 
- EnableDedup(), 
- DedupWindow(<time.Duration>))
+ IdempotencyWindow(<time.Duration>)) // defaults to 2 minutes
 ```
 
 ### Retention Types
