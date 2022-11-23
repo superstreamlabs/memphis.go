@@ -1,20 +1,16 @@
+// Credit for The NATS.IO Authors
 // Copyright 2021-2022 The Memphis Authors
-// Licensed under the MIT License (the "License");
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-// This license limiting reselling the software itself "AS IS".
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Licensed under the Apache License, Version 2.0 (the “License”);
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an “AS IS” BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.package server
 
 package memphis
 
@@ -92,7 +88,7 @@ func Connect(host, username, connectionToken string, options ...Option) (*Conn, 
 	for _, opt := range options {
 		if opt != nil {
 			if err := opt(&opts); err != nil {
-				return nil, err
+				return nil, memphisError(err)
 			}
 		}
 	}
@@ -108,7 +104,7 @@ func normalizeHost(host string) string {
 func randomHex(n int) (string, error) {
 	bytes := make([]byte, n)
 	if _, err := rand.Read(bytes); err != nil {
-		return "", err
+		return "", memphisError(err)
 	}
 	return hex.EncodeToString(bytes), nil
 }
@@ -124,7 +120,7 @@ func (opts Options) connect() (*Conn, error) {
 
 	connId, err := randomHex(12)
 	if err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	c := Conn{
@@ -133,7 +129,7 @@ func (opts Options) connect() (*Conn, error) {
 	}
 
 	if err := c.startConn(); err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	c.stationUpdatesSubs = make(map[string]*stationUpdateSub)
@@ -165,13 +161,13 @@ func (c *Conn) startConn() error {
 	c.brokerConn, err = natsOpts.Connect()
 
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 	c.js, err = c.brokerConn.JetStream()
 
 	if err != nil {
 		c.brokerConn.Close()
-		return err
+		return memphisError(err)
 	}
 	c.username = opts.Username
 	return nil
@@ -247,7 +243,7 @@ type directObj interface {
 
 func defaultHandleCreationResp(resp []byte) error {
 	if len(resp) > 0 {
-		return errors.New(string(resp))
+		return memphisError(errors.New(string(resp)))
 	}
 	return nil
 }
@@ -258,12 +254,12 @@ func (c *Conn) create(do directObj) error {
 
 	b, err := json.Marshal(creationReq)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	msg, err := c.brokerConn.Request(subject, b, 1*time.Second)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	return do.handleCreationResp(msg.Data)
@@ -275,15 +271,15 @@ func (c *Conn) destroy(o directObj) error {
 
 	b, err := json.Marshal(destructionReq)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	msg, err := c.brokerConn.Request(subject, b, 1*time.Second)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 	if len(msg.Data) > 0 && !strings.Contains(string(msg.Data), "not exist") {
-		return errors.New(string(msg.Data))
+		return memphisError(errors.New(string(msg.Data)))
 	}
 
 	return nil

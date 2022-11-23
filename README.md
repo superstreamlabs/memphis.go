@@ -84,7 +84,7 @@ s0, err = c.CreateStation("<station-name>")
 s1, err = c.CreateStation("<station-name>", 
  RetentionTypeOpt(<Messages/MaxMeMessageAgeSeconds/Bytes>),
  RetentionVal(<int>), 
- StorageTypeOpt(<Memory/File>), 
+ StorageTypeOpt(<Memory/Disk>), 
  Replicas(<int>), 
  EnableDedup(), 
  DedupWindow(<time.Duration>))
@@ -115,10 +115,10 @@ The above means that after maximum number of saved bytes (set in retention value
 Memphis currently supports the following types of messages storage:<br>
 
 ```go
-memphis.File
+memphis.Disk
 ```
 
-The above means that messages persist on the file system.
+The above means that messages persist on disk.
 
 ```go
 memphis.Memory
@@ -197,7 +197,7 @@ consumer0, err = s.CreateConsumer("<consumer-name>",
   memphis.ConsumerGroup("<consumer-group>"), // defaults to consumer name
   memphis.PullInterval(<pull interval time.Duration), // defaults to 1 second
   memphis.BatchSize(<batch-size int), // defaults to 10
-  memphis.BatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds
+  memphis.BatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds, has to be at least 1 ms
   memphis.MaxAckTime(<time.Duration>), // defaults to 30 sec
   memphis.MaxMsgDeliveries(<int>), // defaults to 10
   memphis.ConsumerGenUniqueSuffix(),

@@ -1,20 +1,16 @@
+// Credit for The NATS.IO Authors
 // Copyright 2021-2022 The Memphis Authors
-// Licensed under the MIT License (the "License");
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-// This license limiting reselling the software itself "AS IS".
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Licensed under the Apache License, Version 2.0 (the “License”);
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an “AS IS” BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.package server
 
 package memphis
 
@@ -98,7 +94,7 @@ func getDefaultProducerOpts() ProducerOpts {
 func extendNameWithRandSuffix(name string) (string, error) {
 	suffix, err := randomHex(4)
 	if err != nil {
-		return "", err
+		return "", memphisError(err)
 	}
 	return name + "_" + suffix, err
 }
@@ -109,14 +105,14 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 	var err error
 	for _, opt := range opts {
 		if err = opt(&defaultOpts); err != nil {
-			return nil, err
+			return nil, memphisError(err)
 		}
 	}
 
 	if defaultOpts.GenUniqueSuffix {
 		name, err = extendNameWithRandSuffix(name)
 		if err != nil {
-			return nil, err
+			return nil, memphisError(err)
 		}
 	}
 
@@ -128,14 +124,14 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 
 	err = c.listenToSchemaUpdates(stationName)
 	if err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	if err = c.create(&p); err != nil {
 		if err := c.removeSchemaUpdatesListener(stationName); err != nil {
-			return nil, err
+			return nil, memphisError(err)
 		}
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	return &p, nil
@@ -169,7 +165,7 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 	}
 
 	if cr.Err != "" {
-		return errors.New(cr.Err)
+		return memphisError(errors.New(cr.Err))
 	}
 
 	sn := getInternalName(p.stationName)
@@ -193,7 +189,7 @@ func (p *Producer) getDestructionReq() any {
 // Destroy - destoy this producer.
 func (p *Producer) Destroy() error {
 	if err := p.conn.removeSchemaUpdatesListener(p.stationName); err != nil {
-		panic(err)
+		return memphisError(err)
 	}
 	return p.conn.destroy(p)
 }
@@ -227,7 +223,7 @@ func (p *Producer) Produce(message any, opts ...ProduceOpt) error {
 	for _, opt := range opts {
 		if opt != nil {
 			if err := opt(&defaultOpts); err != nil {
-				return err
+				return memphisError(err)
 			}
 		}
 	}
@@ -237,7 +233,7 @@ func (p *Producer) Produce(message any, opts ...ProduceOpt) error {
 
 func (hdr *Headers) validateHeaderKey(key string) error {
 	if strings.HasPrefix(key, "$memphis") {
-		return errors.New("Keys in headers should not start with $memphis")
+		return memphisError(errors.New("Keys in headers should not start with $memphis"))
 	}
 	return nil
 }
@@ -249,7 +245,7 @@ func (hdr *Headers) New() {
 func (hdr *Headers) Add(key, value string) error {
 	err := hdr.validateHeaderKey(key)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	hdr.MsgHeaders[key] = []string{value}
@@ -263,7 +259,7 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 
 	data, err := p.validateMsg(opts.Message)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	natsMessage := nats.Msg{
@@ -275,7 +271,7 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	stallWaitDuration := time.Second * time.Duration(opts.AckWaitSec)
 	paf, err := p.conn.brokerPublish(&natsMessage, nats.StallWait(stallWaitDuration))
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	if opts.AsyncProduce {
@@ -286,14 +282,14 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	case <-paf.Ok():
 		return nil
 	case err = <-paf.Err():
-		return err
+		return memphisError(err)
 	}
 }
 
 func (p *Producer) validateMsg(msg any) ([]byte, error) {
 	sd, err := p.getSchemaDetails()
 	if err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	// empty schema type means there is no schema and validation is not needed
@@ -303,14 +299,14 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 		case []byte:
 			return msg.([]byte), nil
 		default:
-			return nil, errors.New("Unsupported message type")
+			return nil, memphisError(errors.New("Unsupported message type"))
 		}
 
 	}
 
 	msgBytes, err := sd.validateMsg(msg)
 	if err != nil {
-		return nil, errors.New("Schema validation has failed: " + err.Error())
+		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
 	}
 
 	return msgBytes, nil

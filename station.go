@@ -1,20 +1,16 @@
+// Credit for The NATS.IO Authors
 // Copyright 2021-2022 The Memphis Authors
-// Licensed under the MIT License (the "License");
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-// This license limiting reselling the software itself "AS IS".
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Licensed under the Apache License, Version 2.0 (the “License”);
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an “AS IS” BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.package server
 
 package memphis
 
@@ -65,7 +61,7 @@ func (r RetentionType) String() string {
 type StorageType int
 
 const (
-	File StorageType = iota
+	Disk StorageType = iota
 	Memory
 )
 
@@ -106,7 +102,7 @@ func GetStationDefaultOptions() StationOpts {
 	return StationOpts{
 		RetentionType: MaxMessageAgeSeconds,
 		RetentionVal:  604800,
-		StorageType:   File,
+		StorageType:   Disk,
 		Replicas:      1,
 		DedupEnabled:  false,
 		DedupWindow:   0 * time.Millisecond,
@@ -121,7 +117,7 @@ func (c *Conn) CreateStation(Name string, opts ...StationOpt) (*Station, error) 
 	for _, opt := range opts {
 		if opt != nil {
 			if err := opt(&defaultOpts); err != nil {
-				return nil, err
+				return nil, memphisError(err)
 			}
 		}
 	}
@@ -129,7 +125,7 @@ func (c *Conn) CreateStation(Name string, opts ...StationOpt) (*Station, error) 
 	if err != nil && strings.Contains(err.Error(), "already exist") {
 		return res, nil
 	}
-	return res, err
+	return res, memphisError(err)
 }
 
 func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
@@ -270,7 +266,7 @@ func (c *Conn) listenToSchemaUpdates(stationName string) error {
 		sus.schemaUpdateSub, err = c.brokerConn.Subscribe(schemaUpdatesSubject, sus.createMsgHandler())
 		if err != nil {
 			close(sus.schemaUpdateCh)
-			return err
+			return memphisError(err)
 		}
 
 		return nil
@@ -284,7 +280,7 @@ func (sus *stationUpdateSub) createMsgHandler() nats.MsgHandler {
 		var update SchemaUpdate
 		err := json.Unmarshal(msg.Data, &update)
 		if err != nil {
-			log.Printf("schema update unmarshal error: %v\n", err)
+			log.Printf("schema update unmarshal error: %v\n", memphisError(err))
 			return
 		}
 		sus.schemaUpdateCh <- update
@@ -299,14 +295,14 @@ func (c *Conn) removeSchemaUpdatesListener(stationName string) error {
 
 	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
-		return errors.New("listener doesn't exist")
+		return memphisError(errors.New("listener doesn't exist"))
 	}
 
 	sus.refCount--
 	if sus.refCount <= 0 {
 		close(sus.schemaUpdateCh)
 		if err := sus.schemaUpdateSub.Unsubscribe(); err != nil {
-			return err
+			return memphisError(err)
 		}
 		delete(c.stationUpdatesSubs, sn)
 	}
@@ -322,7 +318,7 @@ func (c *Conn) getSchemaDetails(stationName string) (schemaDetails, error) {
 
 	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
-		return schemaDetails{}, errors.New("station subscription doesn't exist")
+		return schemaDetails{}, memphisError(errors.New("station subscription doesn't exist"))
 	}
 
 	return sus.schemaDetails, nil
@@ -366,18 +362,18 @@ func (sd *schemaDetails) parseDescriptor() error {
 	descriptorSet := descriptorpb.FileDescriptorSet{}
 	err := proto.Unmarshal([]byte(sd.activeVersion.Descriptor), &descriptorSet)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	localRegistry, err := protodesc.NewFiles(&descriptorSet)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	filePath := fmt.Sprintf("%v_%v.proto", sd.name, sd.activeVersion.VersionNumber)
 	fileDesc, err := localRegistry.FindFileByPath(filePath)
 	if err != nil {
-		return err
+		return memphisError(err)
 	}
 
 	msgsDesc := fileDesc.Messages()
@@ -392,7 +388,7 @@ func (sd *schemaDetails) validateMsg(msg any) ([]byte, error) {
 	case "protobuf":
 		return sd.validateProtoMsg(msg)
 	default:
-		return nil, errors.New("Invalid schema type")
+		return nil, memphisError(errors.New("Invalid schema type"))
 	}
 }
 
@@ -405,18 +401,18 @@ func (sd *schemaDetails) validateProtoMsg(msg any) ([]byte, error) {
 	case protoreflect.ProtoMessage:
 		msgBytes, err = proto.Marshal(msg.(protoreflect.ProtoMessage))
 		if err != nil {
-			return nil, err
+			return nil, memphisError(err)
 		}
 	case []byte:
 		msgBytes = msg.([]byte)
 	default:
-		return nil, errors.New("Unsupported message type")
+		return nil, memphisError(errors.New("Unsupported message type"))
 	}
 
 	protoMsg := dynamicpb.NewMessage(sd.msgDescriptor)
 	err = proto.Unmarshal(msgBytes, protoMsg)
 	if err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	return msgBytes, nil

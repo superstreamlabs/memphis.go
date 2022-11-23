@@ -1,20 +1,16 @@
+// Credit for The NATS.IO Authors
 // Copyright 2021-2022 The Memphis Authors
-// Licensed under the MIT License (the "License");
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-// This license limiting reselling the software itself "AS IS".
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Licensed under the Apache License, Version 2.0 (the “License”);
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an “AS IS” BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.package server
 
 package memphis
 
@@ -142,7 +138,7 @@ func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...Consumer
 	for _, opt := range opts {
 		if opt != nil {
 			if err := opt(&defaultOpts); err != nil {
-				return nil, err
+				return nil, memphisError(err)
 			}
 		}
 	}
@@ -157,7 +153,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	if opts.GenUniqueSuffix {
 		opts.Name, err = extendNameWithRandSuffix(opts.Name)
 		if err != nil {
-			return nil, err
+			return nil, memphisError(err)
 		}
 	}
 
@@ -175,12 +171,12 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	err = c.create(&consumer)
 	if err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	consumer.firstFetch = true
 	consumer.dlqCh = make(chan *nats.Msg, 1)
-	consumer.consumeQuit = make(chan struct{}, 1)
+	consumer.consumeQuit = make(chan struct{})
 	consumer.pingQuit = make(chan struct{}, 1)
 
 	consumer.pingInterval = consumerDefaultPingInterval
@@ -196,7 +192,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		nats.MaxRequestBatch(opts.BatchSize),
 		nats.MaxDeliver(opts.MaxMsgDeliveries))
 	if err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	consumer.subscriptionActive = true
@@ -217,7 +213,7 @@ func DefaultConsumerErrHandler(c *Consumer, err error) {
 
 func (c *Consumer) callErrHandler(err error) {
 	if c.errHandler != nil {
-		c.errHandler(c, err)
+		c.errHandler(c, memphisError(err))
 	}
 }
 
@@ -251,21 +247,30 @@ type ConsumeHandler func([]*Msg, error)
 // Consumer.Consume - start consuming messages according to the interval configured in the consumer object.
 // When a batch is consumed the handlerFunc will be called.
 func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
-	ticker := time.NewTicker(c.PullInterval)
+	go func() {
+		if c.firstFetch {
+			err := c.firstFetchInit()
+			if err != nil {
+				handlerFunc(nil, memphisError(err))
+				return
+			}
 
-	if c.firstFetch {
-		err := c.firstFetchInit()
-		if err != nil {
-			return err
+			c.firstFetch = false
+			msgs, err := c.fetchSubscription()
+			handlerFunc(msgs, memphisError(err))
 		}
 
-		c.firstFetch = false
-		msgs, err := c.fetchSubscription()
-		go handlerFunc(msgs, err)
-	}
+		ticker := time.NewTicker(c.PullInterval)
+		defer ticker.Stop()
 
-	go func() {
 		for {
+			// give first priority to quit signals
+			select {
+			case <-c.consumeQuit:
+				return
+			default:
+			}
+
 			select {
 			case <-ticker.C:
 				msgs, err := c.fetchSubscription()
@@ -281,9 +286,8 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
 					msgs = append(msgs, &dlqMsg)
 				}
 
-				go handlerFunc(msgs, err)
+				handlerFunc(msgs, memphisError(err))
 			case <-c.consumeQuit:
-				ticker.Stop()
 				return
 			}
 		}
@@ -304,14 +308,14 @@ func (c *Consumer) StopConsume() {
 
 func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 	if !c.subscriptionActive {
-		return nil, errors.New("station unreachable")
+		return nil, memphisError(errors.New("station unreachable"))
 	}
 
 	subscription := c.subscription
 	batchSize := c.BatchSize
 	msgs, err := subscription.Fetch(batchSize)
 	if err != nil {
-		return nil, err
+		return nil, memphisError(err)
 	}
 
 	wrappedMsgs := make([]*Msg, 0, batchSize)
@@ -332,13 +336,13 @@ func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
 	out := make(chan fetchResult, 1)
 	go func() {
 		msgs, err := c.fetchSubscription()
-		out <- fetchResult{msgs: msgs, err: err}
+		out <- fetchResult{msgs: msgs, err: memphisError(err)}
 	}()
 	select {
 	case <-time.After(timeoutDuration):
-		return nil, errors.New("fetch timed out")
+		return nil, memphisError(errors.New("fetch timed out"))
 	case fetchRes := <-out:
-		return fetchRes.msgs, fetchRes.err
+		return fetchRes.msgs, memphisError(fetchRes.err)
 
 	}
 }
@@ -348,7 +352,7 @@ func (c *Consumer) Fetch() ([]*Msg, error) {
 	if c.firstFetch {
 		err := c.firstFetchInit()
 		if err != nil {
-			return nil, err
+			return nil, memphisError(err)
 		}
 
 		c.firstFetch = false
@@ -360,7 +364,7 @@ func (c *Consumer) Fetch() ([]*Msg, error) {
 func (c *Consumer) firstFetchInit() error {
 	var err error
 	_, err = c.conn.brokerQueueSubscribe(c.getDlqSubjName(), c.getDlqQueueName(), c.createDlqMsgHandler())
-	return err
+	return memphisError(err)
 }
 
 func (c *Consumer) createDlqMsgHandler() nats.MsgHandler {
@@ -379,7 +383,7 @@ func (c *Consumer) getDlqQueueName() string {
 	return c.getDlqSubjName()
 }
 
-// Destroy - destoy this consumer.
+// Destroy - destroy this consumer.
 func (c *Consumer) Destroy() error {
 	if c.consumeActive {
 		c.StopConsume()
@@ -462,6 +466,9 @@ func BatchSize(batchSize int) ConsumerOpt {
 // BatchMaxWaitTime - max time to wait between pulls, defauls is 5 seconds.
 func BatchMaxWaitTime(batchMaxWaitTime time.Duration) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
+		if batchMaxWaitTime < 1*time.Millisecond {
+			batchMaxWaitTime = 1*time.Millisecond
+		}
 		opts.BatchMaxTimeToWait = batchMaxWaitTime
 		return nil
 	}
