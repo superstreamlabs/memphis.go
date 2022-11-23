@@ -182,6 +182,17 @@ p.Produce(
 )
 ```
 
+### Message ID
+Stations are idempotent by default for 2 minutes (can be configured), Idempotency achieved by adding a message id
+
+```go
+p.Produce(
+	"<message in []byte>/protoreflect.ProtoMessage in case it is a schema validated station",
+    memphis.AckWaitSec(15),
+	memphis.MsgId("343")
+)
+```
+
 ### Destroying a Producer
 
 ```go
