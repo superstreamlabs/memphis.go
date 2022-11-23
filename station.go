@@ -442,36 +442,30 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 		err      error
 		message  interface{}
 	)
-	switch msg.(type) {
-	case []byte:
+
+	msgType := reflect.TypeOf(msg).Kind()
+
+	if msgType == reflect.Slice {
 		msgBytes = msg.([]byte)
 		if err := json.Unmarshal(msgBytes, &message); err != nil {
 			return nil, memphisError(err)
 		}
-		break
-	case interface{}:
-		msgType := reflect.TypeOf(msg).String()
-
-		// support msg of type struct, else we support interface{} or map[string]interface{}
-		if msgType != "map[string]interface {}" {
-
-			byteMsg, err := json.Marshal(msg)
-			if err != nil {
-				return nil, memphisError(err)
-			}
-			if err := json.Unmarshal(byteMsg, &message); err != nil {
-				return nil, memphisError(err)
-			}
-		} else {
-			message = msg
+	} else if msgType == reflect.Struct {
+		byteMsg, err := json.Marshal(msg)
+		if err != nil {
+			return nil, memphisError(err)
 		}
-	default:
+		if err := json.Unmarshal(byteMsg, &message); err != nil {
+			return nil, memphisError(err)
+		}
+	} else if msgType == reflect.Map {
+		message = msg
+	} else {
 		return nil, memphisError(errors.New("Unsupported message type"))
 	}
 
 	if err = sd.jsonSchema.Validate(message); err != nil {
 		return nil, memphisError(err)
-
 	}
 
 	return msgBytes, nil
