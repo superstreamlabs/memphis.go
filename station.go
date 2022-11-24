@@ -443,7 +443,6 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 		message  interface{}
 	)
 
-	msgType := reflect.TypeOf(msg).Kind()
 	switch msg.(type) {
 	case []byte:
 		msgBytes = msg.([]byte)
@@ -452,13 +451,19 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 		}
 	case map[string]interface{}:
 		message = msg
+		msgBytes, err = json.Marshal(msg)
+		if err != nil {
+			return nil, memphisError(err)
+		}
+
 	default:
+		msgType := reflect.TypeOf(msg).Kind()
 		if msgType == reflect.Struct {
-			byteMsg, err := json.Marshal(msg)
+			msgBytes, err := json.Marshal(msg)
 			if err != nil {
 				return nil, memphisError(err)
 			}
-			if err := json.Unmarshal(byteMsg, &message); err != nil {
+			if err := json.Unmarshal(msgBytes, &message); err != nil {
 				return nil, memphisError(err)
 			}
 		} else {
