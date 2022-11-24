@@ -25,7 +25,7 @@ import (
 
 const (
 	schemaUpdatesSubjectTemplate      = "$memphis_schema_updates_%s"
-	schemaValidationFailUpdateSubject = "$memphis_schema_validation_fail_updates"
+	schemaValidationFailUpdateSubject = "$memphis_notifications"
 	lastProducerCreationReqVersion    = 1
 )
 
