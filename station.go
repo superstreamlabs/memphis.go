@@ -444,26 +444,27 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 	)
 
 	msgType := reflect.TypeOf(msg).Kind()
-
-	if msgType == reflect.Slice {
+	switch msg.(type) {
+	case []byte:
 		msgBytes = msg.([]byte)
 		if err := json.Unmarshal(msgBytes, &message); err != nil {
 			return nil, memphisError(err)
 		}
-	} else if msgType == reflect.Struct {
-		byteMsg, err := json.Marshal(msg)
-		if err != nil {
-			return nil, memphisError(err)
-		}
-		if err := json.Unmarshal(byteMsg, &message); err != nil {
-			return nil, memphisError(err)
-		}
-	} else if msgType == reflect.Map {
+	case map[string]interface{}:
 		message = msg
-	} else {
-		return nil, memphisError(errors.New("Unsupported message type"))
+	default:
+		if msgType == reflect.Struct {
+			byteMsg, err := json.Marshal(msg)
+			if err != nil {
+				return nil, memphisError(err)
+			}
+			if err := json.Unmarshal(byteMsg, &message); err != nil {
+				return nil, memphisError(err)
+			}
+		} else {
+			return nil, memphisError(errors.New("Unsupported message type"))
+		}
 	}
-
 	if err = sd.jsonSchema.Validate(message); err != nil {
 		return nil, memphisError(err)
 	}
