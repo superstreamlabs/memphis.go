@@ -459,7 +459,7 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 	default:
 		msgType := reflect.TypeOf(msg).Kind()
 		if msgType == reflect.Struct {
-			msgBytes, err := json.Marshal(msg)
+			msgBytes, err = json.Marshal(msg)
 			if err != nil {
 				return nil, memphisError(err)
 			}
