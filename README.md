@@ -177,7 +177,7 @@ Meaning your application won't wait for broker acknowledgement - use only in cas
 
 ```go
 p.Produce(
-	"<message in []byte or protoreflect.ProtoMessage(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) in case it is a schema validated station>",
+	"<message in []byte or protoreflect.ProtoMessage(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema)>",
     memphis.AckWaitSec(15),
 	memphis.AsyncProduce()
 )
