@@ -17,6 +17,7 @@ package memphis
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -24,9 +25,9 @@ import (
 )
 
 const (
-	schemaUpdatesSubjectTemplate      = "$memphis_schema_updates_%s"
-	schemaValidationFailUpdateSubject = "$memphis_notifications"
-	lastProducerCreationReqVersion    = 1
+	schemaUpdatesSubjectTemplate   = "$memphis_schema_updates_%s"
+	memphisNotificationsSubject    = "$memphis_notifications"
+	lastProducerCreationReqVersion = 1
 )
 
 // Producer - memphis producer object.
@@ -87,6 +88,7 @@ type ProducerOpts struct {
 type SchemaFailMsg struct {
 	Title string
 	Msg   string
+	Code  string
 }
 
 // ProducerOpt - a function on the options for producer creation.
@@ -292,20 +294,31 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	}
 }
 
-func (p *Producer) sendNotification(title string, msg string) {
+func (p *Producer) sendNotification(title string, msg string, code string) error {
 	failMsg := SchemaFailMsg{
 		Title: title,
 		Msg:   msg,
+		Code:  code,
 	}
 	msgToSlack, _ := json.Marshal(failMsg)
-	p.conn.brokerConn.Publish(schemaValidationFailUpdateSubject, msgToSlack)
+
+	err := p.conn.brokerConn.Publish(memphisNotificationsSubject, msgToSlack)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (p *Producer) validateMsg(msg any) ([]byte, error) {
 	sd, err := p.getSchemaDetails()
 	if err != nil {
-		p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error())
-		return nil, memphisError(err)
+		msgToSend := fmt.Sprintf("%v", msg)
+		errMsg := "Schema validation has failed: " + err.Error()
+		notificationErr := p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend)
+		if notificationErr != nil {
+			errMsg = errMsg + "\nNotification send has Failed: " + notificationErr.Error()
+		}
+		return nil, memphisError(errors.New(errMsg))
 	}
 
 	// empty schema type means there is no schema and validation is not needed
@@ -315,16 +328,26 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 		case []byte:
 			return msg.([]byte), nil
 		default:
-			p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: Unsupported message type")
-			return nil, memphisError(errors.New("Unsupported message type"))
+			msgToSend := fmt.Sprintf("%v", msg)
+			errMsg := "Unsupported message type"
+			notificationErr := p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: Unsupported message type", msgToSend)
+			if notificationErr != nil {
+				errMsg = errMsg + "\nNotification send has Failed: " + notificationErr.Error()
+			}
+			return nil, memphisError(errors.New(errMsg))
 		}
 
 	}
 
 	msgBytes, err := sd.validateMsg(msg)
 	if err != nil {
-		p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error())
-		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
+		msgToSend := string(msg.([]byte)[:])
+		errMsg := "Schema validation has failed: " + err.Error()
+		notificationErr := p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend)
+		if notificationErr != nil {
+			errMsg = errMsg + "\nNotification send has Failed: " + notificationErr.Error()
+		}
+		return nil, memphisError(errors.New(errMsg))
 	}
 
 	return msgBytes, nil
