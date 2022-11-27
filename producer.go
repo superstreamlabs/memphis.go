@@ -86,7 +86,7 @@ type ProducerOpts struct {
 	GenUniqueSuffix bool
 }
 
-type MsgToSend struct {
+type Notification struct {
 	Title string
 	Msg   string
 	Code  string
@@ -297,13 +297,13 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 }
 
 func (p *Producer) sendNotification(title string, msg string, code string, msgType string) {
-	msgToSend := MsgToSend{
+	notification := Notification{
 		Title: title,
 		Msg:   msg,
 		Type:  msgType,
 		Code:  code,
 	}
-	msgToPublish, _ := json.Marshal(msgToSend)
+	msgToPublish, _ := json.Marshal(notification)
 
 	_ = p.conn.brokerConn.Publish(memphisNotificationsSubject, msgToPublish)
 }
