@@ -36,14 +36,13 @@ import (
 
 // Station - memphis station object.
 type Station struct {
-	Name           string
-	RetentionType  RetentionType
-	RetentionValue int
-	StorageType    StorageType
-	Replicas       int
-	DedupEnabled   bool
-	DedupWindow    time.Duration
-	conn           *Conn
+	Name              string
+	RetentionType     RetentionType
+	RetentionValue    int
+	StorageType       StorageType
+	Replicas          int
+	IdempotencyWindow time.Duration
+	conn              *Conn
 }
 
 // RetentionType - station's message retention type
@@ -72,13 +71,12 @@ func (s StorageType) String() string {
 }
 
 type createStationReq struct {
-	Name              string `json:"name"`
-	RetentionType     string `json:"retention_type"`
-	RetentionValue    int    `json:"retention_value"`
-	StorageType       string `json:"storage_type"`
-	Replicas          int    `json:"replicas"`
-	DedupEnabled      bool   `json:"dedup_enabled"`
-	DedupWindowMillis int    `json:"dedup_window_in_ms"`
+	Name                    string `json:"name"`
+	RetentionType           string `json:"retention_type"`
+	RetentionValue          int    `json:"retention_value"`
+	StorageType             string `json:"storage_type"`
+	Replicas                int    `json:"replicas"`
+	IdempotencyWindowMillis int    `json:"idempotency_window_in_ms"`
 }
 
 type removeStationReq struct {
@@ -87,13 +85,12 @@ type removeStationReq struct {
 
 // StationsOpts - configuration options for a station.
 type StationOpts struct {
-	Name          string
-	RetentionType RetentionType
-	RetentionVal  int
-	StorageType   StorageType
-	Replicas      int
-	DedupEnabled  bool
-	DedupWindow   time.Duration
+	Name              string
+	RetentionType     RetentionType
+	RetentionVal      int
+	StorageType       StorageType
+	Replicas          int
+	IdempotencyWindow time.Duration
 }
 
 // StationOpt - a function on the options for a station.
@@ -102,12 +99,11 @@ type StationOpt func(*StationOpts) error
 // GetStationDefaultOptions - returns default configuration options for the station.
 func GetStationDefaultOptions() StationOpts {
 	return StationOpts{
-		RetentionType: MaxMessageAgeSeconds,
-		RetentionVal:  604800,
-		StorageType:   Disk,
-		Replicas:      1,
-		DedupEnabled:  false,
-		DedupWindow:   0 * time.Millisecond,
+		RetentionType:     MaxMessageAgeSeconds,
+		RetentionVal:      604800,
+		StorageType:       Disk,
+		Replicas:          1,
+		IdempotencyWindow: 2 * time.Minute,
 	}
 }
 
@@ -132,14 +128,13 @@ func (c *Conn) CreateStation(Name string, opts ...StationOpt) (*Station, error) 
 
 func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 	s := Station{
-		Name:           opts.Name,
-		RetentionType:  opts.RetentionType,
-		RetentionValue: opts.RetentionVal,
-		StorageType:    opts.StorageType,
-		Replicas:       opts.Replicas,
-		DedupEnabled:   opts.DedupEnabled,
-		DedupWindow:    opts.DedupWindow,
-		conn:           c,
+		Name:              opts.Name,
+		RetentionType:     opts.RetentionType,
+		RetentionValue:    opts.RetentionVal,
+		StorageType:       opts.StorageType,
+		Replicas:          opts.Replicas,
+		IdempotencyWindow: opts.IdempotencyWindow,
+		conn:              c,
 	}
 
 	return &s, s.conn.create(&s)
@@ -158,13 +153,12 @@ func (s *Station) getCreationSubject() string {
 
 func (s *Station) getCreationReq() any {
 	return createStationReq{
-		Name:              s.Name,
-		RetentionType:     s.RetentionType.String(),
-		RetentionValue:    s.RetentionValue,
-		StorageType:       s.StorageType.String(),
-		Replicas:          s.Replicas,
-		DedupEnabled:      s.DedupEnabled,
-		DedupWindowMillis: int(s.DedupWindow.Milliseconds()),
+		Name:                    s.Name,
+		RetentionType:           s.RetentionType.String(),
+		RetentionValue:          s.RetentionValue,
+		StorageType:             s.StorageType.String(),
+		Replicas:                s.Replicas,
+		IdempotencyWindowMillis: int(s.IdempotencyWindow.Milliseconds()),
 	}
 }
 
@@ -220,18 +214,10 @@ func Replicas(replicas int) StationOpt {
 	}
 }
 
-// EnableDedup - whether to allow dedup mecanism, dedup happens based on message ID, default is false.
-func EnableDedup() StationOpt {
+// IdempotencyWindow - time frame in which idempotency track messages, default is 2 minutes. This feature is enabled only for messages contain Msg Id
+func IdempotencyWindow(idempotencyWindow time.Duration) StationOpt {
 	return func(opts *StationOpts) error {
-		opts.DedupEnabled = true
-		return nil
-	}
-}
-
-// DedupWindow - time frame in which dedup track messages, default is 0.
-func DedupWindow(dedupWindow time.Duration) StationOpt {
-	return func(opts *StationOpts) error {
-		opts.DedupWindow = dedupWindow
+		opts.IdempotencyWindow = idempotencyWindow
 		return nil
 	}
 }

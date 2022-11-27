@@ -86,8 +86,7 @@ s1, err = c.CreateStation("<station-name>",
  RetentionVal(<int>), 
  StorageTypeOpt(<Memory/Disk>), 
  Replicas(<int>), 
- EnableDedup(), 
- DedupWindow(<time.Duration>))
+ IdempotencyWindow(<time.Duration>)) // defaults to 2 minutes
 ```
 
 ### Retention Types
@@ -180,6 +179,17 @@ p.Produce(
 	"<message in []byte or protoreflect.ProtoMessage(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema)>",
     memphis.AckWaitSec(15),
 	memphis.AsyncProduce()
+)
+```
+
+### Message ID
+Stations are idempotent by default for 2 minutes (can be configured), Idempotency achieved by adding a message id
+
+```go
+p.Produce(
+	"<message in []byte>/protoreflect.ProtoMessage in case it is a schema validated station",
+    memphis.AckWaitSec(15),
+	memphis.MsgId("343")
 )
 ```
 
