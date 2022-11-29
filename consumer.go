@@ -308,14 +308,14 @@ func (c *Consumer) StopConsume() {
 
 func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 	if !c.subscriptionActive {
-		return nil, memphisError(errors.New("station unreachable"))
+		return nil, errors.New("station unreachable")
 	}
 
 	subscription := c.subscription
 	batchSize := c.BatchSize
 	msgs, err := subscription.Fetch(batchSize)
 	if err != nil {
-		return nil, memphisError(err)
+		return nil, err
 	}
 
 	wrappedMsgs := make([]*Msg, 0, batchSize)
