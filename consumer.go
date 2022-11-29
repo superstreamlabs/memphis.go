@@ -15,6 +15,7 @@
 package memphis
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -26,6 +27,7 @@ import (
 const (
 	consumerDefaultPingInterval = 30 * time.Second
 	dlqSubjPrefix               = "$memphis_dlq"
+	memphisPmAckSubject         = "$memphis_pm_acks"
 )
 
 var (
@@ -57,7 +59,14 @@ type Consumer struct {
 
 // Msg - a received message, can be acked.
 type Msg struct {
-	msg *nats.Msg
+	msg    *nats.Msg
+	conn   *Conn
+	cgName string
+}
+
+type PMsgToAck struct {
+	ID     string `json:"id"`
+	CgName string `json:"cg_name"`
 }
 
 // Msg.Data - get message's data.
@@ -67,7 +76,22 @@ func (m *Msg) Data() []byte {
 
 // Msg.Ack - ack the message.
 func (m *Msg) Ack() error {
-	return m.msg.Ack()
+	err := m.msg.Ack()
+	if err != nil {
+		headers := m.GetHeaders()
+		id, ok := headers["$memphis_pm_id"]
+		if !ok {
+			return err
+		} else {
+			msgToAck := PMsgToAck{
+				ID:     id,
+				CgName: m.cgName,
+			}
+			msgToPublish, _ := json.Marshal(msgToAck)
+			m.conn.brokerConn.Publish(memphisPmAckSubject, msgToPublish)
+		}
+	}
+	return nil
 }
 
 // Msg.GetHeaders - get headers per message
@@ -282,7 +306,7 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
 
 				// push messages from the dlq channel to the user's handler
 				for len(c.dlqCh) > 0 {
-					dlqMsg := Msg{msg: <-c.dlqCh}
+					dlqMsg := Msg{msg: <-c.dlqCh, conn: c.conn, cgName: c.ConsumerGroup}
 					msgs = append(msgs, &dlqMsg)
 				}
 
@@ -308,20 +332,20 @@ func (c *Consumer) StopConsume() {
 
 func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 	if !c.subscriptionActive {
-		return nil, memphisError(errors.New("station unreachable"))
+		return nil, errors.New("station unreachable")
 	}
 
 	subscription := c.subscription
 	batchSize := c.BatchSize
 	msgs, err := subscription.Fetch(batchSize)
 	if err != nil {
-		return nil, memphisError(err)
+		return nil, err
 	}
 
 	wrappedMsgs := make([]*Msg, 0, batchSize)
 
 	for _, msg := range msgs {
-		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg})
+		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup})
 	}
 	return wrappedMsgs, nil
 }
@@ -467,7 +491,7 @@ func BatchSize(batchSize int) ConsumerOpt {
 func BatchMaxWaitTime(batchMaxWaitTime time.Duration) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		if batchMaxWaitTime < 1*time.Millisecond {
-			batchMaxWaitTime = 1*time.Millisecond
+			batchMaxWaitTime = 1 * time.Millisecond
 		}
 		opts.BatchMaxTimeToWait = batchMaxWaitTime
 		return nil
