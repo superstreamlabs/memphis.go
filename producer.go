@@ -308,10 +308,22 @@ func (p *Producer) sendNotification(title string, msg string, code string, msgTy
 	_ = p.conn.brokerConn.Publish(memphisNotificationsSubject, msgToPublish)
 }
 
+func (p *Producer) msgToString(msg any) string {
+	var stringMsg string
+	switch msg.(type) {
+	case []byte:
+		stringMsg = string(msg.([]byte)[:])
+	default:
+		stringMsg = fmt.Sprintf("%v", msg)
+	}
+
+	return stringMsg
+}
+
 func (p *Producer) validateMsg(msg any) ([]byte, error) {
 	sd, err := p.getSchemaDetails()
 	if err != nil {
-		msgToSend := fmt.Sprintf("%v", msg)
+		msgToSend := p.msgToString(msg)
 		p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend, schemaVFailAlertType)
 		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
 	}
@@ -323,7 +335,7 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 		case []byte:
 			return msg.([]byte), nil
 		default:
-			msgToSend := fmt.Sprintf("%v", msg)
+			msgToSend := p.msgToString(msg)
 			p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: Unsupported message type", msgToSend, schemaVFailAlertType)
 			return nil, memphisError(errors.New("Unsupported message type"))
 		}
@@ -332,7 +344,7 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 
 	msgBytes, err := sd.validateMsg(msg)
 	if err != nil {
-		msgToSend := string(msg.([]byte)[:])
+		msgToSend := p.msgToString(msg)
 		p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend, schemaVFailAlertType)
 		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
 	}
