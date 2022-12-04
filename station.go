@@ -433,6 +433,7 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 	case []byte:
 		msgBytes = msg.([]byte)
 		if err := json.Unmarshal(msgBytes, &message); err != nil {
+			err = errors.New("Bad JSON format - " + err.Error())
 			return nil, memphisError(err)
 		}
 	case map[string]interface{}:
