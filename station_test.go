@@ -25,12 +25,12 @@ func TestCreateStation(t *testing.T) {
 	}
 	defer c.Close()
 
-	s1, err := c.CreateStation("station_name_1", RetentionTypeOpt(Messages), RetentionVal(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
+	s1, err := c.CreateStation("station_name_1", RetentionTypeOpt(Messages), RetentionVal(0), StorageTypeOpt(Memory), Replicas(1), IdempotencyWindow(1*time.Second))
 	if err != nil {
 		t.Error(err)
 	}
 
-	s2, err := c.CreateStation("station_name_2", RetentionTypeOpt(Messages), RetentionVal(0), StorageTypeOpt(Memory), Replicas(1), EnableDedup(), DedupWindow(1*time.Second))
+	s2, err := c.CreateStation("station_name_2", RetentionTypeOpt(Messages), RetentionVal(0), StorageTypeOpt(Memory), Replicas(1), IdempotencyWindow(1*time.Second))
 	if err != nil {
 		t.Error(err)
 	}

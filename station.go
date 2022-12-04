@@ -19,12 +19,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 
+	"github.com/santhosh-tekuri/jsonschema/v5"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -34,14 +36,13 @@ import (
 
 // Station - memphis station object.
 type Station struct {
-	Name           string
-	RetentionType  RetentionType
-	RetentionValue int
-	StorageType    StorageType
-	Replicas       int
-	DedupEnabled   bool
-	DedupWindow    time.Duration
-	conn           *Conn
+	Name              string
+	RetentionType     RetentionType
+	RetentionValue    int
+	StorageType       StorageType
+	Replicas          int
+	IdempotencyWindow time.Duration
+	conn              *Conn
 }
 
 // RetentionType - station's message retention type
@@ -70,13 +71,12 @@ func (s StorageType) String() string {
 }
 
 type createStationReq struct {
-	Name              string `json:"name"`
-	RetentionType     string `json:"retention_type"`
-	RetentionValue    int    `json:"retention_value"`
-	StorageType       string `json:"storage_type"`
-	Replicas          int    `json:"replicas"`
-	DedupEnabled      bool   `json:"dedup_enabled"`
-	DedupWindowMillis int    `json:"dedup_window_in_ms"`
+	Name                    string `json:"name"`
+	RetentionType           string `json:"retention_type"`
+	RetentionValue          int    `json:"retention_value"`
+	StorageType             string `json:"storage_type"`
+	Replicas                int    `json:"replicas"`
+	IdempotencyWindowMillis int    `json:"idempotency_window_in_ms"`
 }
 
 type removeStationReq struct {
@@ -85,13 +85,12 @@ type removeStationReq struct {
 
 // StationsOpts - configuration options for a station.
 type StationOpts struct {
-	Name          string
-	RetentionType RetentionType
-	RetentionVal  int
-	StorageType   StorageType
-	Replicas      int
-	DedupEnabled  bool
-	DedupWindow   time.Duration
+	Name              string
+	RetentionType     RetentionType
+	RetentionVal      int
+	StorageType       StorageType
+	Replicas          int
+	IdempotencyWindow time.Duration
 }
 
 // StationOpt - a function on the options for a station.
@@ -100,12 +99,11 @@ type StationOpt func(*StationOpts) error
 // GetStationDefaultOptions - returns default configuration options for the station.
 func GetStationDefaultOptions() StationOpts {
 	return StationOpts{
-		RetentionType: MaxMessageAgeSeconds,
-		RetentionVal:  604800,
-		StorageType:   Disk,
-		Replicas:      1,
-		DedupEnabled:  false,
-		DedupWindow:   0 * time.Millisecond,
+		RetentionType:     MaxMessageAgeSeconds,
+		RetentionVal:      604800,
+		StorageType:       Disk,
+		Replicas:          1,
+		IdempotencyWindow: 2 * time.Minute,
 	}
 }
 
@@ -130,14 +128,13 @@ func (c *Conn) CreateStation(Name string, opts ...StationOpt) (*Station, error) 
 
 func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 	s := Station{
-		Name:           opts.Name,
-		RetentionType:  opts.RetentionType,
-		RetentionValue: opts.RetentionVal,
-		StorageType:    opts.StorageType,
-		Replicas:       opts.Replicas,
-		DedupEnabled:   opts.DedupEnabled,
-		DedupWindow:    opts.DedupWindow,
-		conn:           c,
+		Name:              opts.Name,
+		RetentionType:     opts.RetentionType,
+		RetentionValue:    opts.RetentionVal,
+		StorageType:       opts.StorageType,
+		Replicas:          opts.Replicas,
+		IdempotencyWindow: opts.IdempotencyWindow,
+		conn:              c,
 	}
 
 	return &s, s.conn.create(&s)
@@ -156,13 +153,12 @@ func (s *Station) getCreationSubject() string {
 
 func (s *Station) getCreationReq() any {
 	return createStationReq{
-		Name:              s.Name,
-		RetentionType:     s.RetentionType.String(),
-		RetentionValue:    s.RetentionValue,
-		StorageType:       s.StorageType.String(),
-		Replicas:          s.Replicas,
-		DedupEnabled:      s.DedupEnabled,
-		DedupWindowMillis: int(s.DedupWindow.Milliseconds()),
+		Name:                    s.Name,
+		RetentionType:           s.RetentionType.String(),
+		RetentionValue:          s.RetentionValue,
+		StorageType:             s.StorageType.String(),
+		Replicas:                s.Replicas,
+		IdempotencyWindowMillis: int(s.IdempotencyWindow.Milliseconds()),
 	}
 }
 
@@ -218,18 +214,10 @@ func Replicas(replicas int) StationOpt {
 	}
 }
 
-// EnableDedup - whether to allow dedup mecanism, dedup happens based on message ID, default is false.
-func EnableDedup() StationOpt {
+// IdempotencyWindow - time frame in which idempotency track messages, default is 2 minutes. This feature is enabled only for messages contain Msg Id
+func IdempotencyWindow(idempotencyWindow time.Duration) StationOpt {
 	return func(opts *StationOpts) error {
-		opts.DedupEnabled = true
-		return nil
-	}
-}
-
-// DedupWindow - time frame in which dedup track messages, default is 0.
-func DedupWindow(dedupWindow time.Duration) StationOpt {
-	return func(opts *StationOpts) error {
-		opts.DedupWindow = dedupWindow
+		opts.IdempotencyWindow = idempotencyWindow
 		return nil
 	}
 }
@@ -248,6 +236,7 @@ type schemaDetails struct {
 	schemaType    string
 	activeVersion SchemaVersion
 	msgDescriptor protoreflect.MessageDescriptor
+	jsonSchema    *jsonschema.Schema
 }
 
 func (c *Conn) listenToSchemaUpdates(stationName string) error {
@@ -351,6 +340,10 @@ func (sd *schemaDetails) handleSchemaUpdateInit(sui SchemaUpdateInit) {
 		if err := sd.parseDescriptor(); err != nil {
 			log.Println(err.Error())
 		}
+	} else if sd.schemaType == "json" {
+		if err := sd.parseJsonSchema(); err != nil {
+			log.Println(err.Error())
+		}
 	}
 }
 
@@ -383,10 +376,21 @@ func (sd *schemaDetails) parseDescriptor() error {
 	return nil
 }
 
+func (sd *schemaDetails) parseJsonSchema() error {
+	sch, err := jsonschema.CompileString(sd.name, sd.activeVersion.Content)
+	if err != nil {
+		return memphisError(err)
+	}
+	sd.jsonSchema = sch
+	return nil
+}
+
 func (sd *schemaDetails) validateMsg(msg any) ([]byte, error) {
 	switch sd.schemaType {
 	case "protobuf":
 		return sd.validateProtoMsg(msg)
+	case "json":
+		return sd.validJsonSchemaMsg(msg)
 	default:
 		return nil, memphisError(errors.New("Invalid schema type"))
 	}
@@ -412,6 +416,48 @@ func (sd *schemaDetails) validateProtoMsg(msg any) ([]byte, error) {
 	protoMsg := dynamicpb.NewMessage(sd.msgDescriptor)
 	err = proto.Unmarshal(msgBytes, protoMsg)
 	if err != nil {
+		return nil, memphisError(err)
+	}
+
+	return msgBytes, nil
+}
+
+func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
+	var (
+		msgBytes []byte
+		err      error
+		message  interface{}
+	)
+
+	switch msg.(type) {
+	case []byte:
+		msgBytes = msg.([]byte)
+		if err := json.Unmarshal(msgBytes, &message); err != nil {
+			err = errors.New("Bad JSON format - " + err.Error())
+			return nil, memphisError(err)
+		}
+	case map[string]interface{}:
+		message = msg
+		msgBytes, err = json.Marshal(msg)
+		if err != nil {
+			return nil, memphisError(err)
+		}
+
+	default:
+		msgType := reflect.TypeOf(msg).Kind()
+		if msgType == reflect.Struct {
+			msgBytes, err = json.Marshal(msg)
+			if err != nil {
+				return nil, memphisError(err)
+			}
+			if err := json.Unmarshal(msgBytes, &message); err != nil {
+				return nil, memphisError(err)
+			}
+		} else {
+			return nil, memphisError(errors.New("Unsupported message type"))
+		}
+	}
+	if err = sd.jsonSchema.Validate(message); err != nil {
 		return nil, memphisError(err)
 	}
 
