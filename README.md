@@ -84,16 +84,18 @@ c.Close();
 ### Creating a Station
 Stations can be created from Conn<br>
 Passing optional parameters using functions<br>
+_If a station already exists nothing happens, the new configuration will not be applied_<br>
 
 ```go
 s0, err = c.CreateStation("<station-name>")
 
 s1, err = c.CreateStation("<station-name>", 
- RetentionTypeOpt(<Messages/MaxMeMessageAgeSeconds/Bytes>),
- RetentionVal(<int>), 
- StorageTypeOpt(<Memory/Disk>), 
- Replicas(<int>), 
- IdempotencyWindow(<time.Duration>)) // defaults to 2 minutes
+ memphis.RetentionTypeOpt(<Messages/MaxMeMessageAgeSeconds/Bytes>),
+ memphis.RetentionVal(<int>), 
+ memphis.StorageTypeOpt(<Memory/Disk>), 
+ memphis.Replicas(<int>), 
+ memphis.IdempotencyWindow(<time.Duration>)), // defaults to 2 minutes
+ memphis.SchemaName(<string>)
 ```
 
 ### Retention Types
@@ -137,6 +139,18 @@ Destroying a station will remove all its resources (including producers and cons
 
 ```go
 err := s.Destroy();
+```
+
+### Attaching a Schema to an Existing Station
+
+```go
+err := conn.AttachSchema("<schema-name>", "<station-name>")
+```
+
+### Detaching a Schema from Station
+
+```go
+err := conn.DetachSchema("<station-name>")
 ```
 
 ### Produce and Consume Messages

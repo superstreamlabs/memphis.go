@@ -43,6 +43,7 @@ type Station struct {
 	Replicas          int
 	IdempotencyWindow time.Duration
 	conn              *Conn
+	SchemaName        string
 }
 
 // RetentionType - station's message retention type
@@ -77,6 +78,7 @@ type createStationReq struct {
 	StorageType             string `json:"storage_type"`
 	Replicas                int    `json:"replicas"`
 	IdempotencyWindowMillis int    `json:"idempotency_window_in_ms"`
+	SchemaName              string `json:"schema_name"`
 }
 
 type removeStationReq struct {
@@ -91,6 +93,7 @@ type StationOpts struct {
 	StorageType       StorageType
 	Replicas          int
 	IdempotencyWindow time.Duration
+	SchemaName        string
 }
 
 // StationOpt - a function on the options for a station.
@@ -104,6 +107,7 @@ func GetStationDefaultOptions() StationOpts {
 		StorageType:       Disk,
 		Replicas:          1,
 		IdempotencyWindow: 2 * time.Minute,
+		SchemaName:        "",
 	}
 }
 
@@ -135,6 +139,7 @@ func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 		Replicas:          opts.Replicas,
 		IdempotencyWindow: opts.IdempotencyWindow,
 		conn:              c,
+		SchemaName:        opts.SchemaName,
 	}
 
 	return &s, s.conn.create(&s)
@@ -151,6 +156,10 @@ func (s *Station) getCreationSubject() string {
 	return "$memphis_station_creations"
 }
 
+func (s *Station) getSchemaDetachSubject() string {
+	return "$memphis_schema_detachments"
+}
+
 func (s *Station) getCreationReq() any {
 	return createStationReq{
 		Name:                    s.Name,
@@ -159,6 +168,7 @@ func (s *Station) getCreationReq() any {
 		StorageType:             s.StorageType.String(),
 		Replicas:                s.Replicas,
 		IdempotencyWindowMillis: int(s.IdempotencyWindow.Milliseconds()),
+		SchemaName:              s.SchemaName,
 	}
 }
 
@@ -178,6 +188,14 @@ func (s *Station) getDestructionReq() any {
 func Name(name string) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.Name = name
+		return nil
+	}
+}
+
+// SchemaName - shcema's name to attach
+func SchemaName(schemaName string) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.SchemaName = schemaName
 		return nil
 	}
 }
