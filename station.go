@@ -37,13 +37,13 @@ import (
 // Station - memphis station object.
 type Station struct {
 	Name              string
-	SchemaName        string
 	RetentionType     RetentionType
 	RetentionValue    int
 	StorageType       StorageType
 	Replicas          int
 	IdempotencyWindow time.Duration
 	conn              *Conn
+	SchemaName        string
 }
 
 // RetentionType - station's message retention type
@@ -73,12 +73,12 @@ func (s StorageType) String() string {
 
 type createStationReq struct {
 	Name                    string `json:"name"`
-	SchemaName              string `json:"schema_name"`
 	RetentionType           string `json:"retention_type"`
 	RetentionValue          int    `json:"retention_value"`
 	StorageType             string `json:"storage_type"`
 	Replicas                int    `json:"replicas"`
 	IdempotencyWindowMillis int    `json:"idempotency_window_in_ms"`
+	SchemaName              string `json:"schema_name"`
 }
 
 type removeStationReq struct {
@@ -88,12 +88,12 @@ type removeStationReq struct {
 // StationsOpts - configuration options for a station.
 type StationOpts struct {
 	Name              string
-	SchemaName        string
 	RetentionType     RetentionType
 	RetentionVal      int
 	StorageType       StorageType
 	Replicas          int
 	IdempotencyWindow time.Duration
+	SchemaName        string
 }
 
 // StationOpt - a function on the options for a station.
@@ -103,11 +103,11 @@ type StationOpt func(*StationOpts) error
 func GetStationDefaultOptions() StationOpts {
 	return StationOpts{
 		RetentionType:     MaxMessageAgeSeconds,
-		SchemaName:        "",
 		RetentionVal:      604800,
 		StorageType:       Disk,
 		Replicas:          1,
 		IdempotencyWindow: 2 * time.Minute,
+		SchemaName:        "",
 	}
 }
 
@@ -133,13 +133,13 @@ func (c *Conn) CreateStation(Name string, opts ...StationOpt) (*Station, error) 
 func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 	s := Station{
 		Name:              opts.Name,
-		SchemaName:        opts.SchemaName,
 		RetentionType:     opts.RetentionType,
 		RetentionValue:    opts.RetentionVal,
 		StorageType:       opts.StorageType,
 		Replicas:          opts.Replicas,
 		IdempotencyWindow: opts.IdempotencyWindow,
 		conn:              c,
+		SchemaName:        opts.SchemaName,
 	}
 
 	return &s, s.conn.create(&s)
@@ -156,8 +156,6 @@ func (s *Station) getCreationSubject() string {
 	return "$memphis_station_creations"
 }
 
-
-
 func (s *Station) getSchemaDetachSubject() string {
 	return "$memphis_schema_detachments"
 }
@@ -165,12 +163,12 @@ func (s *Station) getSchemaDetachSubject() string {
 func (s *Station) getCreationReq() any {
 	return createStationReq{
 		Name:                    s.Name,
-		SchemaName:              s.SchemaName,
 		RetentionType:           s.RetentionType.String(),
 		RetentionValue:          s.RetentionValue,
 		StorageType:             s.StorageType.String(),
 		Replicas:                s.Replicas,
 		IdempotencyWindowMillis: int(s.IdempotencyWindow.Milliseconds()),
+		SchemaName:              s.SchemaName,
 	}
 }
 
