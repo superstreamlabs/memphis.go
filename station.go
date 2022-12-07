@@ -37,6 +37,7 @@ import (
 // Station - memphis station object.
 type Station struct {
 	Name              string
+	SchemaName        string
 	RetentionType     RetentionType
 	RetentionValue    int
 	StorageType       StorageType
@@ -72,6 +73,7 @@ func (s StorageType) String() string {
 
 type createStationReq struct {
 	Name                    string `json:"name"`
+	SchemaName              string `json:"schema_name"`
 	RetentionType           string `json:"retention_type"`
 	RetentionValue          int    `json:"retention_value"`
 	StorageType             string `json:"storage_type"`
@@ -86,6 +88,7 @@ type removeStationReq struct {
 // StationsOpts - configuration options for a station.
 type StationOpts struct {
 	Name              string
+	SchemaName        string
 	RetentionType     RetentionType
 	RetentionVal      int
 	StorageType       StorageType
@@ -100,6 +103,7 @@ type StationOpt func(*StationOpts) error
 func GetStationDefaultOptions() StationOpts {
 	return StationOpts{
 		RetentionType:     MaxMessageAgeSeconds,
+		SchemaName:        "",
 		RetentionVal:      604800,
 		StorageType:       Disk,
 		Replicas:          1,
@@ -129,6 +133,7 @@ func (c *Conn) CreateStation(Name string, opts ...StationOpt) (*Station, error) 
 func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 	s := Station{
 		Name:              opts.Name,
+		SchemaName:        opts.SchemaName,
 		RetentionType:     opts.RetentionType,
 		RetentionValue:    opts.RetentionVal,
 		StorageType:       opts.StorageType,
@@ -151,9 +156,16 @@ func (s *Station) getCreationSubject() string {
 	return "$memphis_station_creations"
 }
 
+
+
+func (s *Station) getSchemaDetachSubject() string {
+	return "$memphis_schema_detachments"
+}
+
 func (s *Station) getCreationReq() any {
 	return createStationReq{
 		Name:                    s.Name,
+		SchemaName:              s.SchemaName,
 		RetentionType:           s.RetentionType.String(),
 		RetentionValue:          s.RetentionValue,
 		StorageType:             s.StorageType.String(),
@@ -178,6 +190,14 @@ func (s *Station) getDestructionReq() any {
 func Name(name string) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.Name = name
+		return nil
+	}
+}
+
+// SchemaName - shcema's name to attach
+func SchemaName(schemaName string) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.SchemaName = schemaName
 		return nil
 	}
 }

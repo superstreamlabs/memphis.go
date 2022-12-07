@@ -62,6 +62,15 @@ type Conn struct {
 	stationUpdatesSubs map[string]*stationUpdateSub
 }
 
+type attachSchemaReq struct {
+	Name        string `json:"name"`
+	StationName string `json:"station_name"`
+}
+
+type detachSchemaReq struct {
+	StationName string `json:"station_name"`
+}
+
 // getDefaultOptions - returns default configuration options for the client.
 func getDefaultOptions() Options {
 	return Options{
@@ -193,6 +202,14 @@ func (c *Conn) brokerQueueSubscribe(subj, queue string, cb nats.MsgHandler) (*na
 	return c.brokerConn.QueueSubscribe(subj, queue, cb)
 }
 
+func (c *Conn) getSchemaAttachSubject() string {
+	return "$memphis_schema_attachments"
+}
+
+func (c *Conn) getSchemaDetachSubject() string {
+	return "$memphis_schema_detachments"
+}
+
 // Port - default is 6666.
 func Port(port int) Option {
 	return func(o *Options) error {
@@ -250,9 +267,9 @@ func defaultHandleCreationResp(resp []byte) error {
 
 func (c *Conn) create(do directObj) error {
 	subject := do.getCreationSubject()
-	creationReq := do.getCreationReq()
+	req := do.getCreationReq()
 
-	b, err := json.Marshal(creationReq)
+	b, err := json.Marshal(req)
 	if err != nil {
 		return memphisError(err)
 	}
@@ -263,6 +280,51 @@ func (c *Conn) create(do directObj) error {
 	}
 
 	return do.handleCreationResp(msg.Data)
+}
+
+func (c *Conn) AttachSchema(name string, stationName string) error {
+	subject := c.getSchemaAttachSubject()
+
+	creationReq := &attachSchemaReq{
+		Name:        name,
+		StationName: stationName,
+	}
+
+	b, err := json.Marshal(creationReq)
+	if err != nil {
+		return memphisError(err)
+	}
+
+	msg, err := c.brokerConn.Request(subject, b, 1*time.Second)
+	if err != nil {
+		return memphisError(err)
+	}
+	if len(msg.Data) > 0 {
+		return memphisError(errors.New(string(msg.Data)))
+	}
+	return nil
+}
+
+func (c *Conn) DetachSchema(stationName string) error {
+	subject := c.getSchemaDetachSubject()
+
+	req := &detachSchemaReq{
+		StationName: stationName,
+	}
+
+	b, err := json.Marshal(req)
+	if err != nil {
+		return memphisError(err)
+	}
+
+	msg, err := c.brokerConn.Request(subject, b, 1*time.Second)
+	if err != nil {
+		return memphisError(err)
+	}
+	if len(msg.Data) > 0 {
+		return memphisError(errors.New(string(msg.Data)))
+	}
+	return nil
 }
 
 func (c *Conn) destroy(o directObj) error {
