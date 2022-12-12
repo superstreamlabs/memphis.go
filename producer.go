@@ -334,6 +334,8 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 		switch msg.(type) {
 		case []byte:
 			return msg.([]byte), nil
+		case map[string]interface{}:
+			return json.Marshal(msg)
 		default:
 			msgToSend := p.msgToString(msg)
 			p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: Unsupported message type", msgToSend, schemaVFailAlertType)

@@ -27,11 +27,14 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/dynamicpb"
+	// "google.golang.org/protobuf/types/known/structpb"
+	// "google.golang.org/protobuf/types/known/structpb"
 )
 
 // Station - memphis station object.
@@ -427,6 +430,20 @@ func (sd *schemaDetails) validateProtoMsg(msg any) ([]byte, error) {
 		}
 	case []byte:
 		msgBytes = msg.([]byte)
+	case map[string]interface{}:
+		bytes, err := json.Marshal(msg)
+		if err != nil {
+			return nil, err
+		}
+		pMsg := dynamicpb.NewMessage(sd.msgDescriptor)
+		err = protojson.Unmarshal(bytes, pMsg)
+		if err != nil {
+			return nil, memphisError(err)
+		}
+		msgBytes, err = proto.Marshal(pMsg)
+		if err != nil {
+			return nil, memphisError(err)
+		}
 	default:
 		return nil, memphisError(errors.New("Unsupported message type"))
 	}
@@ -481,3 +498,77 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 
 	return msgBytes, nil
 }
+
+// [
+//   {
+//     "field_number": 1,
+//     "type": "string",
+//     "childrens": [
+//       {
+//         "field_number": 1,
+//         "type": "string",
+//         "value": "1",
+//         "childrens": []
+//       },
+//       {
+//         "field_number": 2,
+//         "type": "string",
+//         "childrens": [
+//           {
+//             "field_number": 3,
+//             "type": "string",
+//             "value": "hello",
+//             "childrens": []
+//           }
+//         ]
+//       }
+//     ]
+//   },
+//   {
+//     "field_number": 1,
+//     "type": "string",
+//     "childrens": [
+//       {
+//         "field_number": 1,
+//         "type": "string",
+//         "value": "2",
+//         "childrens": []
+//       },
+//       {
+//         "field_number": 2,
+//         "type": "string",
+//         "childrens": [
+//           {
+//             "field_number": 3,
+//             "type": "string",
+//             "value": "world",
+//             "childrens": []
+//           }
+//         ]
+//       }
+//     ]
+//   },
+//   {
+//     "field_number": 1,
+//     "type": "string",
+//     "childrens": [
+//       {
+//         "field_number": 1,
+//         "type": "string",
+//         "value": "3",
+//         "childrens": []
+//       },
+//       {
+//         "field_number": 2,
+//         "type": "string",
+//         "childrens": [
+//           {
+//             "field_number": 2,
+//             "type": "fixed64",
+//             "childrens": []
+//           }
+//         ]
+//       }
+//     ]
+//   }
+// ]
