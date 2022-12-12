@@ -176,7 +176,7 @@ p1, err := s.CreateProducer("<producer-name>")
 ### Producing a message
 
 ```go
-p.Produce("<message in []byte or protoreflect.ProtoMessage(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema)>", memphis.AckWaitSec(15)) // defaults to 15 seconds
+p.Produce("<message in []byte or map[string]interface{}/protoreflect.ProtoMessage(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema)>", memphis.AckWaitSec(15)) // defaults to 15 seconds
 ```
 
 ### Add headers
@@ -197,7 +197,7 @@ Meaning your application won't wait for broker acknowledgement - use only in cas
 
 ```go
 p.Produce(
-	"<message in []byte or protoreflect.ProtoMessage(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema)>",
+	"<message in []byte or map[string]interface{}/protoreflect.ProtoMessage(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema)>",
     memphis.AckWaitSec(15),
 	memphis.AsyncProduce()
 )
