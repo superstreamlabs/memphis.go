@@ -33,8 +33,6 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/dynamicpb"
-	// "google.golang.org/protobuf/types/known/structpb"
-	// "google.golang.org/protobuf/types/known/structpb"
 )
 
 // Station - memphis station object.
@@ -498,77 +496,3 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 
 	return msgBytes, nil
 }
-
-// [
-//   {
-//     "field_number": 1,
-//     "type": "string",
-//     "childrens": [
-//       {
-//         "field_number": 1,
-//         "type": "string",
-//         "value": "1",
-//         "childrens": []
-//       },
-//       {
-//         "field_number": 2,
-//         "type": "string",
-//         "childrens": [
-//           {
-//             "field_number": 3,
-//             "type": "string",
-//             "value": "hello",
-//             "childrens": []
-//           }
-//         ]
-//       }
-//     ]
-//   },
-//   {
-//     "field_number": 1,
-//     "type": "string",
-//     "childrens": [
-//       {
-//         "field_number": 1,
-//         "type": "string",
-//         "value": "2",
-//         "childrens": []
-//       },
-//       {
-//         "field_number": 2,
-//         "type": "string",
-//         "childrens": [
-//           {
-//             "field_number": 3,
-//             "type": "string",
-//             "value": "world",
-//             "childrens": []
-//           }
-//         ]
-//       }
-//     ]
-//   },
-//   {
-//     "field_number": 1,
-//     "type": "string",
-//     "childrens": [
-//       {
-//         "field_number": 1,
-//         "type": "string",
-//         "value": "3",
-//         "childrens": []
-//       },
-//       {
-//         "field_number": 2,
-//         "type": "string",
-//         "childrens": [
-//           {
-//             "field_number": 2,
-//             "type": "fixed64",
-//             "childrens": []
-//           }
-//         ]
-//       }
-//     ]
-//   }
-// ]
