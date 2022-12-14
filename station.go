@@ -101,8 +101,8 @@ type StationOpts struct {
 }
 
 type dlsConfiguration struct {
-	Poison      bool
-	Schemaverse bool
+	Poison      bool `json:"poison"`
+	Schemaverse bool `json:"schemaverse"`
 }
 
 // StationOpt - a function on the options for a station.
