@@ -90,14 +90,15 @@ type removeStationReq struct {
 
 // StationsOpts - configuration options for a station.
 type StationOpts struct {
-	Name              string
-	RetentionType     RetentionType
-	RetentionVal      int
-	StorageType       StorageType
-	Replicas          int
-	IdempotencyWindow time.Duration
-	SchemaName        string
-	DlsConfiguration  dlsConfiguration
+	Name                     string
+	RetentionType            RetentionType
+	RetentionVal             int
+	StorageType              StorageType
+	Replicas                 int
+	IdempotencyWindow        time.Duration
+	SchemaName               string
+	SendPoisonMsgToDls       bool
+	SendSchemaFailedMsgToDls bool
 }
 
 type dlsConfiguration struct {
@@ -111,16 +112,14 @@ type StationOpt func(*StationOpts) error
 // GetStationDefaultOptions - returns default configuration options for the station.
 func GetStationDefaultOptions() StationOpts {
 	return StationOpts{
-		RetentionType:     MaxMessageAgeSeconds,
-		RetentionVal:      604800,
-		StorageType:       Disk,
-		Replicas:          1,
-		IdempotencyWindow: 2 * time.Minute,
-		SchemaName:        "",
-		DlsConfiguration: dlsConfiguration{
-			Poison:      true,
-			Schemaverse: true,
-		},
+		RetentionType:            MaxMessageAgeSeconds,
+		RetentionVal:             604800,
+		StorageType:              Disk,
+		Replicas:                 1,
+		IdempotencyWindow:        2 * time.Minute,
+		SchemaName:               "",
+		SendPoisonMsgToDls:       true,
+		SendSchemaFailedMsgToDls: true,
 	}
 }
 
@@ -153,7 +152,10 @@ func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 		IdempotencyWindow: opts.IdempotencyWindow,
 		conn:              c,
 		SchemaName:        opts.SchemaName,
-		DlsConfiguration:  opts.DlsConfiguration,
+		DlsConfiguration: dlsConfiguration{
+			Poison:      opts.SendPoisonMsgToDls,
+			Schemaverse: opts.SendSchemaFailedMsgToDls,
+		},
 	}
 
 	return &s, s.conn.create(&s)
@@ -255,11 +257,18 @@ func IdempotencyWindow(idempotencyWindow time.Duration) StationOpt {
 	}
 }
 
-// DlsConfiguration - types of messages to send to dead letter station, default is true to all types
-func DlsConfiguration(sendPoisonMsgToDls bool, sendSchemaFailedMsgToDls bool) StationOpt {
+// SendPoisonMsgToDls - send poison message to dls, default is true
+func SendPoisonMsgToDls(sendPoisonMsgToDls bool) StationOpt {
 	return func(opts *StationOpts) error {
-		opts.DlsConfiguration.Poison = sendPoisonMsgToDls
-		opts.DlsConfiguration.Schemaverse = sendSchemaFailedMsgToDls
+		opts.SendPoisonMsgToDls = sendPoisonMsgToDls
+		return nil
+	}
+}
+
+// SendSchemaFailedMsgToDls - send message to dls after schema validation fail, default is true
+func SendSchemaFailedMsgToDls(sendSchemaFailedMsgToDls bool) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.SendSchemaFailedMsgToDls = sendSchemaFailedMsgToDls
 		return nil
 	}
 }
