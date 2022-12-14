@@ -45,6 +45,7 @@ type Station struct {
 	IdempotencyWindow time.Duration
 	conn              *Conn
 	SchemaName        string
+	DlsConfiguration  dlsConfiguration
 }
 
 // RetentionType - station's message retention type
@@ -73,13 +74,14 @@ func (s StorageType) String() string {
 }
 
 type createStationReq struct {
-	Name                    string `json:"name"`
-	RetentionType           string `json:"retention_type"`
-	RetentionValue          int    `json:"retention_value"`
-	StorageType             string `json:"storage_type"`
-	Replicas                int    `json:"replicas"`
-	IdempotencyWindowMillis int    `json:"idempotency_window_in_ms"`
-	SchemaName              string `json:"schema_name"`
+	Name                    string           `json:"name"`
+	RetentionType           string           `json:"retention_type"`
+	RetentionValue          int              `json:"retention_value"`
+	StorageType             string           `json:"storage_type"`
+	Replicas                int              `json:"replicas"`
+	IdempotencyWindowMillis int              `json:"idempotency_window_in_ms"`
+	SchemaName              string           `json:"schema_name"`
+	DlsConfiguration        dlsConfiguration `json:"dls_configuration"`
 }
 
 type removeStationReq struct {
@@ -95,6 +97,12 @@ type StationOpts struct {
 	Replicas          int
 	IdempotencyWindow time.Duration
 	SchemaName        string
+	DlsConfiguration  dlsConfiguration
+}
+
+type dlsConfiguration struct {
+	Poison      bool
+	Schemaverse bool
 }
 
 // StationOpt - a function on the options for a station.
@@ -109,6 +117,10 @@ func GetStationDefaultOptions() StationOpts {
 		Replicas:          1,
 		IdempotencyWindow: 2 * time.Minute,
 		SchemaName:        "",
+		DlsConfiguration: dlsConfiguration{
+			Poison:      true,
+			Schemaverse: true,
+		},
 	}
 }
 
@@ -141,6 +153,7 @@ func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 		IdempotencyWindow: opts.IdempotencyWindow,
 		conn:              c,
 		SchemaName:        opts.SchemaName,
+		DlsConfiguration:  opts.DlsConfiguration,
 	}
 
 	return &s, s.conn.create(&s)
@@ -170,6 +183,7 @@ func (s *Station) getCreationReq() any {
 		Replicas:                s.Replicas,
 		IdempotencyWindowMillis: int(s.IdempotencyWindow.Milliseconds()),
 		SchemaName:              s.SchemaName,
+		DlsConfiguration:        s.DlsConfiguration,
 	}
 }
 
@@ -237,6 +251,15 @@ func Replicas(replicas int) StationOpt {
 func IdempotencyWindow(idempotencyWindow time.Duration) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.IdempotencyWindow = idempotencyWindow
+		return nil
+	}
+}
+
+// DlsConfiguration - types of messages to send to dead letter station, default is true to all types
+func DlsConfiguration(dlsPoisonMessages bool, dlsSchemaFail bool) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.DlsConfiguration.Poison = dlsPoisonMessages
+		opts.DlsConfiguration.Schemaverse = dlsSchemaFail
 		return nil
 	}
 }
