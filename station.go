@@ -256,10 +256,10 @@ func IdempotencyWindow(idempotencyWindow time.Duration) StationOpt {
 }
 
 // DlsConfiguration - types of messages to send to dead letter station, default is true to all types
-func DlsConfiguration(dlsPoisonMessages bool, dlsSchemaFail bool) StationOpt {
+func DlsConfiguration(sendPoisonMsgToDls bool, sendSchemaFailedMsgToDls bool) StationOpt {
 	return func(opts *StationOpts) error {
-		opts.DlsConfiguration.Poison = dlsPoisonMessages
-		opts.DlsConfiguration.Schemaverse = dlsSchemaFail
+		opts.DlsConfiguration.Poison = sendPoisonMsgToDls
+		opts.DlsConfiguration.Schemaverse = sendSchemaFailedMsgToDls
 		return nil
 	}
 }
