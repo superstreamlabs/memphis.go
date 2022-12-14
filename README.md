@@ -96,7 +96,8 @@ s1, err = c.CreateStation("<station-name>",
  memphis.Replicas(<int>), 
  memphis.IdempotencyWindow(<time.Duration>)), // defaults to 2 minutes
  memphis.SchemaName(<string>),
- memphis.DlsConfiguration(<bool>, <bool>)
+ memphis.SendPoisonMsgToDls(<bool>), // defaults to true
+ memphis.SendSchemaFailedMsgToDls(<bool>) // defaults to true
 ```
 
 ### Retention Types
