@@ -26,6 +26,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	graphqlParse "github.com/graph-gophers/graphql-go"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -256,6 +257,7 @@ type schemaDetails struct {
 	activeVersion SchemaVersion
 	msgDescriptor protoreflect.MessageDescriptor
 	jsonSchema    *jsonschema.Schema
+	graphQlSchema *graphqlParse.Schema
 }
 
 func (c *Conn) listenToSchemaUpdates(stationName string) error {
@@ -356,11 +358,15 @@ func (sd *schemaDetails) handleSchemaUpdateInit(sui SchemaUpdateInit) {
 	sd.schemaType = sui.SchemaType
 	sd.activeVersion = sui.ActiveVersion
 	if sd.schemaType == "protobuf" {
-		if err := sd.parseDescriptor(); err != nil {
+		if err := sd.compileDescriptor(); err != nil {
 			log.Println(err.Error())
 		}
 	} else if sd.schemaType == "json" {
-		if err := sd.parseJsonSchema(); err != nil {
+		if err := sd.compileJsonSchema(); err != nil {
+			log.Println(err.Error())
+		}
+	} else if sd.schemaType == "graphql" {
+		if err := sd.compileGraphQl(); err != nil {
 			log.Println(err.Error())
 		}
 	}
@@ -370,7 +376,7 @@ func (sd *schemaDetails) handleSchemaUpdateDrop() {
 	*sd = schemaDetails{}
 }
 
-func (sd *schemaDetails) parseDescriptor() error {
+func (sd *schemaDetails) compileDescriptor() error {
 	descriptorSet := descriptorpb.FileDescriptorSet{}
 	err := proto.Unmarshal([]byte(sd.activeVersion.Descriptor), &descriptorSet)
 	if err != nil {
@@ -395,12 +401,22 @@ func (sd *schemaDetails) parseDescriptor() error {
 	return nil
 }
 
-func (sd *schemaDetails) parseJsonSchema() error {
+func (sd *schemaDetails) compileJsonSchema() error {
 	sch, err := jsonschema.CompileString(sd.name, sd.activeVersion.Content)
 	if err != nil {
 		return memphisError(err)
 	}
 	sd.jsonSchema = sch
+	return nil
+}
+
+func (sd *schemaDetails) compileGraphQl() error {
+	schemaContent := sd.activeVersion.Content
+	schemaGraphQl, err := graphqlParse.ParseSchema(schemaContent, nil)
+	if err != nil {
+		return memphisError(err)
+	}
+	sd.graphQlSchema = schemaGraphQl
 	return nil
 }
 
@@ -410,6 +426,8 @@ func (sd *schemaDetails) validateMsg(msg any) ([]byte, error) {
 		return sd.validateProtoMsg(msg)
 	case "json":
 		return sd.validJsonSchemaMsg(msg)
+	case "graphql":
+		return sd.validateGraphQlMsg(msg)
 	default:
 		return nil, memphisError(errors.New("Invalid schema type"))
 	}
@@ -494,5 +512,39 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 		return nil, memphisError(err)
 	}
 
+	return msgBytes, nil
+}
+
+func (sd *schemaDetails) validateGraphQlMsg(msg any) ([]byte, error) {
+	var (
+		msgBytes []byte
+		err      error
+		message  string
+	)
+
+	switch msg.(type) {
+	case string:
+		message = fmt.Sprintf("%v", msg)
+		msgBytes, err = json.Marshal(msg)
+		if err != nil {
+			return nil, memphisError(err)
+		}
+	case []byte:
+		msgBytes = msg.([]byte)
+		message = string(msgBytes)
+	}
+
+	validateResult := sd.graphQlSchema.Validate(message)
+	var validateErrorGql string
+	if len(validateResult) > 0 {
+		var validateErrors []string
+		for _, graphQlErr := range validateResult {
+			validateErrors = append(validateErrors, graphQlErr.Error())
+			var resultErr string
+			validateErrorGql = strings.Join(validateErrors, resultErr)
+		}
+
+		return nil, memphisError(errors.New(validateErrorGql))
+	}
 	return msgBytes, nil
 }
