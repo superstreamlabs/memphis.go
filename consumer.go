@@ -65,8 +65,8 @@ type Msg struct {
 }
 
 type PMsgToAck struct {
-	ID     string `json:"id"`
-	CgName string `json:"cg_name"`
+	ID       string `json:"id"`
+	Sequence string `json:"sequence"`
 }
 
 // Msg.Data - get message's data.
@@ -83,12 +83,17 @@ func (m *Msg) Ack() error {
 		if !ok {
 			return err
 		} else {
-			msgToAck := PMsgToAck{
-				ID:     id,
-				CgName: m.cgName,
+			seq, ok := headers["$memphis_pm_sequence"]
+			if !ok {
+				return err
+			} else {
+				msgToAck := PMsgToAck{
+					ID:       id,
+					Sequence: seq,
+				}
+				msgToPublish, _ := json.Marshal(msgToAck)
+				m.conn.brokerConn.Publish(memphisPmAckSubject, msgToPublish)
 			}
-			msgToPublish, _ := json.Marshal(msgToAck)
-			m.conn.brokerConn.Publish(memphisPmAckSubject, msgToPublish)
 		}
 	}
 	return nil
