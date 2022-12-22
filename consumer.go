@@ -26,7 +26,7 @@ import (
 
 const (
 	consumerDefaultPingInterval = 30 * time.Second
-	dlqSubjPrefix               = "$memphis_dlq"
+	dlsSubjPrefix               = "$memphis_dls"
 	memphisPmAckSubject         = "$memphis_pm_acks"
 )
 
@@ -51,7 +51,7 @@ type Consumer struct {
 	subscriptionActive bool
 	firstFetch         bool
 	consumeActive      bool
-	dlqCh              chan *nats.Msg
+	dlsCh              chan *nats.Msg
 	consumeQuit        chan struct{}
 	pingQuit           chan struct{}
 	errHandler         ConsumerErrHandler
@@ -65,8 +65,8 @@ type Msg struct {
 }
 
 type PMsgToAck struct {
-	ID     string `json:"id"`
-	CgName string `json:"cg_name"`
+	ID       string `json:"id"`
+	Sequence string `json:"sequence"`
 }
 
 // Msg.Data - get message's data.
@@ -83,12 +83,17 @@ func (m *Msg) Ack() error {
 		if !ok {
 			return err
 		} else {
-			msgToAck := PMsgToAck{
-				ID:     id,
-				CgName: m.cgName,
+			seq, ok := headers["$memphis_pm_sequence"]
+			if !ok {
+				return err
+			} else {
+				msgToAck := PMsgToAck{
+					ID:       id,
+					Sequence: seq,
+				}
+				msgToPublish, _ := json.Marshal(msgToAck)
+				m.conn.brokerConn.Publish(memphisPmAckSubject, msgToPublish)
 			}
-			msgToPublish, _ := json.Marshal(msgToAck)
-			m.conn.brokerConn.Publish(memphisPmAckSubject, msgToPublish)
 		}
 	}
 	return nil
@@ -199,7 +204,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	}
 
 	consumer.firstFetch = true
-	consumer.dlqCh = make(chan *nats.Msg, 1)
+	consumer.dlsCh = make(chan *nats.Msg, 1)
 	consumer.consumeQuit = make(chan struct{})
 	consumer.pingQuit = make(chan struct{}, 1)
 
@@ -299,15 +304,15 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
 			case <-ticker.C:
 				msgs, err := c.fetchSubscription()
 
-				// ignore fetch timeout if we have messages in the dlq channel
-				if err == nats.ErrTimeout && len(c.dlqCh) > 0 {
+				// ignore fetch timeout if we have messages in the dls channel
+				if err == nats.ErrTimeout && len(c.dlsCh) > 0 {
 					err = nil
 				}
 
-				// push messages from the dlq channel to the user's handler
-				for len(c.dlqCh) > 0 {
-					dlqMsg := Msg{msg: <-c.dlqCh, conn: c.conn, cgName: c.ConsumerGroup}
-					msgs = append(msgs, &dlqMsg)
+				// push messages from the dls channel to the user's handler
+				for len(c.dlsCh) > 0 {
+					dlsMsg := Msg{msg: <-c.dlsCh, conn: c.conn, cgName: c.ConsumerGroup}
+					msgs = append(msgs, &dlsMsg)
 				}
 
 				handlerFunc(msgs, memphisError(err))
@@ -387,24 +392,24 @@ func (c *Consumer) Fetch() ([]*Msg, error) {
 
 func (c *Consumer) firstFetchInit() error {
 	var err error
-	_, err = c.conn.brokerQueueSubscribe(c.getDlqSubjName(), c.getDlqQueueName(), c.createDlqMsgHandler())
+	_, err = c.conn.brokerQueueSubscribe(c.getDlsSubjName(), c.getDlsQueueName(), c.createDlsMsgHandler())
 	return memphisError(err)
 }
 
-func (c *Consumer) createDlqMsgHandler() nats.MsgHandler {
+func (c *Consumer) createDlsMsgHandler() nats.MsgHandler {
 	return func(msg *nats.Msg) {
-		c.dlqCh <- msg
+		c.dlsCh <- msg
 	}
 }
 
-func (c *Consumer) getDlqSubjName() string {
+func (c *Consumer) getDlsSubjName() string {
 	stationName := getInternalName(c.stationName)
 	consumerGroup := getInternalName(c.ConsumerGroup)
-	return fmt.Sprintf("%v_%v_%v", dlqSubjPrefix, stationName, consumerGroup)
+	return fmt.Sprintf("%v_%v_%v", dlsSubjPrefix, stationName, consumerGroup)
 }
 
-func (c *Consumer) getDlqQueueName() string {
-	return c.getDlqSubjName()
+func (c *Consumer) getDlsQueueName() string {
+	return c.getDlsSubjName()
 }
 
 // Destroy - destroy this consumer.
