@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -28,6 +29,8 @@ import (
 
 	"github.com/nats-io/nats.go"
 )
+
+const configurationUpdatesSubject = "$memphis_sdk_configurations_updates"
 
 // Option is a function on the options for a connection.
 type Option func(*Options) error
@@ -47,6 +50,12 @@ type queryReq struct {
 	resp chan bool
 }
 
+type ConfigurationsUpdate struct {
+	StationName string `json:"station_name"`
+	Type        string `json:"type"`
+	Update      bool   `json:"update"`
+}
+
 func (c *Conn) IsConnected() bool {
 	return c.brokerConn.IsConnected()
 }
@@ -60,6 +69,8 @@ type Conn struct {
 	js                 nats.JetStreamContext
 	stationUpdatesMu   sync.RWMutex
 	stationUpdatesSubs map[string]*stationUpdateSub
+	configUpdatesMu    sync.RWMutex
+	configUpdatesSub   configurationsUpdateSub
 }
 
 type attachSchemaReq struct {
@@ -86,6 +97,13 @@ type errorResp struct {
 	Message string `json:"message"`
 }
 
+type configurationsUpdateSub struct {
+	ConfigUpdatesCh            chan ConfigurationsUpdate
+	ConfigUpdateSub            *nats.Subscription
+	ClusterConfigurations      map[string]bool
+	StationSchemaverseToDlsMap map[string]bool
+}
+
 // Connect - creates connection with memphis.
 func Connect(host, username, connectionToken string, options ...Option) (*Conn, error) {
 	opts := getDefaultOptions()
@@ -101,8 +119,16 @@ func Connect(host, username, connectionToken string, options ...Option) (*Conn, 
 			}
 		}
 	}
+	conn, err := opts.connect()
+	if err != nil {
+		return nil, err
+	}
+	err = conn.listenToConfigurationUpdates()
+	if err != nil {
+		return nil, err
+	}
 
-	return opts.connect()
+	return conn, nil
 }
 
 func normalizeHost(host string) string {
@@ -359,4 +385,63 @@ const (
 
 func replaceDelimiters(in string) string {
 	return strings.Replace(in, delimToReplace, delimReplacement, -1)
+}
+
+func (c *Conn) listenToConfigurationUpdates() error {
+	c.configUpdatesSub = configurationsUpdateSub{
+		ConfigUpdatesCh:            make(chan ConfigurationsUpdate),
+		ClusterConfigurations:      make(map[string]bool),
+		StationSchemaverseToDlsMap: make(map[string]bool),
+	}
+	cus := c.configUpdatesSub
+
+	go cus.configurationsUpdatesHandler(&c.configUpdatesMu)
+	var err error
+	cus.ConfigUpdateSub, err = c.brokerConn.Subscribe(configurationUpdatesSubject, cus.createUpdatesHandler())
+	if err != nil {
+		close(cus.ConfigUpdatesCh)
+		return memphisError(err)
+	}
+
+	return nil
+}
+
+func (cus *configurationsUpdateSub) createUpdatesHandler() nats.MsgHandler {
+	return func(msg *nats.Msg) {
+		var update ConfigurationsUpdate
+		err := json.Unmarshal(msg.Data, &update)
+		if err != nil {
+			log.Printf("schema update unmarshal error: %v\n", memphisError(err))
+			return
+		}
+		cus.ConfigUpdatesCh <- update
+	}
+}
+
+func (cus *configurationsUpdateSub) configurationsUpdatesHandler(lock *sync.RWMutex) {
+	for {
+		update, ok := <-cus.ConfigUpdatesCh
+		if !ok {
+			return
+		}
+		lock.Lock()
+		switch update.Type {
+		case "send_notification":
+			cus.ClusterConfigurations[update.Type] = update.Update
+		case "schemaverse_to_dls":
+			cus.StationSchemaverseToDlsMap[getInternalName(update.StationName)] = update.Update
+		}
+		lock.Unlock()
+	}
+}
+
+func GetDlsSubject(subjType string, stationName string, id string) string {
+	return fmt.Sprintf("$memphis-%s-dls", stationName) + "." + subjType + "." + id
+}
+
+func GetDlsMsgId(stationName string, producerName string, timeSent string) string {
+	// Remove any spaces might be in ID
+	msgId := strings.ReplaceAll(stationName+"~"+producerName+"~0~"+timeSent, " ", "")
+	msgId = strings.ReplaceAll(msgId, ",", "+")
+	return msgId
 }

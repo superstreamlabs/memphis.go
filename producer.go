@@ -93,6 +93,24 @@ type Notification struct {
 	Type  string
 }
 
+type DlsMessage struct {
+	ID           string            `json:"_id"`
+	StationName  string            `json:"station_name"`
+	Producer     ProducerDetails   `json:"producer"`
+	Message      MessagePayloadDls `json:"message"`
+	CreationDate time.Time         `json:"creation_date"`
+}
+
+type ProducerDetails struct {
+	Name         string `json:"name"`
+	ConnectionId string `json:"connection_id"`
+}
+
+type MessagePayloadDls struct {
+	TimeSent time.Time `json:"time_sent"`
+	Data     string    `json:"data"`
+}
+
 // ProducerOpt - a function on the options for producer creation.
 type ProducerOpt func(*ProducerOpts) error
 
@@ -324,8 +342,31 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 	sd, err := p.getSchemaDetails()
 	if err != nil {
 		msgToSend := p.msgToString(msg)
-		p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend, schemaVFailAlertType)
-		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
+		internStation := getInternalName(p.stationName)
+		if p.conn.configUpdatesSub.StationSchemaverseToDlsMap[internStation] {
+			timeSent := time.Now()
+			id := GetDlsMsgId(getInternalName(p.stationName), p.Name, timeSent.String())
+			schemaFailMsg := &DlsMessage{
+				ID:          id,
+				StationName: internStation,
+				Producer: ProducerDetails{
+					Name:         p.Name,
+					ConnectionId: p.conn.ConnId,
+				},
+				Message: MessagePayloadDls{
+					TimeSent: timeSent,
+					Data:     msgToSend,
+				},
+				CreationDate: timeSent,
+			}
+			msgToPublish, _ := json.Marshal(schemaFailMsg)
+			_ = p.conn.brokerConn.Publish(GetDlsSubject("schema", internStation, id), msgToPublish)
+
+			if p.conn.configUpdatesSub.ClusterConfigurations["send_notification"] {
+				p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend, schemaVFailAlertType)
+				return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
+			}
+		}
 	}
 
 	// empty schema type means there is no schema and validation is not needed
@@ -345,8 +386,31 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 	msgBytes, err := sd.validateMsg(msg)
 	if err != nil {
 		msgToSend := p.msgToString(msg)
-		p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend, schemaVFailAlertType)
-		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
+		internStation := getInternalName(p.stationName)
+		if p.conn.configUpdatesSub.StationSchemaverseToDlsMap[internStation] {
+			timeSent := time.Now()
+			id := GetDlsMsgId(getInternalName(p.stationName), p.Name, timeSent.String())
+			schemaFailMsg := &DlsMessage{
+				ID:          id,
+				StationName: internStation,
+				Producer: ProducerDetails{
+					Name:         p.Name,
+					ConnectionId: p.conn.ConnId,
+				},
+				Message: MessagePayloadDls{
+					TimeSent: timeSent,
+					Data:     msgToSend,
+				},
+				CreationDate: timeSent,
+			}
+			msgToPublish, _ := json.Marshal(schemaFailMsg)
+			_ = p.conn.brokerConn.Publish(GetDlsSubject("schema", internStation, id), msgToPublish)
+
+			if p.conn.configUpdatesSub.ClusterConfigurations["send_notification"] {
+				p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend, schemaVFailAlertType)
+			}
+			return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
+		}
 	}
 
 	return msgBytes, nil
