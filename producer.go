@@ -47,8 +47,10 @@ type createProducerReq struct {
 }
 
 type createProducerResp struct {
-	SchemaUpdateInit SchemaUpdateInit `json:"schema_update"`
-	Err              string           `json:"error"`
+	SchemaUpdateInit        SchemaUpdateInit `json:"schema_update"`
+	SchemaVerseToDls        bool             `json:"schemaverse_to_dls"`
+	ClusterSendNotification bool             `json:"send_notification"`
+	Err                     string           `json:"error"`
 }
 
 type SchemaUpdateType int
@@ -91,6 +93,26 @@ type Notification struct {
 	Msg   string
 	Code  string
 	Type  string
+}
+
+type DlsMessage struct {
+	ID           string            `json:"_id"`
+	StationName  string            `json:"station_name"`
+	Producer     ProducerDetails   `json:"producer"`
+	Message      MessagePayloadDls `json:"message"`
+	CreationDate time.Time         `json:"creation_date"`
+}
+
+type ProducerDetails struct {
+	Name         string `json:"name"`
+	ConnectionId string `json:"connection_id"`
+}
+
+type MessagePayloadDls struct {
+	TimeSent time.Time         `json:"time_sent"`
+	Size     int               `json:"size"`
+	Data     string            `json:"data"`
+	Headers  map[string]string `json:"headers"`
 }
 
 // ProducerOpt - a function on the options for producer creation.
@@ -185,6 +207,12 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 	sd.handleSchemaUpdateInit(cr.SchemaUpdateInit)
 	p.conn.stationUpdatesMu.Unlock()
 
+	p.conn.configUpdatesMu.Lock()
+	cu := &p.conn.configUpdatesSub
+	cu.ClusterConfigurations[sn] = cr.SchemaVerseToDls
+	cu.StationSchemaverseToDlsMap[sn] = cr.ClusterSendNotification
+	p.conn.configUpdatesMu.Unlock()
+
 	return nil
 }
 
@@ -267,7 +295,7 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	opts.MsgHeaders.MsgHeaders["$memphis_connectionId"] = []string{p.conn.ConnId}
 	opts.MsgHeaders.MsgHeaders["$memphis_producedBy"] = []string{p.Name}
 
-	data, err := p.validateMsg(opts.Message)
+	data, err := p.validateMsg(opts.Message, opts.MsgHeaders.MsgHeaders)
 	if err != nil {
 		return memphisError(err)
 	}
@@ -320,11 +348,43 @@ func (p *Producer) msgToString(msg any) string {
 	return stringMsg
 }
 
-func (p *Producer) validateMsg(msg any) ([]byte, error) {
+func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error) {
+	internStation := getInternalName(p.stationName)
+	if p.conn.configUpdatesSub.StationSchemaverseToDlsMap[internStation] {
+		msgToSend := p.msgToString(msg)
+		timeSent := time.Now()
+		id := GetDlsMsgId(internStation, p.Name, time.Now().String())
+		headersForDls := make(map[string]string)
+		for k, v := range headers {
+			concat := strings.Join(v, " ")
+			headersForDls[k] = concat
+		}
+		schemaFailMsg := &DlsMessage{
+			ID:          id,
+			StationName: internStation,
+			Producer: ProducerDetails{
+				Name:         p.Name,
+				ConnectionId: p.conn.ConnId,
+			},
+			Message: MessagePayloadDls{
+				TimeSent: timeSent,
+				Data:     msgToSend,
+				Headers:  headersForDls,
+			},
+			CreationDate: timeSent,
+		}
+		msgToPublish, _ := json.Marshal(schemaFailMsg)
+		_ = p.conn.brokerConn.Publish(GetDlsSubject("schema", internStation, id), msgToPublish)
+
+		if p.conn.configUpdatesSub.ClusterConfigurations["send_notification"] {
+			p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend, schemaVFailAlertType)
+		}
+	}
+}
+
+func (p *Producer) validateMsg(msg any, headers map[string][]string) ([]byte, error) {
 	sd, err := p.getSchemaDetails()
 	if err != nil {
-		msgToSend := p.msgToString(msg)
-		p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend, schemaVFailAlertType)
 		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
 	}
 
@@ -344,8 +404,7 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 
 	msgBytes, err := sd.validateMsg(msg)
 	if err != nil {
-		msgToSend := p.msgToString(msg)
-		p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend, schemaVFailAlertType)
+		p.sendMsgToDls(msg, headers, err)
 		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
 	}
 
