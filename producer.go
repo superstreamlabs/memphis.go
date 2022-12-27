@@ -109,8 +109,10 @@ type ProducerDetails struct {
 }
 
 type MessagePayloadDls struct {
-	TimeSent time.Time `json:"time_sent"`
-	Data     string    `json:"data"`
+	TimeSent time.Time         `json:"time_sent"`
+	Size     int               `json:"size"`
+	Data     string            `json:"data"`
+	Headers  map[string]string `json:"headers"`
 }
 
 // ProducerOpt - a function on the options for producer creation.
@@ -293,7 +295,7 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	opts.MsgHeaders.MsgHeaders["$memphis_connectionId"] = []string{p.conn.ConnId}
 	opts.MsgHeaders.MsgHeaders["$memphis_producedBy"] = []string{p.Name}
 
-	data, err := p.validateMsg(opts.Message)
+	data, err := p.validateMsg(opts.Message, opts.MsgHeaders.MsgHeaders)
 	if err != nil {
 		return memphisError(err)
 	}
@@ -346,12 +348,17 @@ func (p *Producer) msgToString(msg any) string {
 	return stringMsg
 }
 
-func (p *Producer) sendMsgToDls(msg any, err error) {
+func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error) {
 	internStation := getInternalName(p.stationName)
 	if p.conn.configUpdatesSub.StationSchemaverseToDlsMap[internStation] {
 		msgToSend := p.msgToString(msg)
 		timeSent := time.Now()
 		id := GetDlsMsgId(internStation, p.Name, time.Now().String())
+		headersForDls := make(map[string]string)
+		for k, v := range headers {
+			concat := strings.Join(v, " ")
+			headersForDls[k] = concat
+		}
 		schemaFailMsg := &DlsMessage{
 			ID:          id,
 			StationName: internStation,
@@ -362,6 +369,7 @@ func (p *Producer) sendMsgToDls(msg any, err error) {
 			Message: MessagePayloadDls{
 				TimeSent: timeSent,
 				Data:     msgToSend,
+				Headers:  headersForDls,
 			},
 			CreationDate: timeSent,
 		}
@@ -374,10 +382,9 @@ func (p *Producer) sendMsgToDls(msg any, err error) {
 	}
 }
 
-func (p *Producer) validateMsg(msg any) ([]byte, error) {
+func (p *Producer) validateMsg(msg any, headers map[string][]string) ([]byte, error) {
 	sd, err := p.getSchemaDetails()
 	if err != nil {
-		p.sendMsgToDls(msg, err)
 		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
 	}
 
@@ -397,7 +404,7 @@ func (p *Producer) validateMsg(msg any) ([]byte, error) {
 
 	msgBytes, err := sd.validateMsg(msg)
 	if err != nil {
-		p.sendMsgToDls(msg, err)
+		p.sendMsgToDls(msg, headers, err)
 		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
 	}
 
