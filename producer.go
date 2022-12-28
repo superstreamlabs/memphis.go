@@ -209,8 +209,8 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 
 	p.conn.configUpdatesMu.Lock()
 	cu := &p.conn.configUpdatesSub
-	cu.ClusterConfigurations[sn] = cr.SchemaVerseToDls
-	cu.StationSchemaverseToDlsMap[sn] = cr.ClusterSendNotification
+	cu.ClusterConfigurations["send_notification"] = cr.ClusterSendNotification
+	cu.StationSchemaverseToDlsMap[sn] = cr.SchemaVerseToDls
 	p.conn.configUpdatesMu.Unlock()
 
 	return nil
