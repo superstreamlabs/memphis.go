@@ -575,6 +575,9 @@ func (sd *schemaDetails) validateGraphQlMsg(msg any) ([]byte, error) {
 			var resultErr string
 			validateErrorGql = strings.Join(validateErrors, resultErr)
 		}
+		if strings.Contains(validateErrorGql, "syntax error") {
+			return nil, memphisError(errors.New("Invalid message format, expecting GraphQL"))
+		}
 
 		return nil, memphisError(errors.New(validateErrorGql))
 	}
