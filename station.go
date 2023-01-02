@@ -499,6 +499,9 @@ func (sd *schemaDetails) validateProtoMsg(msg any) ([]byte, error) {
 	protoMsg := dynamicpb.NewMessage(sd.msgDescriptor)
 	err = proto.Unmarshal(msgBytes, protoMsg)
 	if err != nil {
+		if strings.Contains(err.Error(), "cannot parse invalid wire-format data") {
+			err = errors.New("Invalid message format, expecting protobuf")
+		}
 		return nil, memphisError(err)
 	}
 
