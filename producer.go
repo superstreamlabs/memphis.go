@@ -15,6 +15,7 @@
 package memphis
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -368,7 +369,7 @@ func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error)
 			},
 			Message: MessagePayloadDls{
 				TimeSent: timeSent,
-				Data:     msgToSend,
+				Data:     hex.EncodeToString([]byte(msgToSend)),
 				Headers:  headersForDls,
 			},
 			CreationDate: timeSent,
