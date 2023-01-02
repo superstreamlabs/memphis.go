@@ -499,6 +499,9 @@ func (sd *schemaDetails) validateProtoMsg(msg any) ([]byte, error) {
 	protoMsg := dynamicpb.NewMessage(sd.msgDescriptor)
 	err = proto.Unmarshal(msgBytes, protoMsg)
 	if err != nil {
+		if strings.Contains(err.Error(), "cannot parse invalid wire-format data") {
+			err = errors.New("Invalid message format, expecting protobuf")
+		}
 		return nil, memphisError(err)
 	}
 
@@ -574,6 +577,9 @@ func (sd *schemaDetails) validateGraphQlMsg(msg any) ([]byte, error) {
 			validateErrors = append(validateErrors, graphQlErr.Error())
 			var resultErr string
 			validateErrorGql = strings.Join(validateErrors, resultErr)
+		}
+		if strings.Contains(validateErrorGql, "syntax error") {
+			return nil, memphisError(errors.New("Invalid message format, expecting GraphQL"))
 		}
 
 		return nil, memphisError(errors.New(validateErrorGql))
