@@ -197,10 +197,10 @@ func (c *Conn) startConn() error {
 	url := opts.Host + ":" + strconv.Itoa(opts.Port)
 	if (opts.ClientCert.TlsCert != "") || (opts.ClientCert.TlsKey != "") {
 		if opts.ClientCert.TlsCert == "" {
-			return memphisError(errors.New("Must provide a cert file"))
+			return memphisError(errors.New("Must provide a TLS cert file"))
 		}
 		if opts.ClientCert.TlsKey == "" {
-			return memphisError(errors.New("Must provide a key file"))
+			return memphisError(errors.New("Must provide a TLS key file"))
 		}
 		cert, err := tls.LoadX509KeyPair(opts.ClientCert.TlsCert, opts.ClientCert.TlsKey)
 		if err != nil {
