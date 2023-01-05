@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"regexp"
 	"strconv"
@@ -40,6 +41,7 @@ type Option func(*Options) error
 type ClientCertStruct struct {
 	TlsCert string
 	TlsKey  string
+	CaFile  string
 }
 
 type Options struct {
@@ -101,6 +103,7 @@ func getDefaultOptions() Options {
 		ClientCert: ClientCertStruct{
 			TlsCert: "",
 			TlsKey:  "",
+			CaFile:  "",
 		},
 	}
 }
@@ -195,12 +198,15 @@ func (c *Conn) startConn() error {
 	var natsOpts nats.Options
 	var err error
 	url := opts.Host + ":" + strconv.Itoa(opts.Port)
-	if (opts.ClientCert.TlsCert != "") || (opts.ClientCert.TlsKey != "") {
+	if (opts.ClientCert.TlsCert != "") || (opts.ClientCert.TlsKey != "") || (opts.ClientCert.CaFile != "") {
 		if opts.ClientCert.TlsCert == "" {
 			return memphisError(errors.New("Must provide a TLS cert file"))
 		}
 		if opts.ClientCert.TlsKey == "" {
 			return memphisError(errors.New("Must provide a TLS key file"))
+		}
+		if opts.ClientCert.CaFile == "" {
+			return memphisError(errors.New("Must provide a TLS ca file"))
 		}
 		cert, err := tls.LoadX509KeyPair(opts.ClientCert.TlsCert, opts.ClientCert.TlsKey)
 		if err != nil {
@@ -212,6 +218,14 @@ func (c *Conn) startConn() error {
 		}
 		TLSConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 		TLSConfig.Certificates = []tls.Certificate{cert}
+		certs := x509.NewCertPool()
+
+		pemData, err := ioutil.ReadFile(opts.ClientCert.CaFile)
+		if err != nil {
+			return memphisError(errors.New("memphis: error loading ca file: " + err.Error()))
+		}
+		certs.AppendCertsFromPEM(pemData)
+		TLSConfig.RootCAs = certs
 		natsOpts = nats.Options{
 			Url:               url,
 			AllowReconnect:    opts.Reconnect,
@@ -321,11 +335,12 @@ func Timeout(timeout time.Duration) Option {
 }
 
 // ClientCert - paths to tls cert and key files.
-func ClientCert(TlsCert string, TlsKey string) Option {
+func ClientCert(TlsCert string, TlsKey string, CaFile string) Option {
 	return func(o *Options) error {
 		o.ClientCert = ClientCertStruct{
 			TlsCert: TlsCert,
 			TlsKey:  TlsKey,
+			CaFile:  CaFile,
 		}
 		return nil
 	}
