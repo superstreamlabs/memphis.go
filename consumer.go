@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -55,6 +56,7 @@ type Consumer struct {
 	consumeQuit        chan struct{}
 	pingQuit           chan struct{}
 	errHandler         ConsumerErrHandler
+	OptStartSequence   uint64
 }
 
 // Msg - a received message, can be acked.
@@ -72,6 +74,15 @@ type PMsgToAck struct {
 // Msg.Data - get message's data.
 func (m *Msg) Data() []byte {
 	return m.msg.Data
+}
+
+//Msg.GetSequenceNumber - get message's sequence number
+func (m *Msg) GetSequenceNumber() (uint64, error) {
+	meta, err := m.msg.Metadata()
+	if err != nil {
+		return 0, nil
+	}
+	return meta.Sequence.Consumer, nil
 }
 
 // Msg.Ack - ack the message.
@@ -119,6 +130,7 @@ type createConsumerReq struct {
 	ConsumerGroup    string `json:"consumers_group"`
 	MaxAckTimeMillis int    `json:"max_ack_time_ms"`
 	MaxMsgDeliveries int    `json:"max_msg_deliveries"`
+	OptStartSequence uint64 `json:"opt_start_sequence"`
 }
 
 type removeConsumerReq struct {
@@ -138,6 +150,7 @@ type ConsumerOpts struct {
 	MaxMsgDeliveries   int
 	GenUniqueSuffix    bool
 	ErrHandler         ConsumerErrHandler
+	OptStartSequence   uint64
 }
 
 // getDefaultConsumerOptions - returns default configuration options for consumers.
@@ -196,10 +209,11 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		conn:               c,
 		stationName:        opts.StationName,
 		errHandler:         opts.ErrHandler,
+		OptStartSequence:   opts.OptStartSequence,
 	}
 
 	err = c.create(&consumer)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "start sequence can not be updated") {
 		return nil, memphisError(err)
 	}
 
@@ -214,12 +228,23 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	subj := subjInternalName + ".final"
 
 	durable := getInternalName(consumer.ConsumerGroup)
-	consumer.subscription, err = c.brokerPullSubscribe(subj,
-		durable,
-		nats.ManualAck(),
-		nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
-		nats.MaxRequestBatch(opts.BatchSize),
-		nats.MaxDeliver(opts.MaxMsgDeliveries))
+	if consumer.OptStartSequence != 0 {
+		consumer.subscription, err = c.brokerPullSubscribe(subj,
+			durable,
+			nats.StartSequence(opts.OptStartSequence),
+			nats.ManualAck(),
+			nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
+			nats.MaxRequestBatch(opts.BatchSize),
+			nats.MaxDeliver(opts.MaxMsgDeliveries))
+	} else {
+		consumer.subscription, err = c.brokerPullSubscribe(subj,
+			durable,
+			nats.ManualAck(),
+			nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
+			nats.MaxRequestBatch(opts.BatchSize),
+			nats.MaxDeliver(opts.MaxMsgDeliveries))
+	}
+
 	if err != nil {
 		return nil, memphisError(err)
 	}
@@ -227,6 +252,10 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	consumer.subscriptionActive = true
 
 	go consumer.pingConsumer()
+
+	if err != nil && strings.Contains(err.Error(), "start sequence can not be updated") {
+		return &consumer, memphisError(errors.New("start sequence can not be updated with an existing consumer"))
+	}
 
 	return &consumer, err
 }
@@ -437,6 +466,7 @@ func (c *Consumer) getCreationReq() any {
 		ConsumerGroup:    c.ConsumerGroup,
 		MaxAckTimeMillis: int(c.MaxAckTime.Milliseconds()),
 		MaxMsgDeliveries: c.MaxMsgDeliveries,
+		OptStartSequence: c.OptStartSequence,
 	}
 }
 
@@ -531,6 +561,13 @@ func ConsumerGenUniqueSuffix() ConsumerOpt {
 func ConsumerErrorHandler(ceh ConsumerErrHandler) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.ErrHandler = ceh
+		return nil
+	}
+}
+
+func OptStartSequence(optStartSequence uint64) ConsumerOpt {
+	return func(opts *ConsumerOpts) error {
+		opts.OptStartSequence = optStartSequence
 		return nil
 	}
 }
