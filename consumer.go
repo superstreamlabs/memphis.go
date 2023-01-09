@@ -233,7 +233,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	durable := getInternalName(consumer.ConsumerGroup)
 	if consumer.OptStartSequence != 0 && consumer.LastMessages != 0 {
-		return nil, memphisError(errors.New("You can create consumer with one of options:OptStartSequence or LastMessages"))
+		return nil, memphisError(errors.New("Consumer creation cant't contain more than one of the following options: startConsumeFromSequence or LastMessages"))
 	}
 	if consumer.OptStartSequence != 0 || consumer.LastMessages != 0 {
 		consumer.subscription, err = c.brokerPullSubscribe(subj,
@@ -573,7 +573,7 @@ func ConsumerErrorHandler(ceh ConsumerErrHandler) ConsumerOpt {
 	}
 }
 
-func OptStartSequence(optStartSequence uint64) ConsumerOpt {
+func StartConsumeFromSeq(optStartSequence uint64) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.OptStartSequence = optStartSequence
 		return nil
