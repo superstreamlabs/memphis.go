@@ -235,7 +235,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	if consumer.OptStartSequence != 0 && consumer.LastMessages != 0 {
 		return nil, memphisError(errors.New("Consumer creation cant't contain more than one of the following options: startConsumeFromSequence or LastMessages"))
 	}
-	if consumer.OptStartSequence != 0 || consumer.LastMessages != 0 {
+	if consumer.OptStartSequence != 0 {
 		consumer.subscription, err = c.brokerPullSubscribe(subj,
 			durable,
 			nats.StartSequence(opts.OptStartSequence),
