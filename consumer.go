@@ -57,6 +57,7 @@ type Consumer struct {
 	pingQuit           chan struct{}
 	errHandler         ConsumerErrHandler
 	OptStartSequence   uint64
+	LastMessages       uint64
 }
 
 // Msg - a received message, can be acked.
@@ -131,6 +132,7 @@ type createConsumerReq struct {
 	MaxAckTimeMillis int    `json:"max_ack_time_ms"`
 	MaxMsgDeliveries int    `json:"max_msg_deliveries"`
 	OptStartSequence uint64 `json:"opt_start_sequence"`
+	LastMessages     uint64 `json:"last_messages"`
 }
 
 type removeConsumerReq struct {
@@ -151,6 +153,7 @@ type ConsumerOpts struct {
 	GenUniqueSuffix    bool
 	ErrHandler         ConsumerErrHandler
 	OptStartSequence   uint64
+	LastMessages       uint64
 }
 
 // getDefaultConsumerOptions - returns default configuration options for consumers.
@@ -210,6 +213,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		stationName:        opts.StationName,
 		errHandler:         opts.ErrHandler,
 		OptStartSequence:   opts.OptStartSequence,
+		LastMessages:       opts.LastMessages,
 	}
 
 	err = c.create(&consumer)
@@ -228,7 +232,10 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	subj := subjInternalName + ".final"
 
 	durable := getInternalName(consumer.ConsumerGroup)
-	if consumer.OptStartSequence != 0 {
+	if consumer.OptStartSequence != 0 && consumer.LastMessages != 0 {
+		return nil, memphisError(errors.New("You can create consumer with one of options:OptStartSequence or LastMessages"))
+	}
+	if consumer.OptStartSequence != 0 || consumer.LastMessages != 0 {
 		consumer.subscription, err = c.brokerPullSubscribe(subj,
 			durable,
 			nats.StartSequence(opts.OptStartSequence),
@@ -467,6 +474,7 @@ func (c *Consumer) getCreationReq() any {
 		MaxAckTimeMillis: int(c.MaxAckTime.Milliseconds()),
 		MaxMsgDeliveries: c.MaxMsgDeliveries,
 		OptStartSequence: c.OptStartSequence,
+		LastMessages:     c.LastMessages,
 	}
 }
 
@@ -568,6 +576,13 @@ func ConsumerErrorHandler(ceh ConsumerErrHandler) ConsumerOpt {
 func OptStartSequence(optStartSequence uint64) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.OptStartSequence = optStartSequence
+		return nil
+	}
+}
+
+func LastMessages(lastMessages uint64) ConsumerOpt {
+	return func(opts *ConsumerOpts) error {
+		opts.LastMessages = lastMessages
 		return nil
 	}
 }
