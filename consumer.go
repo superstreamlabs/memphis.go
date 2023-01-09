@@ -216,8 +216,12 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		LastMessages:       opts.LastMessages,
 	}
 
+	if consumer.OptStartSequence != 0 && consumer.LastMessages != 0 {
+		return nil, memphisError(errors.New("Consumer creation can't contain more than one of the following options: startConsumeFromSequence or LastMessages"))
+	}
+
 	err = c.create(&consumer)
-	if err != nil && !strings.Contains(err.Error(), "start sequence can not be updated") {
+	if err != nil {
 		return nil, memphisError(err)
 	}
 
@@ -232,9 +236,6 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	subj := subjInternalName + ".final"
 
 	durable := getInternalName(consumer.ConsumerGroup)
-	if consumer.OptStartSequence != 0 && consumer.LastMessages != 0 {
-		return nil, memphisError(errors.New("Consumer creation cant't contain more than one of the following options: startConsumeFromSequence or LastMessages"))
-	}
 	if consumer.OptStartSequence != 0 {
 		consumer.subscription, err = c.brokerPullSubscribe(subj,
 			durable,
@@ -253,16 +254,15 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	}
 
 	if err != nil {
+		if err != nil && strings.Contains(err.Error(), "configuration requests optional start sequence to be") {
+			return &consumer, memphisError(errors.New("The consumer already exists with different configuration. You can't change the configuration to an existing consumer."))
+		}
 		return nil, memphisError(err)
 	}
 
 	consumer.subscriptionActive = true
 
 	go consumer.pingConsumer()
-
-	if err != nil && strings.Contains(err.Error(), "start sequence can not be updated") {
-		return &consumer, memphisError(errors.New("start sequence can not be updated with an existing consumer"))
-	}
 
 	return &consumer, err
 }
