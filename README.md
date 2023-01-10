@@ -74,7 +74,7 @@ c, err := memphis.Connect("<memphis-host>",
 	memphis.Reconnect(<bool>),
 	memphis.MaxReconnect(<int>),
 	// for TLS connection:
-	memphis.ClientCert("<cert-client.pem>", "<key-client.pem>",  "<rootCA.pem>"),
+	memphis.Tls("<cert-client.pem>", "<key-client.pem>",  "<rootCA.pem>"),
 	)
 ```
 

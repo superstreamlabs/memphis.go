@@ -38,7 +38,7 @@ const configurationUpdatesSubject = "$memphis_sdk_configurations_updates"
 // Option is a function on the options for a connection.
 type Option func(*Options) error
 
-type ClientCertStruct struct {
+type TLSOpts struct {
 	TlsCert string
 	TlsKey  string
 	CaFile  string
@@ -53,7 +53,7 @@ type Options struct {
 	MaxReconnect      int
 	ReconnectInterval time.Duration
 	Timeout           time.Duration
-	ClientCert        ClientCertStruct
+	TLSOpts           TLSOpts
 }
 
 type queryReq struct {
@@ -100,7 +100,7 @@ func getDefaultOptions() Options {
 		MaxReconnect:      3,
 		ReconnectInterval: 200 * time.Millisecond,
 		Timeout:           15 * time.Second,
-		ClientCert: ClientCertStruct{
+		TLSOpts: TLSOpts{
 			TlsCert: "",
 			TlsKey:  "",
 			CaFile:  "",
@@ -195,20 +195,29 @@ func disconnectedError(conn *nats.Conn, err error) {
 
 func (c *Conn) startConn() error {
 	opts := &c.opts
-	var natsOpts nats.Options
 	var err error
 	url := opts.Host + ":" + strconv.Itoa(opts.Port)
-	if (opts.ClientCert.TlsCert != "") || (opts.ClientCert.TlsKey != "") || (opts.ClientCert.CaFile != "") {
-		if opts.ClientCert.TlsCert == "" {
+	natsOpts := nats.Options{
+		Url:               url,
+		AllowReconnect:    opts.Reconnect,
+		MaxReconnect:      opts.MaxReconnect,
+		ReconnectWait:     opts.ReconnectInterval,
+		Timeout:           opts.Timeout,
+		Token:             opts.ConnectionToken,
+		DisconnectedErrCB: disconnectedError,
+		Name:              c.ConnId + "::" + opts.Username,
+	}
+	if (opts.TLSOpts.TlsCert != "") || (opts.TLSOpts.TlsKey != "") || (opts.TLSOpts.CaFile != "") {
+		if opts.TLSOpts.TlsCert == "" {
 			return memphisError(errors.New("Must provide a TLS cert file"))
 		}
-		if opts.ClientCert.TlsKey == "" {
+		if opts.TLSOpts.TlsKey == "" {
 			return memphisError(errors.New("Must provide a TLS key file"))
 		}
-		if opts.ClientCert.CaFile == "" {
+		if opts.TLSOpts.CaFile == "" {
 			return memphisError(errors.New("Must provide a TLS ca file"))
 		}
-		cert, err := tls.LoadX509KeyPair(opts.ClientCert.TlsCert, opts.ClientCert.TlsKey)
+		cert, err := tls.LoadX509KeyPair(opts.TLSOpts.TlsCert, opts.TLSOpts.TlsKey)
 		if err != nil {
 			return memphisError(errors.New("memphis: error loading client certificate: " + err.Error()))
 		}
@@ -220,39 +229,16 @@ func (c *Conn) startConn() error {
 		TLSConfig.Certificates = []tls.Certificate{cert}
 		certs := x509.NewCertPool()
 
-		pemData, err := ioutil.ReadFile(opts.ClientCert.CaFile)
+		pemData, err := ioutil.ReadFile(opts.TLSOpts.CaFile)
 		if err != nil {
 			return memphisError(errors.New("memphis: error loading ca file: " + err.Error()))
 		}
 		certs.AppendCertsFromPEM(pemData)
 		TLSConfig.RootCAs = certs
-		natsOpts = nats.Options{
-			Url:               url,
-			AllowReconnect:    opts.Reconnect,
-			MaxReconnect:      opts.MaxReconnect,
-			ReconnectWait:     opts.ReconnectInterval,
-			Timeout:           opts.Timeout,
-			Token:             opts.ConnectionToken,
-			DisconnectedErrCB: disconnectedError,
-			Name:              c.ConnId + "::" + opts.Username,
-			Secure:            true,
-			TLSConfig:         TLSConfig,
-		}
-	} else {
-		natsOpts = nats.Options{
-			Url:               url,
-			AllowReconnect:    opts.Reconnect,
-			MaxReconnect:      opts.MaxReconnect,
-			ReconnectWait:     opts.ReconnectInterval,
-			Timeout:           opts.Timeout,
-			Token:             opts.ConnectionToken,
-			DisconnectedErrCB: disconnectedError,
-			Name:              c.ConnId + "::" + opts.Username,
-		}
+		natsOpts.TLSConfig = TLSConfig
 	}
 
 	c.brokerConn, err = natsOpts.Connect()
-
 	if err != nil {
 		return memphisError(err)
 	}
@@ -334,10 +320,10 @@ func Timeout(timeout time.Duration) Option {
 	}
 }
 
-// ClientCert - paths to tls cert and key files.
-func ClientCert(TlsCert string, TlsKey string, CaFile string) Option {
+// Tls - paths to tls cert, key and ca files.
+func Tls(TlsCert string, TlsKey string, CaFile string) Option {
 	return func(o *Options) error {
-		o.ClientCert = ClientCertStruct{
+		o.TLSOpts = TLSOpts{
 			TlsCert: TlsCert,
 			TlsKey:  TlsKey,
 			CaFile:  CaFile,
