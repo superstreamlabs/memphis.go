@@ -222,6 +222,9 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	err = c.create(&consumer)
 	if err != nil {
+		if strings.Contains(err.Error(), "start sequence can not be updated") {
+			return &consumer, memphisError(errors.New("The consumer already exists with different configuration. You can't change the configuration to an existing consumer."))
+		}
 		return nil, memphisError(err)
 	}
 
@@ -236,27 +239,14 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	subj := subjInternalName + ".final"
 
 	durable := getInternalName(consumer.ConsumerGroup)
-	if consumer.OptStartSequence != 0 {
-		consumer.subscription, err = c.brokerPullSubscribe(subj,
-			durable,
-			nats.StartSequence(opts.OptStartSequence),
-			nats.ManualAck(),
-			nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
-			nats.MaxRequestBatch(opts.BatchSize),
-			nats.MaxDeliver(opts.MaxMsgDeliveries))
-	} else {
-		consumer.subscription, err = c.brokerPullSubscribe(subj,
-			durable,
-			nats.ManualAck(),
-			nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
-			nats.MaxRequestBatch(opts.BatchSize),
-			nats.MaxDeliver(opts.MaxMsgDeliveries))
-	}
+	consumer.subscription, err = c.brokerPullSubscribe(subj,
+		durable,
+		nats.ManualAck(),
+		nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
+		nats.MaxRequestBatch(opts.BatchSize),
+		nats.MaxDeliver(opts.MaxMsgDeliveries))
 
 	if err != nil {
-		if err != nil && strings.Contains(err.Error(), "configuration requests optional start sequence to be") {
-			return &consumer, memphisError(errors.New("The consumer already exists with different configuration. You can't change the configuration to an existing consumer."))
-		}
 		return nil, memphisError(err)
 	}
 
