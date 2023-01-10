@@ -38,26 +38,26 @@ var (
 
 // Consumer - memphis consumer object.
 type Consumer struct {
-	Name               string
-	ConsumerGroup      string
-	PullInterval       time.Duration
-	BatchSize          int
-	BatchMaxTimeToWait time.Duration
-	MaxAckTime         time.Duration
-	MaxMsgDeliveries   int
-	conn               *Conn
-	stationName        string
-	subscription       *nats.Subscription
-	pingInterval       time.Duration
-	subscriptionActive bool
-	firstFetch         bool
-	consumeActive      bool
-	dlsCh              chan *nats.Msg
-	consumeQuit        chan struct{}
-	pingQuit           chan struct{}
-	errHandler         ConsumerErrHandler
-	OptStartSequence   uint64
-	LastMessages       uint64
+	Name                     string
+	ConsumerGroup            string
+	PullInterval             time.Duration
+	BatchSize                int
+	BatchMaxTimeToWait       time.Duration
+	MaxAckTime               time.Duration
+	MaxMsgDeliveries         int
+	conn                     *Conn
+	stationName              string
+	subscription             *nats.Subscription
+	pingInterval             time.Duration
+	subscriptionActive       bool
+	firstFetch               bool
+	consumeActive            bool
+	dlsCh                    chan *nats.Msg
+	consumeQuit              chan struct{}
+	pingQuit                 chan struct{}
+	errHandler               ConsumerErrHandler
+	StartConsumeFromSequence uint64
+	LastMessages             uint64
 }
 
 // Msg - a received message, can be acked.
@@ -124,15 +124,15 @@ func (m *Msg) GetHeaders() map[string]string {
 type ConsumerErrHandler func(*Consumer, error)
 
 type createConsumerReq struct {
-	Name             string `json:"name"`
-	StationName      string `json:"station_name"`
-	ConnectionId     string `json:"connection_id"`
-	ConsumerType     string `json:"consumer_type"`
-	ConsumerGroup    string `json:"consumers_group"`
-	MaxAckTimeMillis int    `json:"max_ack_time_ms"`
-	MaxMsgDeliveries int    `json:"max_msg_deliveries"`
-	OptStartSequence uint64 `json:"opt_start_sequence"`
-	LastMessages     uint64 `json:"last_messages"`
+	Name                     string `json:"name"`
+	StationName              string `json:"station_name"`
+	ConnectionId             string `json:"connection_id"`
+	ConsumerType             string `json:"consumer_type"`
+	ConsumerGroup            string `json:"consumers_group"`
+	MaxAckTimeMillis         int    `json:"max_ack_time_ms"`
+	MaxMsgDeliveries         int    `json:"max_msg_deliveries"`
+	StartConsumeFromSequence uint64 `json:"start_consume_from_sequence"`
+	LastMessages             uint64 `json:"last_messages"`
 }
 
 type removeConsumerReq struct {
@@ -142,18 +142,18 @@ type removeConsumerReq struct {
 
 // ConsumerOpts - configuration options for a consumer.
 type ConsumerOpts struct {
-	Name               string
-	StationName        string
-	ConsumerGroup      string
-	PullInterval       time.Duration
-	BatchSize          int
-	BatchMaxTimeToWait time.Duration
-	MaxAckTime         time.Duration
-	MaxMsgDeliveries   int
-	GenUniqueSuffix    bool
-	ErrHandler         ConsumerErrHandler
-	OptStartSequence   uint64
-	LastMessages       uint64
+	Name                     string
+	StationName              string
+	ConsumerGroup            string
+	PullInterval             time.Duration
+	BatchSize                int
+	BatchMaxTimeToWait       time.Duration
+	MaxAckTime               time.Duration
+	MaxMsgDeliveries         int
+	GenUniqueSuffix          bool
+	ErrHandler               ConsumerErrHandler
+	StartConsumeFromSequence uint64
+	LastMessages             uint64
 }
 
 // getDefaultConsumerOptions - returns default configuration options for consumers.
@@ -203,27 +203,27 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	}
 
 	consumer := Consumer{Name: opts.Name,
-		ConsumerGroup:      opts.ConsumerGroup,
-		PullInterval:       opts.PullInterval,
-		BatchSize:          opts.BatchSize,
-		MaxAckTime:         opts.MaxAckTime,
-		MaxMsgDeliveries:   opts.MaxMsgDeliveries,
-		BatchMaxTimeToWait: opts.BatchMaxTimeToWait,
-		conn:               c,
-		stationName:        opts.StationName,
-		errHandler:         opts.ErrHandler,
-		OptStartSequence:   opts.OptStartSequence,
-		LastMessages:       opts.LastMessages,
+		ConsumerGroup:            opts.ConsumerGroup,
+		PullInterval:             opts.PullInterval,
+		BatchSize:                opts.BatchSize,
+		MaxAckTime:               opts.MaxAckTime,
+		MaxMsgDeliveries:         opts.MaxMsgDeliveries,
+		BatchMaxTimeToWait:       opts.BatchMaxTimeToWait,
+		conn:                     c,
+		stationName:              opts.StationName,
+		errHandler:               opts.ErrHandler,
+		StartConsumeFromSequence: opts.StartConsumeFromSequence,
+		LastMessages:             opts.LastMessages,
 	}
 
-	if consumer.OptStartSequence != 0 && consumer.LastMessages != 0 {
+	if consumer.StartConsumeFromSequence != 0 && consumer.LastMessages != 0 {
 		return nil, memphisError(errors.New("Consumer creation can't contain more than one of the following options: startConsumeFromSequence or LastMessages"))
 	}
 
 	err = c.create(&consumer)
 	if err != nil {
 		if strings.Contains(err.Error(), "can not be updated") {
-			return &consumer, memphisError(errors.New("The consumer already exists with different configuration. You can't change the configuration to an existing consumer."))
+			return nil, memphisError(errors.New("The consumer already exists with different configuration. You can't change the configuration to an existing consumer."))
 		}
 		return nil, memphisError(err)
 	}
@@ -456,15 +456,15 @@ func (c *Consumer) getCreationSubject() string {
 
 func (c *Consumer) getCreationReq() any {
 	return createConsumerReq{
-		Name:             c.Name,
-		StationName:      c.stationName,
-		ConnectionId:     c.conn.ConnId,
-		ConsumerType:     "application",
-		ConsumerGroup:    c.ConsumerGroup,
-		MaxAckTimeMillis: int(c.MaxAckTime.Milliseconds()),
-		MaxMsgDeliveries: c.MaxMsgDeliveries,
-		OptStartSequence: c.OptStartSequence,
-		LastMessages:     c.LastMessages,
+		Name:                     c.Name,
+		StationName:              c.stationName,
+		ConnectionId:             c.conn.ConnId,
+		ConsumerType:             "application",
+		ConsumerGroup:            c.ConsumerGroup,
+		MaxAckTimeMillis:         int(c.MaxAckTime.Milliseconds()),
+		MaxMsgDeliveries:         c.MaxMsgDeliveries,
+		StartConsumeFromSequence: c.StartConsumeFromSequence,
+		LastMessages:             c.LastMessages,
 	}
 }
 
@@ -563,9 +563,9 @@ func ConsumerErrorHandler(ceh ConsumerErrHandler) ConsumerOpt {
 	}
 }
 
-func StartConsumeFromSeq(optStartSequence uint64) ConsumerOpt {
+func StartConsumeFromSequence(startConsumeFromSequence uint64) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
-		opts.OptStartSequence = optStartSequence
+		opts.StartConsumeFromSequence = startConsumeFromSequence
 		return nil
 	}
 }
