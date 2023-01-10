@@ -239,6 +239,8 @@ consumer0, err = s.CreateConsumer("<consumer-name>",
   memphis.MaxMsgDeliveries(<int>), // defaults to 10
   memphis.ConsumerGenUniqueSuffix(),
   memphis.ConsumerErrorHandler(func(*Consumer, error){})
+  memphis.StartConsumeFromSeq(<uint64>)// start consume from specific sequence
+  memphis.LastMessages(<uint64>)// consume specific amount of messages from last
 )
   
 // creation from a Conn
