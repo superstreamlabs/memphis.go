@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -222,9 +221,6 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	err = c.create(&consumer)
 	if err != nil {
-		if strings.Contains(err.Error(), "can not be updated") {
-			return nil, memphisError(errors.New("The consumer already exists with different configuration. You can't change the configuration to an existing consumer."))
-		}
 		return nil, memphisError(err)
 	}
 
