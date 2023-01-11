@@ -56,7 +56,7 @@ type Consumer struct {
 	pingQuit                 chan struct{}
 	errHandler               ConsumerErrHandler
 	StartConsumeFromSequence uint64
-	LastMessages             uint64
+	LastMessages             int64
 }
 
 // Msg - a received message, can be acked.
@@ -131,7 +131,7 @@ type createConsumerReq struct {
 	MaxAckTimeMillis         int    `json:"max_ack_time_ms"`
 	MaxMsgDeliveries         int    `json:"max_msg_deliveries"`
 	StartConsumeFromSequence uint64 `json:"start_consume_from_sequence"`
-	LastMessages             uint64 `json:"last_messages"`
+	LastMessages             int64  `json:"last_messages"`
 }
 
 type removeConsumerReq struct {
@@ -152,19 +152,21 @@ type ConsumerOpts struct {
 	GenUniqueSuffix          bool
 	ErrHandler               ConsumerErrHandler
 	StartConsumeFromSequence uint64
-	LastMessages             uint64
+	LastMessages             int64
 }
 
 // getDefaultConsumerOptions - returns default configuration options for consumers.
 func getDefaultConsumerOptions() ConsumerOpts {
 	return ConsumerOpts{
-		PullInterval:       1 * time.Second,
-		BatchSize:          10,
-		BatchMaxTimeToWait: 5 * time.Second,
-		MaxAckTime:         30 * time.Second,
-		MaxMsgDeliveries:   10,
-		GenUniqueSuffix:    false,
-		ErrHandler:         DefaultConsumerErrHandler,
+		PullInterval:             1 * time.Second,
+		BatchSize:                10,
+		BatchMaxTimeToWait:       5 * time.Second,
+		MaxAckTime:               30 * time.Second,
+		MaxMsgDeliveries:         10,
+		GenUniqueSuffix:          false,
+		ErrHandler:               DefaultConsumerErrHandler,
+		StartConsumeFromSequence: 1,
+		LastMessages:             -1,
 	}
 }
 
@@ -215,8 +217,8 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		LastMessages:             opts.LastMessages,
 	}
 
-	if consumer.StartConsumeFromSequence != 0 && consumer.LastMessages != 0 {
-		return nil, memphisError(errors.New("Consumer creation can't contain more than one of the following options: startConsumeFromSequence or LastMessages"))
+	if consumer.StartConsumeFromSequence > 1 && consumer.LastMessages > -1 {
+		return nil, memphisError(errors.New("Consumer creation options can't contain both startConsumeFromSequence and lastMessages"))
 	}
 
 	err = c.create(&consumer)
@@ -566,7 +568,7 @@ func StartConsumeFromSequence(startConsumeFromSequence uint64) ConsumerOpt {
 	}
 }
 
-func LastMessages(lastMessages uint64) ConsumerOpt {
+func LastMessages(lastMessages int64) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.LastMessages = lastMessages
 		return nil
