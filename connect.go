@@ -16,10 +16,13 @@ package memphis
 
 import (
 	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"regexp"
 	"strconv"
@@ -35,6 +38,12 @@ const configurationUpdatesSubject = "$memphis_sdk_configurations_updates"
 // Option is a function on the options for a connection.
 type Option func(*Options) error
 
+type TLSOpts struct {
+	TlsCert string
+	TlsKey  string
+	CaFile  string
+}
+
 type Options struct {
 	Host              string
 	Port              int
@@ -44,6 +53,7 @@ type Options struct {
 	MaxReconnect      int
 	ReconnectInterval time.Duration
 	Timeout           time.Duration
+	TLSOpts           TLSOpts
 }
 
 type queryReq struct {
@@ -90,6 +100,11 @@ func getDefaultOptions() Options {
 		MaxReconnect:      3,
 		ReconnectInterval: 200 * time.Millisecond,
 		Timeout:           15 * time.Second,
+		TLSOpts: TLSOpts{
+			TlsCert: "",
+			TlsKey:  "",
+			CaFile:  "",
+		},
 	}
 }
 
@@ -180,7 +195,6 @@ func disconnectedError(conn *nats.Conn, err error) {
 
 func (c *Conn) startConn() error {
 	opts := &c.opts
-
 	var err error
 	url := opts.Host + ":" + strconv.Itoa(opts.Port)
 	natsOpts := nats.Options{
@@ -193,8 +207,38 @@ func (c *Conn) startConn() error {
 		DisconnectedErrCB: disconnectedError,
 		Name:              c.ConnId + "::" + opts.Username,
 	}
-	c.brokerConn, err = natsOpts.Connect()
+	if (opts.TLSOpts.TlsCert != "") || (opts.TLSOpts.TlsKey != "") || (opts.TLSOpts.CaFile != "") {
+		if opts.TLSOpts.TlsCert == "" {
+			return memphisError(errors.New("Must provide a TLS cert file"))
+		}
+		if opts.TLSOpts.TlsKey == "" {
+			return memphisError(errors.New("Must provide a TLS key file"))
+		}
+		if opts.TLSOpts.CaFile == "" {
+			return memphisError(errors.New("Must provide a TLS ca file"))
+		}
+		cert, err := tls.LoadX509KeyPair(opts.TLSOpts.TlsCert, opts.TLSOpts.TlsKey)
+		if err != nil {
+			return memphisError(errors.New("memphis: error loading client certificate: " + err.Error()))
+		}
+		cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
+		if err != nil {
+			return memphisError(errors.New("memphis: error parsing client certificate: " + err.Error()))
+		}
+		TLSConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+		TLSConfig.Certificates = []tls.Certificate{cert}
+		certs := x509.NewCertPool()
 
+		pemData, err := ioutil.ReadFile(opts.TLSOpts.CaFile)
+		if err != nil {
+			return memphisError(errors.New("memphis: error loading ca file: " + err.Error()))
+		}
+		certs.AppendCertsFromPEM(pemData)
+		TLSConfig.RootCAs = certs
+		natsOpts.TLSConfig = TLSConfig
+	}
+
+	c.brokerConn, err = natsOpts.Connect()
 	if err != nil {
 		return memphisError(err)
 	}
@@ -272,6 +316,18 @@ func ReconnectInterval(reconnectInterval time.Duration) Option {
 func Timeout(timeout time.Duration) Option {
 	return func(o *Options) error {
 		o.Timeout = timeout
+		return nil
+	}
+}
+
+// Tls - paths to tls cert, key and ca files.
+func Tls(TlsCert string, TlsKey string, CaFile string) Option {
+	return func(o *Options) error {
+		o.TLSOpts = TLSOpts{
+			TlsCert: TlsCert,
+			TlsKey:  TlsKey,
+			CaFile:  CaFile,
+		}
 		return nil
 	}
 }
