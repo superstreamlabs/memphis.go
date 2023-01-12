@@ -218,11 +218,11 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	}
 
 	if consumer.StartConsumeFromSequence == 0 {
-		return nil, memphisError(errors.New("startConsumeFromSequence has to be a positive number and start from 1"))
+		return nil, memphisError(errors.New("startConsumeFromSequence has to be a positive number"))
 	}
 
 	if consumer.LastMessages < -1 {
-		return nil, memphisError(errors.New("LastMessages has to be start from -1"))
+		return nil, memphisError(errors.New("min value for LastMessages is -1"))
 	}
 
 	if consumer.StartConsumeFromSequence > 1 && consumer.LastMessages > -1 {
