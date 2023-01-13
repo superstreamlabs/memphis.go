@@ -282,6 +282,12 @@ Get headers per message
 ```go
 headers := msg.GetHeaders()
 ```
+
+### Get message sequence number
+Get message sequence number
+```go
+sequenceNumber, err := msg.GetSequenceNumber()
+```
 ### Destroying a Consumer
 
 ```shell
