@@ -25,9 +25,10 @@ import (
 )
 
 const (
-	consumerDefaultPingInterval = 30 * time.Second
-	dlsSubjPrefix               = "$memphis_dls"
-	memphisPmAckSubject         = "$memphis_pm_acks"
+	consumerDefaultPingInterval    = 30 * time.Second
+	dlsSubjPrefix                  = "$memphis_dls"
+	memphisPmAckSubject            = "$memphis_pm_acks"
+	lastConsumerCreationReqVersion = 1
 )
 
 var (
@@ -132,6 +133,11 @@ type createConsumerReq struct {
 	MaxMsgDeliveries         int    `json:"max_msg_deliveries"`
 	StartConsumeFromSequence uint64 `json:"start_consume_from_sequence"`
 	LastMessages             int64  `json:"last_messages"`
+	RequestVersion           int    `json:"req_version"`
+}
+
+type createConsumerResp struct {
+	Err string `json:"error"`
 }
 
 type removeConsumerReq struct {
@@ -471,6 +477,7 @@ func (c *Consumer) getCreationReq() any {
 		MaxMsgDeliveries:         c.MaxMsgDeliveries,
 		StartConsumeFromSequence: c.StartConsumeFromSequence,
 		LastMessages:             c.LastMessages,
+		RequestVersion:           lastConsumerCreationReqVersion,
 	}
 }
 
