@@ -83,7 +83,7 @@ func (m *Msg) GetSequenceNumber() (uint64, error) {
 	if err != nil {
 		return 0, nil
 	}
-	return meta.Sequence.Consumer, nil
+	return meta.Sequence.Stream, nil
 }
 
 // Msg.Ack - ack the message.
