@@ -86,10 +86,12 @@ type Conn struct {
 type attachSchemaReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
+	Username    string `json:"username"`
 }
 
 type detachSchemaReq struct {
 	StationName string `json:"station_name"`
+	Username    string `json:"username"`
 }
 
 // getDefaultOptions - returns default configuration options for the client.
@@ -370,6 +372,7 @@ func (c *Conn) AttachSchema(name string, stationName string) error {
 	creationReq := &attachSchemaReq{
 		Name:        name,
 		StationName: stationName,
+		Username:    c.username,
 	}
 
 	b, err := json.Marshal(creationReq)
@@ -392,6 +395,7 @@ func (c *Conn) DetachSchema(stationName string) error {
 
 	req := &detachSchemaReq{
 		StationName: stationName,
+		Username:    c.username,
 	}
 
 	b, err := json.Marshal(req)

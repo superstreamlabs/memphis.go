@@ -83,10 +83,12 @@ type createStationReq struct {
 	IdempotencyWindowMillis int              `json:"idempotency_window_in_ms"`
 	SchemaName              string           `json:"schema_name"`
 	DlsConfiguration        dlsConfiguration `json:"dls_configuration"`
+	Username                string           `json:"username"`
 }
 
 type removeStationReq struct {
-	Name string `json:"station_name"`
+	Name     string `json:"station_name"`
+	Username string `json:"username"`
 }
 
 // StationsOpts - configuration options for a station.
@@ -187,6 +189,7 @@ func (s *Station) getCreationReq() any {
 		IdempotencyWindowMillis: int(s.IdempotencyWindow.Milliseconds()),
 		SchemaName:              s.SchemaName,
 		DlsConfiguration:        s.DlsConfiguration,
+		Username:                s.conn.username,
 	}
 }
 
@@ -199,7 +202,7 @@ func (s *Station) getDestructionSubject() string {
 }
 
 func (s *Station) getDestructionReq() any {
-	return removeStationReq{Name: s.Name}
+	return removeStationReq{Name: s.Name, Username: s.conn.username}
 }
 
 // Name - station's name
