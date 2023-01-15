@@ -77,7 +77,7 @@ func (m *Msg) Data() []byte {
 	return m.msg.Data
 }
 
-//Msg.GetSequenceNumber - get message's sequence number
+// Msg.GetSequenceNumber - get message's sequence number
 func (m *Msg) GetSequenceNumber() (uint64, error) {
 	meta, err := m.msg.Metadata()
 	if err != nil {
