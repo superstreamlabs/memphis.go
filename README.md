@@ -242,6 +242,8 @@ consumer0, err = s.CreateConsumer("<consumer-name>",
   memphis.MaxMsgDeliveries(<int>), // defaults to 10
   memphis.ConsumerGenUniqueSuffix(),
   memphis.ConsumerErrorHandler(func(*Consumer, error){})
+  memphis.StartConsumeFromSeq(<uint64>)// start consuming from a specific sequence. defaults to 1
+  memphis.LastMessages(<int64>)// consume the last N messages, defaults to -1 (all messages in the station)
 )
   
 // creation from a Conn
@@ -282,6 +284,12 @@ message.Ack();
 Get headers per message
 ```go
 headers := msg.GetHeaders()
+```
+
+### Get message sequence number
+Get message sequence number
+```go
+sequenceNumber, err := msg.GetSequenceNumber()
 ```
 ### Destroying a Consumer
 

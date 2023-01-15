@@ -53,7 +53,7 @@ func TestCreateProducer(t *testing.T) {
 		t.Error(err)
 	}
 
-	c.destroy(&Station{Name: "station_name_2"})
+	c.destroy(&Station{Name: "station_name_2", conn: c})
 }
 
 func TestProduce(t *testing.T) {
