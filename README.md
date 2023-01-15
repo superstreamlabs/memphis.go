@@ -70,9 +70,11 @@ It is possible to pass connection configuration parameters, as function-paramete
 c, err := memphis.Connect("<memphis-host>", 
 	"<application type username>", 
 	"<broker-token>",
-	Port(<int>),        
-	Reconnect(<bool>),
-	MaxReconnect(<int>)
+	memphis.Port(<int>),        
+	memphis.Reconnect(<bool>),
+	memphis.MaxReconnect(<int>),
+	// for TLS connection:
+	memphis.Tls("<cert-client.pem>", "<key-client.pem>",  "<rootCA.pem>"),
 	)
 ```
 
@@ -98,10 +100,11 @@ s1, err = c.CreateStation("<station-name>",
  memphis.RetentionVal(<int>), 
  memphis.StorageTypeOpt(<Memory/Disk>), 
  memphis.Replicas(<int>), 
- memphis.IdempotencyWindow(<time.Duration>)), // defaults to 2 minutes
+ memphis.IdempotencyWindow(<time.Duration>), // defaults to 2 minutes
  memphis.SchemaName(<string>),
  memphis.SendPoisonMsgToDls(<bool>), // defaults to true
  memphis.SendSchemaFailedMsgToDls(<bool>) // defaults to true
+)
 ```
 
 ### Retention Types

@@ -131,6 +131,7 @@ type createConsumerReq struct {
 	ConsumerGroup            string `json:"consumers_group"`
 	MaxAckTimeMillis         int    `json:"max_ack_time_ms"`
 	MaxMsgDeliveries         int    `json:"max_msg_deliveries"`
+	Username                 string `json:"username"`
 	StartConsumeFromSequence uint64 `json:"start_consume_from_sequence"`
 	LastMessages             int64  `json:"last_messages"`
 	RequestVersion           int    `json:"req_version"`
@@ -143,6 +144,7 @@ type createConsumerResp struct {
 type removeConsumerReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
+	Username    string `json:"username"`
 }
 
 // ConsumerOpts - configuration options for a consumer.
@@ -475,6 +477,7 @@ func (c *Consumer) getCreationReq() any {
 		ConsumerGroup:            c.ConsumerGroup,
 		MaxAckTimeMillis:         int(c.MaxAckTime.Milliseconds()),
 		MaxMsgDeliveries:         c.MaxMsgDeliveries,
+		Username:                 c.conn.username,
 		StartConsumeFromSequence: c.StartConsumeFromSequence,
 		LastMessages:             c.LastMessages,
 		RequestVersion:           lastConsumerCreationReqVersion,
@@ -490,7 +493,7 @@ func (c *Consumer) getDestructionSubject() string {
 }
 
 func (c *Consumer) getDestructionReq() any {
-	return removeConsumerReq{Name: c.Name, StationName: c.stationName}
+	return removeConsumerReq{Name: c.Name, StationName: c.stationName, Username: c.conn.username}
 }
 
 // ConsumerName - name for the consumer.
