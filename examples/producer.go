@@ -15,8 +15,13 @@ func main() {
 	defer conn.Close()
 	p, err := conn.CreateProducer("<station-name>", "<producer-name>")
 
+	if err != nil {
+		fmt.Printf("Create Producer failed: %v", err)
+		os.Exit(1)
+	}
+
 	hdrs := memphis.Headers{}
-    hdrs.New()
+	hdrs.New()
 	err = hdrs.Add("key", "value")
 
 	if err != nil {
