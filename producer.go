@@ -45,6 +45,7 @@ type createProducerReq struct {
 	ConnectionId   string `json:"connection_id"`
 	ProducerType   string `json:"producer_type"`
 	RequestVersion int    `json:"req_version"`
+	Username       string `json:"username"`
 }
 
 type createProducerResp struct {
@@ -82,6 +83,7 @@ type SchemaVersion struct {
 type removeProducerReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
+	Username    string `json:"username"`
 }
 
 // ProducerOpts - configuration options for producer creation.
@@ -186,6 +188,7 @@ func (p *Producer) getCreationReq() any {
 		ConnectionId:   p.conn.ConnId,
 		ProducerType:   "application",
 		RequestVersion: lastProducerCreationReqVersion,
+		Username:       p.conn.username,
 	}
 }
 
@@ -222,7 +225,7 @@ func (p *Producer) getDestructionSubject() string {
 }
 
 func (p *Producer) getDestructionReq() any {
-	return removeProducerReq{Name: p.Name, StationName: p.stationName}
+	return removeProducerReq{Name: p.Name, StationName: p.stationName, Username: p.conn.username}
 }
 
 // Destroy - destoy this producer.

@@ -38,10 +38,12 @@
 <img src="https://img.shields.io/github/last-commit/memphisdev/memphis-broker?color=61dfc6&label=last%20commit">
 </p>
 
-**[Memphis{dev}](https://memphis.dev)** is an open-source real-time data processing platform<br>
-that provides end-to-end support for in-app streaming use cases using Memphis distributed message broker.<br>
-Memphis' platform requires zero ops, enables rapid development, extreme cost reduction, <br>
-eliminates coding barriers, and saves a great amount of dev time for data-oriented developers and data engineers.
+**[Memphis](https://memphis.dev)** is a next-generation message broker.<br>
+A simple, robust, and durable cloud-native message broker wrapped with<br>
+an entire ecosystem that enables fast and reliable development of next-generation event-driven use cases.<br><br>
+Memphis enables building modern applications that require large volumes of streamed and enriched data,<br>
+modern protocols, zero ops, rapid development, extreme cost reduction,<br>
+and a significantly lower amount of dev time for data-oriented developers and data engineers.
 
 # Installation
 After installing and running memphis broker,<br>
@@ -70,9 +72,11 @@ It is possible to pass connection configuration parameters, as function-paramete
 c, err := memphis.Connect("<memphis-host>", 
 	"<application type username>", 
 	"<broker-token>",
-	Port(<int>),        
-	Reconnect(<bool>),
-	MaxReconnect(<int>)
+	memphis.Port(<int>),        
+	memphis.Reconnect(<bool>),
+	memphis.MaxReconnect(<int>),
+	// for TLS connection:
+	memphis.Tls("<cert-client.pem>", "<key-client.pem>",  "<rootCA.pem>"),
 	)
 ```
 
@@ -98,10 +102,11 @@ s1, err = c.CreateStation("<station-name>",
  memphis.RetentionVal(<int>), 
  memphis.StorageTypeOpt(<Memory/Disk>), 
  memphis.Replicas(<int>), 
- memphis.IdempotencyWindow(<time.Duration>)), // defaults to 2 minutes
+ memphis.IdempotencyWindow(<time.Duration>), // defaults to 2 minutes
  memphis.SchemaName(<string>),
  memphis.SendPoisonMsgToDls(<bool>), // defaults to true
  memphis.SendSchemaFailedMsgToDls(<bool>) // defaults to true
+)
 ```
 
 ### Retention Types
@@ -239,6 +244,8 @@ consumer0, err = s.CreateConsumer("<consumer-name>",
   memphis.MaxMsgDeliveries(<int>), // defaults to 10
   memphis.ConsumerGenUniqueSuffix(),
   memphis.ConsumerErrorHandler(func(*Consumer, error){})
+  memphis.StartConsumeFromSeq(<uint64>)// start consuming from a specific sequence. defaults to 1
+  memphis.LastMessages(<int64>)// consume the last N messages, defaults to -1 (all messages in the station)
 )
   
 // creation from a Conn
@@ -279,6 +286,12 @@ message.Ack();
 Get headers per message
 ```go
 headers := msg.GetHeaders()
+```
+
+### Get message sequence number
+Get message sequence number
+```go
+sequenceNumber, err := msg.GetSequenceNumber()
 ```
 ### Destroying a Consumer
 
