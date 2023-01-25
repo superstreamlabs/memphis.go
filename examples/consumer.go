@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -22,7 +23,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	handler := func(msgs []*memphis.Msg, err error) {
+	handler := func(msgs []*memphis.Msg, err error, ctx context.Context) {
 		if err != nil {
 			fmt.Printf("Fetch failed: %v\n", err)
 			return

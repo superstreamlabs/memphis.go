@@ -15,6 +15,7 @@
 package memphis
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -58,6 +59,7 @@ type Consumer struct {
 	errHandler               ConsumerErrHandler
 	StartConsumeFromSequence uint64
 	LastMessages             int64
+	context                  context.Context
 }
 
 // Msg - a received message, can be acked.
@@ -307,26 +309,30 @@ func (c *Consumer) pingConsumer() {
 			return
 		}
 	}
+}
 
+// Consumer.SetContext - set a context that will be passed to each message handler function call
+func (c *Consumer) SetContext(ctx context.Context) {
+	c.context = ctx
 }
 
 // ConsumeHandler - handler for consumed messages
-type ConsumeHandler func([]*Msg, error)
+type ConsumeHandler func([]*Msg, error, context.Context)
 
 // Consumer.Consume - start consuming messages according to the interval configured in the consumer object.
 // When a batch is consumed the handlerFunc will be called.
 func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
-	go func() {
+	go func(c *Consumer) {
 		if c.firstFetch {
 			err := c.firstFetchInit()
 			if err != nil {
-				handlerFunc(nil, memphisError(err))
+				handlerFunc(nil, memphisError(err), nil)
 				return
 			}
 
 			c.firstFetch = false
 			msgs, err := c.fetchSubscription()
-			handlerFunc(msgs, memphisError(err))
+			handlerFunc(msgs, memphisError(err), c.context)
 		}
 
 		ticker := time.NewTicker(c.PullInterval)
@@ -355,12 +361,12 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
 					msgs = append(msgs, &dlsMsg)
 				}
 
-				handlerFunc(msgs, memphisError(err))
+				handlerFunc(msgs, memphisError(err), nil)
 			case <-c.consumeQuit:
 				return
 			}
 		}
-	}()
+	}(c)
 	c.consumeActive = true
 	return nil
 }
