@@ -252,13 +252,21 @@ consumer0, err = s.CreateConsumer("<consumer-name>",
 consumer1, err = c.CreateConsumer("<station-name>", "<consumer-name>", ...) 
 ```
 
+### Passing a context to a message handler
+
+```go
+ctx := context.Background()
+ctx = context.WithValue(ctx, "key", "value")
+consumer.SetContext(ctx)
+```
+
 ### Processing Messages
 First, create a callback function that receives a slice of pointers to ```memphis.Msg``` and an error.<br><br>
 Then, pass this callback into ```consumer.Consume``` function.<br><br>
 The consumer will try to fetch messages every ```pullInterval``` (that was given in Consumer's creation) and call the defined message handler.
 
 ```go
-func handler(msgs []*memphis.Msg, err error) {
+func handler(msgs []*memphis.Msg, err error, ctx context.Context) {
 	if err != nil {
 		m := msgs[0]
 		fmt.Println(string(m.Data()))
