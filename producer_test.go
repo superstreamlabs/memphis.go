@@ -1,6 +1,7 @@
 package memphis
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -183,7 +184,7 @@ func TestConsume(t *testing.T) {
 		t.Error(err)
 	}
 
-	handler := func(msgs []*Msg, err error) {
+	handler := func(msgs []*Msg, err error, ctx context.Context) {
 		res := string(msgs[0].Data())
 		if res != testMessage {
 			t.Error("Did not receive exact produced message")
@@ -345,7 +346,7 @@ func TestFullFlow(t *testing.T) {
 	}
 
 	handlerCh := make(chan struct{})
-	handler := func(msgs []*Msg, err error) {
+	handler := func(msgs []*Msg, err error, ctx context.Context) {
 		if err != nil {
 			t.Errorf("Fetch failed: %v\n", err)
 			handlerCh <- struct{}{}
