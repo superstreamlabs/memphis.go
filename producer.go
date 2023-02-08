@@ -124,7 +124,7 @@ type ProducerOpt func(*ProducerOpts) error
 
 // getDefaultProducerOpts - returns default configuration options for producer creation.
 func getDefaultProducerOpts() ProducerOpts {
-	return ProducerOpts{GenUniqueSuffix: true}
+	return ProducerOpts{GenUniqueSuffix: false}
 }
 
 func extendNameWithRandSuffix(name string) (string, error) {
