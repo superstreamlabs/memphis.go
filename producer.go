@@ -155,7 +155,7 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 
 	p := Producer{
 		Name:        name,
-		stationName: stationName,
+		stationName: getInternalName(stationName),
 		conn:        c,
 		realName:    realName,
 	}
