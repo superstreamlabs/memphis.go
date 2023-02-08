@@ -188,27 +188,23 @@ func (c *Conn) Produce(stationName, name string, message any, opts ...ProducerOp
 }
 
 func checkForProducerExistenceAndCreate(p *Producer) {
-	pn := fmt.Sprintf("%s_%s", p.stationName, p.Name)
-	if producersMap[pn] != nil {
-		return
-	}
-	producersMap[pn] = p
+	producersMap.setProducer(p)
 }
 
 func checkForProducerExistenceAndDelete(p *Producer) {
 	pn := fmt.Sprintf("%s_%s", p.stationName, p.Name)
-	if producersMap[pn] != nil {
+	if producersMap.getProducer(pn) == nil {
 		delete(producersMap, pn)
 	}
 }
 
 func checkForProducerExistence(stationName, name string) (error, *Producer) {
 	pn := fmt.Sprintf("%s_%s", stationName, name)
-	if producersMap[pn] != nil {
+	if producersMap.getProducer(pn) == nil {
 		return fmt.Errorf("%s not exists on the map", pn), nil
 	}
 
-	return nil, producersMap[pn]
+	return nil, producersMap.getProducer(pn)
 }
 
 // Station.CreateProducer - creates a producer attached to this station.

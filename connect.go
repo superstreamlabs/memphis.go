@@ -38,6 +38,8 @@ const configurationUpdatesSubject = "$memphis_sdk_configurations_updates"
 // Option is a function on the options for a connection.
 type Option func(*Options) error
 
+type ProducersMap map[string]*Producer
+
 type TLSOpts struct {
 	TlsCert string
 	TlsKey  string
@@ -66,7 +68,7 @@ type ConfigurationsUpdate struct {
 	Update      bool   `json:"update"`
 }
 
-var producersMap map[string]*Producer
+var producersMap = make(ProducersMap)
 
 func (c *Conn) IsConnected() bool {
 	return c.brokerConn.IsConnected()
@@ -506,4 +508,20 @@ func GetDlsMsgId(stationName string, producerName string, timeSent string) strin
 	msgId := strings.ReplaceAll(stationName+"~"+producerName+"~0~"+timeSent, " ", "")
 	msgId = strings.ReplaceAll(msgId, ",", "+")
 	return msgId
+}
+
+func (pm *ProducersMap) getProducer(n string) *Producer {
+	if (*pm)[n] != nil {
+		return (*pm)[n]
+	}
+	return nil
+}
+
+func (pm *ProducersMap) setProducer(p *Producer) {
+	pn := fmt.Sprintf("%s_%s", p.stationName, p.Name)
+
+	if pm.getProducer(pn) != nil {
+		return
+	}
+	(*pm)[pn] = p
 }
