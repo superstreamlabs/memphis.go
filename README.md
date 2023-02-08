@@ -185,7 +185,14 @@ p1, err := s.CreateProducer("<producer-name>")
 ```
 
 ### Producing a message
+Without creating a producer (receiver function of the connection struct).
+In cases where extra performance is needed the recommended way is to create a producer first
+and produce messages by using the produce receiver function of it
+```go
+c.Produce("station_name_c_produce", "producer_name_a", []byte("Hey There!"))
+```
 
+Creating a producer first (receiver function of the producer struct).
 ```go
 p.Produce("<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema)>", memphis.AckWaitSec(15)) // defaults to 15 seconds
 ```
