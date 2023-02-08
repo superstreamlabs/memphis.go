@@ -527,7 +527,7 @@ func (pm *ProducersMap) getProducer(key string) *Producer {
 }
 
 func (pm *ProducersMap) setProducer(p *Producer) {
-	pn := fmt.Sprintf("%s_%s", p.stationName, p.Name)
+	pn := fmt.Sprintf("%s_%s", p.stationName, p.realName)
 
 	if pm.getProducer(pn) != nil {
 		return

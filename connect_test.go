@@ -34,12 +34,12 @@ func TestProduceNoProducer(t *testing.T) {
 	}
 	defer c.Close()
 
-	err = c.Produce("station_name_c_produce", "producer_name_a", []byte("Hey There!"))
+	err = c.Produce("station_name_c_produce", "producer_name_a", []byte("Hey There!"), nil, nil)
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = c.Produce("station_name_c_produce", "producer_name_a", []byte("Hey! Test 2 pleaseee"))
+	err = c.Produce("station_name_c_produce", "producer_name_a", []byte("Hey! Test 2 pleaseee"), nil, nil)
 	if err != nil {
 		t.Error(err)
 	}

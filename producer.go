@@ -37,6 +37,7 @@ type Producer struct {
 	Name        string
 	stationName string
 	conn        *Conn
+	realName    string
 }
 
 type createProducerReq struct {
@@ -123,7 +124,7 @@ type ProducerOpt func(*ProducerOpts) error
 
 // getDefaultProducerOpts - returns default configuration options for producer creation.
 func getDefaultProducerOpts() ProducerOpts {
-	return ProducerOpts{GenUniqueSuffix: false}
+	return ProducerOpts{GenUniqueSuffix: true}
 }
 
 func extendNameWithRandSuffix(name string) (string, error) {
@@ -136,6 +137,7 @@ func extendNameWithRandSuffix(name string) (string, error) {
 
 // CreateProducer - creates a producer.
 func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*Producer, error) {
+	realName := name
 	defaultOpts := getDefaultProducerOpts()
 	var err error
 	for _, opt := range opts {
@@ -155,6 +157,7 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 		Name:        name,
 		stationName: stationName,
 		conn:        c,
+		realName:    realName,
 	}
 
 	err = c.listenToSchemaUpdates(stationName)
@@ -176,7 +179,7 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 // Produce - produce a message without creating a new producer, using connection only,
 // in cases where extra performance is needed the recommended way is to create a producer first
 // and produce messages by using the produce receiver function of it
-func (c *Conn) Produce(stationName, name string, message any, opts ...ProducerOpt) error {
+func (c *Conn) Produce(stationName, name string, message any, pOpts []ProduceOpt, opts []ProducerOpt) error {
 	if err, cp := c.getProducerFromCache(stationName, name); err == nil {
 		return cp.Produce(message, nil)
 	}
@@ -185,7 +188,7 @@ func (c *Conn) Produce(stationName, name string, message any, opts ...ProducerOp
 		return memphisError(err)
 	}
 
-	return p.Produce(message, nil)
+	return p.Produce(message, pOpts...)
 }
 
 func (c *Conn) cacheProducer(p *Producer) {
