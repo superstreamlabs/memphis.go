@@ -168,7 +168,15 @@ func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 type StationName string
 
 func (s *Station) Destroy() error {
-	return s.conn.destroy(s)
+	err := s.conn.destroy(s)
+	if err != nil {
+		return err
+	}
+
+	pm := s.conn.GetProducerMap()
+	pm.unsetStationProducers(s.Name)
+
+	return nil
 }
 
 func (s *Station) getCreationSubject() string {

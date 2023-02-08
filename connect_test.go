@@ -43,4 +43,11 @@ func TestProduceNoProducer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
+	pm := c.GetProducerMap()
+	pm.unsetStationProducers("station_name_c_produce")
+	p := pm.getProducer("producer_name_a")
+	if p != nil {
+		t.Error("unsetStationProducers failed to remove key [station_name_c_produce]")
+	}
 }

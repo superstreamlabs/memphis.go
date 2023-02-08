@@ -136,10 +136,6 @@ func extendNameWithRandSuffix(name string) (string, error) {
 
 // CreateProducer - creates a producer.
 func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*Producer, error) {
-	if err, p := checkForProducerExistence(stationName, name); err == nil {
-		return p, nil
-	}
-
 	defaultOpts := getDefaultProducerOpts()
 	var err error
 	for _, opt := range opts {
@@ -172,13 +168,16 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 		}
 		return nil, memphisError(err)
 	}
-	checkForProducerExistenceAndCreate(&p)
+	c.cacheProducer(&p)
 
 	return &p, nil
 }
 
 // Produce - produce a message without creating a new producer, using connection only
 func (c *Conn) Produce(stationName, name string, message any, opts ...ProducerOpt) error {
+	if err, cp := c.getProducerFromCache(stationName, name); err == nil {
+		return cp.Produce(message, nil)
+	}
 	p, err := c.CreateProducer(stationName, name, opts...)
 	if err != nil {
 		return memphisError(err)
@@ -187,24 +186,27 @@ func (c *Conn) Produce(stationName, name string, message any, opts ...ProducerOp
 	return p.Produce(message, nil)
 }
 
-func checkForProducerExistenceAndCreate(p *Producer) {
-	producersMap.setProducer(p)
+func (c *Conn) cacheProducer(p *Producer) {
+	pm := c.GetProducerMap()
+	pm.setProducer(p)
 }
 
-func checkForProducerExistenceAndDelete(p *Producer) {
+func (c *Conn) unCacheProducer(p *Producer) {
 	pn := fmt.Sprintf("%s_%s", p.stationName, p.Name)
-	if producersMap.getProducer(pn) == nil {
-		delete(producersMap, pn)
+	pm := c.GetProducerMap()
+	if pm.getProducer(pn) == nil {
+		pm.unsetProducer(pn)
 	}
 }
 
-func checkForProducerExistence(stationName, name string) (error, *Producer) {
+func (c *Conn) getProducerFromCache(stationName, name string) (error, *Producer) {
 	pn := fmt.Sprintf("%s_%s", stationName, name)
-	if producersMap.getProducer(pn) == nil {
+	pm := c.GetProducerMap()
+	if pm.getProducer(pn) == nil {
 		return fmt.Errorf("%s not exists on the map", pn), nil
 	}
 
-	return nil, producersMap.getProducer(pn)
+	return nil, pm.getProducer(pn)
 }
 
 // Station.CreateProducer - creates a producer attached to this station.
@@ -273,7 +275,7 @@ func (p *Producer) Destroy() error {
 		return err
 	}
 
-	checkForProducerExistenceAndDelete(p)
+	p.conn.unCacheProducer(p)
 	return nil
 }
 

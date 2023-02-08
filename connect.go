@@ -68,10 +68,16 @@ type ConfigurationsUpdate struct {
 	Update      bool   `json:"update"`
 }
 
-var producersMap = make(ProducersMap)
-
 func (c *Conn) IsConnected() bool {
 	return c.brokerConn.IsConnected()
+}
+
+func (c *Conn) GetProducerMap() ProducersMap {
+	return c.producersMap
+}
+
+func (c *Conn) SetProducerMap(producersMap ProducersMap) {
+	c.producersMap = producersMap
 }
 
 // Conn - holds the connection with memphis.
@@ -85,6 +91,7 @@ type Conn struct {
 	stationUpdatesSubs map[string]*stationUpdateSub
 	configUpdatesMu    sync.RWMutex
 	configUpdatesSub   configurationsUpdateSub
+	producersMap       ProducersMap
 }
 
 type attachSchemaReq struct {
@@ -180,8 +187,9 @@ func (opts Options) connect() (*Conn, error) {
 	}
 
 	c := Conn{
-		ConnId: connId,
-		opts:   opts,
+		ConnId:       connId,
+		opts:         opts,
+		producersMap: make(ProducersMap),
 	}
 
 	if err := c.startConn(); err != nil {
@@ -260,6 +268,7 @@ func (c *Conn) startConn() error {
 
 func (c *Conn) Close() {
 	c.brokerConn.Close()
+	c.SetProducerMap(nil)
 }
 
 func (c *Conn) brokerCorePublish(subject, reply string, msg []byte) error {
@@ -510,9 +519,9 @@ func GetDlsMsgId(stationName string, producerName string, timeSent string) strin
 	return msgId
 }
 
-func (pm *ProducersMap) getProducer(n string) *Producer {
-	if (*pm)[n] != nil {
-		return (*pm)[n]
+func (pm *ProducersMap) getProducer(key string) *Producer {
+	if (*pm)[key] != nil {
+		return (*pm)[key]
 	}
 	return nil
 }
@@ -524,4 +533,16 @@ func (pm *ProducersMap) setProducer(p *Producer) {
 		return
 	}
 	(*pm)[pn] = p
+}
+
+func (pm *ProducersMap) unsetProducer(key string) {
+	delete(*pm, key)
+}
+
+func (pm *ProducersMap) unsetStationProducers(stationName string) {
+	for k, v := range *pm {
+		if v.stationName == stationName {
+			pm.unsetProducer(k)
+		}
+	}
 }
