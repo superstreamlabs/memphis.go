@@ -66,6 +66,8 @@ type ConfigurationsUpdate struct {
 	Update      bool   `json:"update"`
 }
 
+var producersMap map[string]*Producer
+
 func (c *Conn) IsConnected() bool {
 	return c.brokerConn.IsConnected()
 }

@@ -136,6 +136,10 @@ func extendNameWithRandSuffix(name string) (string, error) {
 
 // CreateProducer - creates a producer.
 func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*Producer, error) {
+	if err, p := checkForProducerExistence(stationName, name); err == nil {
+		return p, nil
+	}
+
 	defaultOpts := getDefaultProducerOpts()
 	var err error
 	for _, opt := range opts {
@@ -163,6 +167,7 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 	}
 
 	if err = c.create(&p); err != nil {
+		checkForProducerExistenceAndCreate(&p)
 		if err := c.removeSchemaUpdatesListener(stationName); err != nil {
 			return nil, memphisError(err)
 		}
@@ -170,6 +175,40 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 	}
 
 	return &p, nil
+}
+
+// Produce - produce a message without creating a new producer, using connection only
+func (c *Conn) Produce(stationName, name string, message any, opts ...ProducerOpt) error {
+	p, err := c.CreateProducer(stationName, name, opts...)
+	if err != nil {
+		return memphisError(err)
+	}
+
+	return p.Produce(message, nil)
+}
+
+func checkForProducerExistenceAndCreate(p *Producer) {
+	pn := fmt.Sprintf("%s_%s", p.stationName, p.Name)
+	if producersMap[pn] != nil {
+		return
+	}
+	producersMap[pn] = p
+}
+
+func checkForProducerExistenceAndDelete(p *Producer) {
+	pn := fmt.Sprintf("%s_%s", p.stationName, p.Name)
+	if producersMap[pn] != nil {
+		delete(producersMap, pn)
+	}
+}
+
+func checkForProducerExistence(stationName, name string) (error, *Producer) {
+	pn := fmt.Sprintf("%s_%s", stationName, name)
+	if producersMap[pn] != nil {
+		return fmt.Errorf("%s not exists on the map", pn), nil
+	}
+
+	return nil, producersMap[pn]
 }
 
 // Station.CreateProducer - creates a producer attached to this station.
@@ -233,7 +272,13 @@ func (p *Producer) Destroy() error {
 	if err := p.conn.removeSchemaUpdatesListener(p.stationName); err != nil {
 		return memphisError(err)
 	}
-	return p.conn.destroy(p)
+	err := p.conn.destroy(p)
+	if err != nil {
+		return err
+	}
+
+	checkForProducerExistenceAndDelete(p)
+	return nil
 }
 
 type Headers struct {
