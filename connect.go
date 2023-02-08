@@ -38,6 +38,8 @@ const configurationUpdatesSubject = "$memphis_sdk_configurations_updates"
 // Option is a function on the options for a connection.
 type Option func(*Options) error
 
+type ProducersMap map[string]*Producer
+
 type TLSOpts struct {
 	TlsCert string
 	TlsKey  string
@@ -70,6 +72,14 @@ func (c *Conn) IsConnected() bool {
 	return c.brokerConn.IsConnected()
 }
 
+func (c *Conn) getProducerMap() ProducersMap {
+	return c.producersMap
+}
+
+func (c *Conn) setProducerMap(producersMap ProducersMap) {
+	c.producersMap = producersMap
+}
+
 // Conn - holds the connection with memphis.
 type Conn struct {
 	opts               Options
@@ -81,6 +91,7 @@ type Conn struct {
 	stationUpdatesSubs map[string]*stationUpdateSub
 	configUpdatesMu    sync.RWMutex
 	configUpdatesSub   configurationsUpdateSub
+	producersMap       ProducersMap
 }
 
 type attachSchemaReq struct {
@@ -176,8 +187,9 @@ func (opts Options) connect() (*Conn, error) {
 	}
 
 	c := Conn{
-		ConnId: connId,
-		opts:   opts,
+		ConnId:       connId,
+		opts:         opts,
+		producersMap: make(ProducersMap),
 	}
 
 	if err := c.startConn(); err != nil {
@@ -256,6 +268,7 @@ func (c *Conn) startConn() error {
 
 func (c *Conn) Close() {
 	c.brokerConn.Close()
+	c.setProducerMap(nil)
 }
 
 func (c *Conn) brokerCorePublish(subject, reply string, msg []byte) error {
@@ -504,4 +517,32 @@ func GetDlsMsgId(stationName string, producerName string, timeSent string) strin
 	msgId := strings.ReplaceAll(stationName+"~"+producerName+"~0~"+timeSent, " ", "")
 	msgId = strings.ReplaceAll(msgId, ",", "+")
 	return msgId
+}
+
+func (pm *ProducersMap) getProducer(key string) *Producer {
+	if (*pm) != nil && (*pm)[key] != nil {
+		return (*pm)[key]
+	}
+	return nil
+}
+
+func (pm *ProducersMap) setProducer(p *Producer) {
+	pn := fmt.Sprintf("%s_%s", p.stationName, p.Name)
+
+	if pm.getProducer(pn) != nil {
+		return
+	}
+	(*pm)[pn] = p
+}
+
+func (pm *ProducersMap) unsetProducer(key string) {
+	delete(*pm, key)
+}
+
+func (pm *ProducersMap) unsetStationProducers(stationName string) {
+	for k, v := range *pm {
+		if v.stationName == stationName {
+			pm.unsetProducer(k)
+		}
+	}
 }

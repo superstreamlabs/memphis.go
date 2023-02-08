@@ -26,3 +26,28 @@ func TestNormalizeHost(t *testing.T) {
 		t.Error()
 	}
 }
+
+func TestProduceNoProducer(t *testing.T) {
+	c, err := Connect("localhost", "root", "memphis")
+	if err != nil {
+		t.Error(err)
+	}
+	defer c.Close()
+
+	err = c.Produce("station_name_c_produce", "producer_name_a", []byte("Hey There!"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = c.Produce("station_name_c_produce", "producer_name_a", []byte("Hey! Test 2 pleaseee"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	pm := c.getProducerMap()
+	pm.unsetStationProducers("station_name_c_produce")
+	p := pm.getProducer("producer_name_a")
+	if p != nil {
+		t.Error("unsetStationProducers failed to remove key [station_name_c_produce]")
+	}
+}

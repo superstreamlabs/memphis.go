@@ -168,8 +168,47 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 		}
 		return nil, memphisError(err)
 	}
+	c.cacheProducer(&p)
 
 	return &p, nil
+}
+
+// Produce - produce a message without creating a new producer, using connection only,
+// in cases where extra performance is needed the recommended way is to create a producer first
+// and produce messages by using the produce receiver function of it
+func (c *Conn) Produce(stationName, name string, message any, opts ...ProducerOpt) error {
+	if err, cp := c.getProducerFromCache(stationName, name); err == nil {
+		return cp.Produce(message, nil)
+	}
+	p, err := c.CreateProducer(stationName, name, opts...)
+	if err != nil {
+		return memphisError(err)
+	}
+
+	return p.Produce(message, nil)
+}
+
+func (c *Conn) cacheProducer(p *Producer) {
+	pm := c.getProducerMap()
+	pm.setProducer(p)
+}
+
+func (c *Conn) unCacheProducer(p *Producer) {
+	pn := fmt.Sprintf("%s_%s", p.stationName, p.Name)
+	pm := c.getProducerMap()
+	if pm.getProducer(pn) == nil {
+		pm.unsetProducer(pn)
+	}
+}
+
+func (c *Conn) getProducerFromCache(stationName, name string) (error, *Producer) {
+	pn := fmt.Sprintf("%s_%s", stationName, name)
+	pm := c.getProducerMap()
+	if pm.getProducer(pn) == nil {
+		return fmt.Errorf("%s not exists on the map", pn), nil
+	}
+
+	return nil, pm.getProducer(pn)
 }
 
 // Station.CreateProducer - creates a producer attached to this station.
@@ -233,7 +272,13 @@ func (p *Producer) Destroy() error {
 	if err := p.conn.removeSchemaUpdatesListener(p.stationName); err != nil {
 		return memphisError(err)
 	}
-	return p.conn.destroy(p)
+	err := p.conn.destroy(p)
+	if err != nil {
+		return err
+	}
+
+	p.conn.unCacheProducer(p)
+	return nil
 }
 
 type Headers struct {
