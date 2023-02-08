@@ -167,12 +167,12 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 	}
 
 	if err = c.create(&p); err != nil {
-		checkForProducerExistenceAndCreate(&p)
 		if err := c.removeSchemaUpdatesListener(stationName); err != nil {
 			return nil, memphisError(err)
 		}
 		return nil, memphisError(err)
 	}
+	checkForProducerExistenceAndCreate(&p)
 
 	return &p, nil
 }
