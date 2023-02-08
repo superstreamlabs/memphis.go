@@ -173,7 +173,7 @@ func (s *Station) Destroy() error {
 		return err
 	}
 
-	pm := s.conn.GetProducerMap()
+	pm := s.conn.getProducerMap()
 	pm.unsetStationProducers(s.Name)
 
 	return nil

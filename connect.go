@@ -72,11 +72,11 @@ func (c *Conn) IsConnected() bool {
 	return c.brokerConn.IsConnected()
 }
 
-func (c *Conn) GetProducerMap() ProducersMap {
+func (c *Conn) getProducerMap() ProducersMap {
 	return c.producersMap
 }
 
-func (c *Conn) SetProducerMap(producersMap ProducersMap) {
+func (c *Conn) setProducerMap(producersMap ProducersMap) {
 	c.producersMap = producersMap
 }
 
@@ -268,7 +268,7 @@ func (c *Conn) startConn() error {
 
 func (c *Conn) Close() {
 	c.brokerConn.Close()
-	c.SetProducerMap(nil)
+	c.setProducerMap(nil)
 }
 
 func (c *Conn) brokerCorePublish(subject, reply string, msg []byte) error {
@@ -520,7 +520,7 @@ func GetDlsMsgId(stationName string, producerName string, timeSent string) strin
 }
 
 func (pm *ProducersMap) getProducer(key string) *Producer {
-	if (*pm)[key] != nil {
+	if (*pm) != nil && (*pm)[key] != nil {
 		return (*pm)[key]
 	}
 	return nil

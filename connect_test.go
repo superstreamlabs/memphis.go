@@ -44,7 +44,7 @@ func TestProduceNoProducer(t *testing.T) {
 		t.Error(err)
 	}
 
-	pm := c.GetProducerMap()
+	pm := c.getProducerMap()
 	pm.unsetStationProducers("station_name_c_produce")
 	p := pm.getProducer("producer_name_a")
 	if p != nil {
