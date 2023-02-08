@@ -26,3 +26,21 @@ func TestNormalizeHost(t *testing.T) {
 		t.Error()
 	}
 }
+
+func TestProduceNoProducer(t *testing.T) {
+	c, err := Connect("localhost", "root", "memphis")
+	if err != nil {
+		t.Error(err)
+	}
+	defer c.Close()
+
+	err = c.Produce("station_name_c_produce", "producer_name_a", []byte("Hey There!"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = c.Produce("station_name_c_produce", "producer_name_a", []byte("Hey! Test 2 pleaseee"))
+	if err != nil {
+		t.Error(err)
+	}
+}
