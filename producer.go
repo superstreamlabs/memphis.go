@@ -197,7 +197,7 @@ func (c *Conn) cacheProducer(p *Producer) {
 }
 
 func (c *Conn) unCacheProducer(p *Producer) {
-	pn := fmt.Sprintf("%s_%s", p.stationName, p.Name)
+	pn := fmt.Sprintf("%s_%s", p.stationName, p.realName)
 	pm := c.getProducerMap()
 	if pm.getProducer(pn) == nil {
 		pm.unsetProducer(pn)
