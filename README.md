@@ -189,7 +189,7 @@ Without creating a producer (receiver function of the connection struct).
 In cases where extra performance is needed the recommended way is to create a producer first
 and produce messages by using the produce receiver function of it
 ```go
-c.Produce("station_name_c_produce", "producer_name_a", []byte("Hey There!"))
+c.Produce("station_name_c_produce", "producer_name_a", []byte("Hey There!"), []memphis.ProducerOpt{}, []memphis.ProduceOpt{})
 ```
 
 Creating a producer first (receiver function of the producer struct).
