@@ -37,6 +37,7 @@ type Producer struct {
 	Name        string
 	stationName string
 	conn        *Conn
+	realName    string
 }
 
 type createProducerReq struct {
@@ -136,6 +137,7 @@ func extendNameWithRandSuffix(name string) (string, error) {
 
 // CreateProducer - creates a producer.
 func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*Producer, error) {
+	name = strings.ToLower(name)
 	defaultOpts := getDefaultProducerOpts()
 	var err error
 	for _, opt := range opts {
@@ -144,6 +146,7 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 		}
 	}
 
+	nameWithoutSuffix := name
 	if defaultOpts.GenUniqueSuffix {
 		name, err = extendNameWithRandSuffix(name)
 		if err != nil {
@@ -155,6 +158,7 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 		Name:        name,
 		stationName: getInternalName(stationName),
 		conn:        c,
+		realName:    nameWithoutSuffix,
 	}
 
 	err = c.listenToSchemaUpdates(stationName)
@@ -176,39 +180,41 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 // Produce - produce a message without creating a new producer, using connection only,
 // in cases where extra performance is needed the recommended way is to create a producer first
 // and produce messages by using the produce receiver function of it
-func (c *Conn) Produce(stationName, name string, message any, opts ...ProducerOpt) error {
-	if err, cp := c.getProducerFromCache(stationName, name); err == nil {
-		return cp.Produce(message, nil)
+func (c *Conn) Produce(stationName, name string, message any, opts []ProducerOpt, pOpts []ProduceOpt) error {
+	if cp, err := c.getProducerFromCache(stationName, name); err == nil {
+		return cp.Produce(message, pOpts...)
 	}
 	p, err := c.CreateProducer(stationName, name, opts...)
 	if err != nil {
 		return memphisError(err)
 	}
 
-	return p.Produce(message, nil)
+	return p.Produce(message, pOpts...)
 }
 
 func (c *Conn) cacheProducer(p *Producer) {
-	pm := c.getProducerMap()
+	pm := c.getProducersMap()
 	pm.setProducer(p)
 }
 
 func (c *Conn) unCacheProducer(p *Producer) {
-	pn := fmt.Sprintf("%s_%s", p.stationName, p.Name)
-	pm := c.getProducerMap()
+	pn := fmt.Sprintf("%s_%s", p.stationName, p.realName)
+	pm := c.getProducersMap()
 	if pm.getProducer(pn) == nil {
 		pm.unsetProducer(pn)
 	}
 }
 
-func (c *Conn) getProducerFromCache(stationName, name string) (error, *Producer) {
+func (c *Conn) getProducerFromCache(stationName, name string) (*Producer, error) {
+	stationName = getInternalName(stationName)
+	name = strings.ToLower(name)
 	pn := fmt.Sprintf("%s_%s", stationName, name)
-	pm := c.getProducerMap()
+	pm := c.getProducersMap()
 	if pm.getProducer(pn) == nil {
-		return fmt.Errorf("%s not exists on the map", pn), nil
+		return nil, fmt.Errorf("%s not exists on the map", pn)
 	}
 
-	return nil, pm.getProducer(pn)
+	return pm.getProducer(pn), nil
 }
 
 // Station.CreateProducer - creates a producer attached to this station.
@@ -320,7 +326,7 @@ func (p *Producer) Produce(message any, opts ...ProduceOpt) error {
 
 func (hdr *Headers) validateHeaderKey(key string) error {
 	if strings.HasPrefix(key, "$memphis") {
-		return memphisError(errors.New("Keys in headers should not start with $memphis"))
+		return memphisError(errors.New("keys in headers should not start with $memphis"))
 	}
 	return nil
 }
@@ -496,6 +502,7 @@ func AsyncProduce() ProduceOpt {
 	}
 }
 
+// MsgId - set an id for a message for idempotent producer
 func MsgId(id string) ProduceOpt {
 	return func(opts *ProduceOpts) error {
 		opts.MsgHeaders.MsgHeaders["msg-id"] = []string{id}
