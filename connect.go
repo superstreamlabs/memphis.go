@@ -72,11 +72,11 @@ func (c *Conn) IsConnected() bool {
 	return c.brokerConn.IsConnected()
 }
 
-func (c *Conn) getProducerMap() ProducersMap {
+func (c *Conn) getProducersMap() ProducersMap {
 	return c.producersMap
 }
 
-func (c *Conn) setProducerMap(producersMap ProducersMap) {
+func (c *Conn) setProducersMap(producersMap ProducersMap) {
 	c.producersMap = producersMap
 }
 
@@ -268,7 +268,7 @@ func (c *Conn) startConn() error {
 
 func (c *Conn) Close() {
 	c.brokerConn.Close()
-	c.setProducerMap(nil)
+	c.setProducersMap(nil)
 }
 
 func (c *Conn) brokerCorePublish(subject, reply string, msg []byte) error {
@@ -527,7 +527,7 @@ func (pm *ProducersMap) getProducer(key string) *Producer {
 }
 
 func (pm *ProducersMap) setProducer(p *Producer) {
-	pn := fmt.Sprintf("%s_%s", p.stationName, p.Name)
+	pn := fmt.Sprintf("%s_%s", p.stationName, p.realName)
 
 	if pm.getProducer(pn) != nil {
 		return
