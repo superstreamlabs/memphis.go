@@ -68,6 +68,7 @@ type ConfigurationsUpdate struct {
 	Update      bool   `json:"update"`
 }
 
+// IsConnected - check if connected to broker - returns boolean
 func (c *Conn) IsConnected() bool {
 	return c.brokerConn.IsConnected()
 }
