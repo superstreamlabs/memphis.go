@@ -310,6 +310,12 @@ sequenceNumber, err := msg.GetSequenceNumber()
 ```
 ### Destroying a Consumer
 
-```shell
+```go
 consumer.Destroy();
+```
+
+### Check if broker is connected
+
+```go
+conn.IsConnected()
 ```
