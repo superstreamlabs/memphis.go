@@ -105,7 +105,8 @@ s1, err = c.CreateStation("<station-name>",
  memphis.IdempotencyWindow(<time.Duration>), // defaults to 2 minutes
  memphis.SchemaName(<string>),
  memphis.SendPoisonMsgToDls(<bool>), // defaults to true
- memphis.SendSchemaFailedMsgToDls(<bool>) // defaults to true
+ memphis.SendSchemaFailedMsgToDls(<bool>), // defaults to true
+ memphis.TieredStorageEnabled(<bool>) // defaults to false
 )
 ```
 
