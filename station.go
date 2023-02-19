@@ -38,15 +38,16 @@ import (
 
 // Station - memphis station object.
 type Station struct {
-	Name              string
-	RetentionType     RetentionType
-	RetentionValue    int
-	StorageType       StorageType
-	Replicas          int
-	IdempotencyWindow time.Duration
-	conn              *Conn
-	SchemaName        string
-	DlsConfiguration  dlsConfiguration
+	Name                 string
+	RetentionType        RetentionType
+	RetentionValue       int
+	StorageType          StorageType
+	Replicas             int
+	IdempotencyWindow    time.Duration
+	conn                 *Conn
+	SchemaName           string
+	DlsConfiguration     dlsConfiguration
+	TieredStorageEnabled bool
 }
 
 // RetentionType - station's message retention type
@@ -84,6 +85,7 @@ type createStationReq struct {
 	SchemaName              string           `json:"schema_name"`
 	DlsConfiguration        dlsConfiguration `json:"dls_configuration"`
 	Username                string           `json:"username"`
+	TieredStorageEnabled    bool             `json:"tiered_storage_enabled"`
 }
 
 type removeStationReq struct {
@@ -102,6 +104,7 @@ type StationOpts struct {
 	SchemaName               string
 	SendPoisonMsgToDls       bool
 	SendSchemaFailedMsgToDls bool
+	TieredStorageEnabled     bool
 }
 
 type dlsConfiguration struct {
@@ -123,6 +126,7 @@ func GetStationDefaultOptions() StationOpts {
 		SchemaName:               "",
 		SendPoisonMsgToDls:       true,
 		SendSchemaFailedMsgToDls: true,
+		TieredStorageEnabled:     false,
 	}
 }
 
@@ -159,6 +163,7 @@ func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 			Poison:      opts.SendPoisonMsgToDls,
 			Schemaverse: opts.SendSchemaFailedMsgToDls,
 		},
+		TieredStorageEnabled: opts.TieredStorageEnabled,
 	}
 
 	return &s, s.conn.create(&s)
@@ -198,6 +203,7 @@ func (s *Station) getCreationReq() any {
 		SchemaName:              s.SchemaName,
 		DlsConfiguration:        s.DlsConfiguration,
 		Username:                s.conn.username,
+		TieredStorageEnabled:    s.TieredStorageEnabled,
 	}
 }
 
@@ -281,6 +287,14 @@ func SendPoisonMsgToDls(sendPoisonMsgToDls bool) StationOpt {
 func SendSchemaFailedMsgToDls(sendSchemaFailedMsgToDls bool) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.SendSchemaFailedMsgToDls = sendSchemaFailedMsgToDls
+		return nil
+	}
+}
+
+// TieredStorageEnabled - enable tiered storage, default is false
+func TieredStorageEnabled(tieredStorageEnabled bool) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.TieredStorageEnabled = tieredStorageEnabled
 		return nil
 	}
 }
