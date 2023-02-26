@@ -85,6 +85,7 @@ type createStationReq struct {
 	SchemaName              string           `json:"schema_name"`
 	DlsConfiguration        dlsConfiguration `json:"dls_configuration"`
 	Username                string           `json:"username"`
+	TieredStorageEnabled    bool             `json:"tiered_storage_enabled"`
 }
 
 type removeStationReq struct {
@@ -202,6 +203,7 @@ func (s *Station) getCreationReq() any {
 		SchemaName:              s.SchemaName,
 		DlsConfiguration:        s.DlsConfiguration,
 		Username:                s.conn.username,
+		TieredStorageEnabled:    s.TieredStorageEnabled,
 	}
 }
 
