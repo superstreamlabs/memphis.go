@@ -40,6 +40,8 @@ type Option func(*Options) error
 
 type ProducersMap map[string]*Producer
 
+type ConsumersMap map[string]*Consumer
+
 type TLSOpts struct {
 	TlsCert string
 	TlsKey  string
@@ -68,6 +70,37 @@ type ConfigurationsUpdate struct {
 	Update      bool   `json:"update"`
 }
 
+// FetchOpts - configuration options for fetch.
+type FetchOpts struct {
+	Name                     string
+	StationName              string
+	ConsumerGroup            string
+	BatchSize                int
+	BatchMaxTimeToWait       time.Duration
+	MaxAckTime               time.Duration
+	MaxMsgDeliveries         int
+	GenUniqueSuffix          bool
+	ErrHandler               ConsumerErrHandler
+	StartConsumeFromSequence uint64
+	LastMessages             int64
+}
+
+// getDefaultConsumerOptions - returns default configuration options for consumers.
+func getDefaultFetchOptions() FetchOpts {
+	return FetchOpts{
+		BatchMaxTimeToWait:       5 * time.Second,
+		MaxAckTime:               30 * time.Second,
+		MaxMsgDeliveries:         10,
+		GenUniqueSuffix:          false,
+		ErrHandler:               DefaultConsumerErrHandler,
+		StartConsumeFromSequence: 1,
+		LastMessages:             -1,
+	}
+}
+
+// FetchOpt  - a function on the options fetch.
+type FetchOpt func(*FetchOpts) error
+
 // IsConnected - check if connected to broker - returns boolean
 func (c *Conn) IsConnected() bool {
 	return c.brokerConn.IsConnected()
@@ -79,6 +112,14 @@ func (c *Conn) getProducersMap() ProducersMap {
 
 func (c *Conn) setProducersMap(producersMap ProducersMap) {
 	c.producersMap = producersMap
+}
+
+func (c *Conn) getConsumersMap() ConsumersMap {
+	return c.consumersMap
+}
+
+func (c *Conn) setConsumersMap(consumersMap ConsumersMap) {
+	c.consumersMap = consumersMap
 }
 
 // Conn - holds the connection with memphis.
@@ -93,6 +134,7 @@ type Conn struct {
 	configUpdatesMu    sync.RWMutex
 	configUpdatesSub   configurationsUpdateSub
 	producersMap       ProducersMap
+	consumersMap       ConsumersMap
 }
 
 type attachSchemaReq struct {
@@ -191,6 +233,7 @@ func (opts Options) connect() (*Conn, error) {
 		ConnId:       connId,
 		opts:         opts,
 		producersMap: make(ProducersMap),
+		consumersMap: make(ConsumersMap),
 	}
 
 	if err := c.startConn(); err != nil {
@@ -270,6 +313,7 @@ func (c *Conn) startConn() error {
 func (c *Conn) Close() {
 	c.brokerConn.Close()
 	c.setProducersMap(nil)
+	c.setConsumersMap(nil)
 }
 
 func (c *Conn) brokerCorePublish(subject, reply string, msg []byte) error {
@@ -545,5 +589,146 @@ func (pm *ProducersMap) unsetStationProducers(stationName string) {
 		if v.stationName == stationName {
 			pm.unsetProducer(k)
 		}
+	}
+}
+func (cm *ConsumersMap) getConsumer(key string) *Consumer {
+	if (*cm) != nil && (*cm)[key] != nil {
+		return (*cm)[key]
+	}
+	return nil
+}
+
+func (cm *ConsumersMap) setConsumer(c *Consumer) {
+	cn := fmt.Sprintf("%s_%s", c.stationName, c.realName)
+	if cm.getConsumer(cn) != nil {
+		return
+	}
+	(*cm)[cn] = c
+}
+
+func (cm *ConsumersMap) unsetConsumer(key string) {
+	delete(*cm, key)
+}
+
+func (cm *ConsumersMap) unsetStationConsumers(stationName string) {
+	for k, v := range *cm {
+		if v.stationName == stationName {
+			cm.unsetConsumer(k)
+		}
+	}
+}
+
+func (c *Conn) FetchMessages(stationName string, consumerName string, batchSize int, opts ...FetchOpt) ([]*Msg, error) {
+	var consumer *Consumer
+	cm := c.getConsumersMap()
+	cons := cm.getConsumer(fmt.Sprintf("%s_%s", strings.ToLower(stationName), strings.ToLower(consumerName)))
+	if cons == nil {
+		defaultOpts := getDefaultFetchOptions()
+		defaultOpts.Name = consumerName
+		defaultOpts.StationName = stationName
+		defaultOpts.ConsumerGroup = consumerName
+		defaultOpts.BatchSize = batchSize
+		for _, opt := range opts {
+			if opt != nil {
+				if err := opt(&defaultOpts); err != nil {
+					return nil, memphisError(err)
+				}
+			}
+		}
+		if defaultOpts.GenUniqueSuffix {
+			co, err := c.CreateConsumer(stationName, consumerName, BatchMaxWaitTime(defaultOpts.BatchMaxTimeToWait), BatchSize(batchSize), ConsumerGroup(defaultOpts.ConsumerGroup), ConsumerErrorHandler(defaultOpts.ErrHandler), LastMessages(defaultOpts.LastMessages), MaxAckTime(defaultOpts.MaxAckTime), MaxMsgDeliveries(defaultOpts.MaxMsgDeliveries), StartConsumeFromSequence(defaultOpts.StartConsumeFromSequence), ConsumerGenUniqueSuffix())
+			if err != nil {
+				return nil, err
+			}
+			consumer = co
+		} else {
+			con, err := c.CreateConsumer(stationName, consumerName, BatchMaxWaitTime(defaultOpts.BatchMaxTimeToWait), BatchSize(batchSize), ConsumerGroup(defaultOpts.ConsumerGroup), ConsumerErrorHandler(defaultOpts.ErrHandler), LastMessages(defaultOpts.LastMessages), MaxAckTime(defaultOpts.MaxAckTime), MaxMsgDeliveries(defaultOpts.MaxMsgDeliveries), StartConsumeFromSequence(defaultOpts.StartConsumeFromSequence))
+			if err != nil {
+				return nil, err
+			}
+			consumer = con
+		}
+	} else {
+		consumer = cons
+	}
+	msgs, err := consumer.Fetch(batchSize)
+	if err != nil {
+		return nil, err
+	}
+	return msgs, nil
+}
+
+// ConsumerName - name for the consumer.
+func FetchConsumerName(name string) FetchOpt {
+	return func(opts *FetchOpts) error {
+		opts.Name = name
+		return nil
+	}
+}
+
+// StationNameOpt - station name to consume messages from.
+func FetchStationNameOpt(stationName string) FetchOpt {
+	return func(opts *FetchOpts) error {
+		opts.StationName = stationName
+		return nil
+	}
+}
+
+// ConsumerGroup - consumer group name, default is "".
+func FetchConsumerGroup(cg string) FetchOpt {
+	return func(opts *FetchOpts) error {
+		opts.ConsumerGroup = cg
+		return nil
+	}
+}
+
+// BatchSize - pull batch size.
+func FetchBatchSize(batchSize int) FetchOpt {
+	return func(opts *FetchOpts) error {
+		opts.BatchSize = batchSize
+		return nil
+	}
+}
+
+// BatchMaxWaitTime - max time to wait between pulls, defauls is 5 seconds.
+func FetchBatchMaxWaitTime(batchMaxWaitTime time.Duration) FetchOpt {
+	return func(opts *FetchOpts) error {
+		if batchMaxWaitTime < 1*time.Millisecond {
+			batchMaxWaitTime = 1 * time.Millisecond
+		}
+		opts.BatchMaxTimeToWait = batchMaxWaitTime
+		return nil
+	}
+}
+
+// MaxAckTime - max time for ack a message, in case a message not acked within this time period memphis will resend it.
+func FetchMaxAckTime(maxAckTime time.Duration) FetchOpt {
+	return func(opts *FetchOpts) error {
+		opts.MaxAckTime = maxAckTime
+		return nil
+	}
+}
+
+// MaxMsgDeliveries - max number of message deliveries, by default is 10.
+func FetchMaxMsgDeliveries(maxMsgDeliveries int) FetchOpt {
+	return func(opts *FetchOpts) error {
+		opts.MaxMsgDeliveries = maxMsgDeliveries
+		return nil
+	}
+}
+
+// ConsumerGenUniqueSuffix - whether to generate a unique suffix for this consumer.
+func FetchConsumerGenUniqueSuffix() FetchOpt {
+	return func(opts *FetchOpts) error {
+		opts.GenUniqueSuffix = true
+		return nil
+	}
+}
+
+// FetchConsumerErrorHandler - handler for consumer errors.
+func FetchConsumerErrorHandler(ceh ConsumerErrHandler) FetchOpt {
+	return func(opts *FetchOpts) error {
+		opts.ErrHandler = ceh
+		return nil
 	}
 }

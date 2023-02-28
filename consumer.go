@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -51,15 +53,18 @@ type Consumer struct {
 	subscription             *nats.Subscription
 	pingInterval             time.Duration
 	subscriptionActive       bool
-	firstFetch               bool
 	consumeActive            bool
-	dlsCh                    chan *nats.Msg
 	consumeQuit              chan struct{}
 	pingQuit                 chan struct{}
 	errHandler               ConsumerErrHandler
 	StartConsumeFromSequence uint64
 	LastMessages             int64
 	context                  context.Context
+	realName                 string
+	dlsCurrentIndex          int
+	dlsHandlerFunc           ConsumeHandler
+	dlsMsgs                  []*Msg
+	dlsMsgsMutex             sync.RWMutex
 }
 
 // Msg - a received message, can be acked.
@@ -198,14 +203,21 @@ func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...Consumer
 			}
 		}
 	}
+	consumer, err := defaultOpts.createConsumer(c)
+	if err != nil {
+		return nil, memphisError(err)
+	}
+	cm := c.getConsumersMap()
+	cm.setConsumer(consumer)
 
-	return defaultOpts.createConsumer(c)
+	return consumer, nil
 }
 
 // ConsumerOpts.createConsumer - creates a consumer using a configuration struct.
 func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	var err error
-
+	name := strings.ToLower(opts.Name)
+	nameWithoutSuffix := name
 	if opts.GenUniqueSuffix {
 		opts.Name, err = extendNameWithRandSuffix(opts.Name)
 		if err != nil {
@@ -225,6 +237,10 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		errHandler:               opts.ErrHandler,
 		StartConsumeFromSequence: opts.StartConsumeFromSequence,
 		LastMessages:             opts.LastMessages,
+		dlsMsgs:                  []*Msg{},
+		dlsCurrentIndex:          0,
+		dlsHandlerFunc:           nil,
+		realName:                 nameWithoutSuffix,
 	}
 
 	if consumer.StartConsumeFromSequence == 0 {
@@ -244,8 +260,6 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		return nil, memphisError(err)
 	}
 
-	consumer.firstFetch = true
-	consumer.dlsCh = make(chan *nats.Msg, 1)
 	consumer.consumeQuit = make(chan struct{})
 	consumer.pingQuit = make(chan struct{}, 1)
 
@@ -269,6 +283,11 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	consumer.subscriptionActive = true
 
 	go consumer.pingConsumer()
+	err = consumer.dlsSubscriptionInit()
+	if err != nil {
+		return nil, memphisError(err)
+	}
+	c.cacheConsumer(&consumer)
 
 	return &consumer, err
 }
@@ -323,18 +342,9 @@ type ConsumeHandler func([]*Msg, error, context.Context)
 // When a batch is consumed the handlerFunc will be called.
 func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
 	go func(c *Consumer) {
-		if c.firstFetch {
-			err := c.firstFetchInit()
-			if err != nil {
-				handlerFunc(nil, memphisError(err), nil)
-				return
-			}
-
-			c.firstFetch = false
-			msgs, err := c.fetchSubscription()
-			handlerFunc(msgs, memphisError(err), c.context)
-		}
-
+		msgs, err := c.fetchSubscription()
+		handlerFunc(msgs, memphisError(err), c.context)
+		c.dlsHandlerFunc = handlerFunc
 		ticker := time.NewTicker(c.PullInterval)
 		defer ticker.Stop()
 
@@ -349,18 +359,6 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
 			select {
 			case <-ticker.C:
 				msgs, err := c.fetchSubscription()
-
-				// ignore fetch timeout if we have messages in the dls channel
-				if err == nats.ErrTimeout && len(c.dlsCh) > 0 {
-					err = nil
-				}
-
-				// push messages from the dls channel to the user's handler
-				for len(c.dlsCh) > 0 {
-					dlsMsg := Msg{msg: <-c.dlsCh, conn: c.conn, cgName: c.ConsumerGroup}
-					msgs = append(msgs, &dlsMsg)
-				}
-
 				handlerFunc(msgs, memphisError(err), nil)
 			case <-c.consumeQuit:
 				return
@@ -415,7 +413,7 @@ func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
 	}()
 	select {
 	case <-time.After(timeoutDuration):
-		return nil, memphisError(errors.New("fetch timed out"))
+		return nil, nil
 	case fetchRes := <-out:
 		return fetchRes.msgs, memphisError(fetchRes.err)
 
@@ -423,20 +421,25 @@ func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
 }
 
 // Fetch - immediately fetch a message batch.
-func (c *Consumer) Fetch() ([]*Msg, error) {
-	if c.firstFetch {
-		err := c.firstFetchInit()
-		if err != nil {
-			return nil, memphisError(err)
+func (c *Consumer) Fetch(batchSize int) ([]*Msg, error) {
+	c.BatchSize = batchSize
+	var msgs []*Msg
+	if len(c.dlsMsgs) > 0 {
+		c.dlsMsgsMutex.Lock()
+		if len(c.dlsMsgs) <= batchSize {
+			msgs = c.dlsMsgs
+			c.dlsMsgs = []*Msg{}
+		} else {
+			msgs = c.dlsMsgs[:batchSize-1]
+			c.dlsMsgs = c.dlsMsgs[batchSize-1:]
 		}
-
-		c.firstFetch = false
+		c.dlsMsgsMutex.Unlock()
+		return msgs, nil
 	}
-
 	return c.fetchSubscriprionWithTimeout()
 }
 
-func (c *Consumer) firstFetchInit() error {
+func (c *Consumer) dlsSubscriptionInit() error {
 	var err error
 	_, err = c.conn.brokerQueueSubscribe(c.getDlsSubjName(), c.getDlsQueueName(), c.createDlsMsgHandler())
 	return memphisError(err)
@@ -444,7 +447,25 @@ func (c *Consumer) firstFetchInit() error {
 
 func (c *Consumer) createDlsMsgHandler() nats.MsgHandler {
 	return func(msg *nats.Msg) {
-		c.dlsCh <- msg
+		// if a consume function is active
+		if c.dlsHandlerFunc != nil {
+			dlsMsg := []*Msg{{msg: msg, conn: c.conn, cgName: c.ConsumerGroup}}
+			c.dlsHandlerFunc(dlsMsg, nil, nil)
+		} else {
+			// for fetch function
+			c.dlsMsgsMutex.Lock()
+			if len(c.dlsMsgs) > 9999 {
+				indexToInsert := c.dlsCurrentIndex
+				if indexToInsert >= 10000 {
+					indexToInsert = indexToInsert % 10000
+				}
+				c.dlsMsgs[indexToInsert] = &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup}
+			} else {
+				c.dlsMsgs = append(c.dlsMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup})
+			}
+			c.dlsCurrentIndex = c.dlsCurrentIndex + 1
+			c.dlsMsgsMutex.Unlock()
+		}
 	}
 }
 
@@ -467,6 +488,7 @@ func (c *Consumer) Destroy() error {
 		c.pingQuit <- struct{}{}
 	}
 
+	c.conn.unCacheConsumer(c)
 	return c.conn.destroy(c)
 }
 
@@ -596,5 +618,18 @@ func LastMessages(lastMessages int64) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.LastMessages = lastMessages
 		return nil
+	}
+}
+
+func (con *Conn) cacheConsumer(c *Consumer) {
+	cm := con.getConsumersMap()
+	cm.setConsumer(c)
+}
+
+func (con *Conn) unCacheConsumer(c *Consumer) {
+	cn := fmt.Sprintf("%s_%s", c.stationName, c.realName)
+	cm := con.getConsumersMap()
+	if cm.getConsumer(cn) == nil {
+		cm.unsetConsumer(cn)
 	}
 }
