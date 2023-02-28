@@ -618,6 +618,7 @@ func (cm *ConsumersMap) unsetStationConsumers(stationName string) {
 	}
 }
 
+// FetchMessages - Consume a batch of messages.
 func (c *Conn) FetchMessages(stationName string, consumerName string, batchSize int, opts ...FetchOpt) ([]*Msg, error) {
 	var consumer *Consumer
 	cm := c.getConsumersMap()
