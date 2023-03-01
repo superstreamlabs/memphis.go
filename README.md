@@ -98,7 +98,7 @@ _If a station already exists nothing happens, the new configuration will not be 
 s0, err = c.CreateStation("<station-name>")
 
 s1, err = c.CreateStation("<station-name>", 
- memphis.RetentionTypeOpt(<Messages/MaxMeMessageAgeSeconds/Bytes>),
+ memphis.RetentionTypeOpt(<Messages/MaxMessageAgeSeconds/Bytes>),
  memphis.RetentionVal(<int>), 
  memphis.StorageTypeOpt(<Memory/Disk>), 
  memphis.Replicas(<int>), 
@@ -114,7 +114,7 @@ s1, err = c.CreateStation("<station-name>",
 Memphis currently supports the following types of retention:<br>
 
 ```go
-memphis.MaxMeMessageAgeSeconds
+memphis.MaxMessageAgeSeconds
 ```
 
 The above means that every message persists for the value set in the retention value field (in seconds).
@@ -130,6 +130,16 @@ memphis.Bytes
 ```
 
 The above means that after maximum number of saved bytes (set in retention value)<br>has been reached, the oldest messages will be deleted.
+
+### Retention Values
+
+The `retention values` are directly related to the `retention types` mentioned above,<br> where the values vary according to the type of retention chosen.
+
+All retention values are of type `int` but with different representations as follows:
+
+`memphis.MaxMessageAgeSeconds` is represented **in seconds**, `memphis.Messages` in a **number of messages** <br> and finally `memphis.Bytes` in a **number of bytes**.
+
+After these limits are reached oldest messages will be deleted.
 
 ### Storage Types
 Memphis currently supports the following types of messages storage:<br>
