@@ -137,7 +137,7 @@ The `retention values` are directly related to the `retention types` mentioned a
 
 All retention values are of type `int` but with different representations as follows:
 
-`MaxMessageAgeSeconds` is represented **in seconds**, `Messages` in a **number of messages** <br> and finally `Bytes` in a **number of bytes**.
+`memphis.MaxMessageAgeSeconds` is represented **in seconds**, `memphis.Messages` in a **number of messages** <br> and finally `memphis.Bytes` in a **number of bytes**.
 
 After these limits are reached oldest messages will be deleted.
 
