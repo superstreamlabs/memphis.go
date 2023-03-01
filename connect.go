@@ -72,7 +72,7 @@ type ConfigurationsUpdate struct {
 
 // FetchOpts - configuration options for fetch.
 type FetchOpts struct {
-	Name                     string
+	ConsumerName             string
 	StationName              string
 	ConsumerGroup            string
 	BatchSize                int
@@ -88,6 +88,8 @@ type FetchOpts struct {
 // getDefaultConsumerOptions - returns default configuration options for consumers.
 func getDefaultFetchOptions() FetchOpts {
 	return FetchOpts{
+		BatchSize:                10,
+		ConsumerGroup:            "",
 		BatchMaxTimeToWait:       5 * time.Second,
 		MaxAckTime:               30 * time.Second,
 		MaxMsgDeliveries:         10,
@@ -599,7 +601,8 @@ func (cm *ConsumersMap) getConsumer(key string) *Consumer {
 }
 
 func (cm *ConsumersMap) setConsumer(c *Consumer) {
-	cn := fmt.Sprintf("%s_%s", c.stationName, c.realName)
+	internalStationName := getInternalName(c.stationName)
+	cn := fmt.Sprintf("%s_%s", internalStationName, c.realName)
 	if cm.getConsumer(cn) != nil {
 		return
 	}
@@ -611,39 +614,40 @@ func (cm *ConsumersMap) unsetConsumer(key string) {
 }
 
 func (cm *ConsumersMap) unsetStationConsumers(stationName string) {
+	internalStationName := getInternalName(stationName)
 	for k, v := range *cm {
-		if v.stationName == stationName {
+		intetnalStationV := getInternalName(v.stationName)
+		if intetnalStationV == internalStationName {
 			cm.unsetConsumer(k)
 		}
 	}
 }
 
 // FetchMessages - Consume a batch of messages.
-func (c *Conn) FetchMessages(stationName string, consumerName string, batchSize int, opts ...FetchOpt) ([]*Msg, error) {
+func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...FetchOpt) ([]*Msg, error) {
 	var consumer *Consumer
 	cm := c.getConsumersMap()
-	cons := cm.getConsumer(fmt.Sprintf("%s_%s", strings.ToLower(stationName), strings.ToLower(consumerName)))
-	if cons == nil {
-		defaultOpts := getDefaultFetchOptions()
-		defaultOpts.Name = consumerName
-		defaultOpts.StationName = stationName
-		defaultOpts.ConsumerGroup = consumerName
-		defaultOpts.BatchSize = batchSize
-		for _, opt := range opts {
-			if opt != nil {
-				if err := opt(&defaultOpts); err != nil {
-					return nil, memphisError(err)
-				}
+	internalStationName := getInternalName(strings.ToLower(stationName))
+	cons := cm.getConsumer(fmt.Sprintf("%s_%s", internalStationName, strings.ToLower(consumerName)))
+	defaultOpts := getDefaultFetchOptions()
+	defaultOpts.ConsumerName = consumerName
+	defaultOpts.StationName = stationName
+	for _, opt := range opts {
+		if opt != nil {
+			if err := opt(&defaultOpts); err != nil {
+				return nil, memphisError(err)
 			}
 		}
+	}
+	if cons == nil {
 		if defaultOpts.GenUniqueSuffix {
-			co, err := c.CreateConsumer(stationName, consumerName, BatchMaxWaitTime(defaultOpts.BatchMaxTimeToWait), BatchSize(batchSize), ConsumerGroup(defaultOpts.ConsumerGroup), ConsumerErrorHandler(defaultOpts.ErrHandler), LastMessages(defaultOpts.LastMessages), MaxAckTime(defaultOpts.MaxAckTime), MaxMsgDeliveries(defaultOpts.MaxMsgDeliveries), StartConsumeFromSequence(defaultOpts.StartConsumeFromSequence), ConsumerGenUniqueSuffix())
+			co, err := c.CreateConsumer(stationName, consumerName, BatchMaxWaitTime(defaultOpts.BatchMaxTimeToWait), BatchSize(defaultOpts.BatchSize), ConsumerGroup(defaultOpts.ConsumerGroup), ConsumerErrorHandler(defaultOpts.ErrHandler), LastMessages(defaultOpts.LastMessages), MaxAckTime(defaultOpts.MaxAckTime), MaxMsgDeliveries(defaultOpts.MaxMsgDeliveries), StartConsumeFromSequence(defaultOpts.StartConsumeFromSequence), ConsumerGenUniqueSuffix())
 			if err != nil {
 				return nil, err
 			}
 			consumer = co
 		} else {
-			con, err := c.CreateConsumer(stationName, consumerName, BatchMaxWaitTime(defaultOpts.BatchMaxTimeToWait), BatchSize(batchSize), ConsumerGroup(defaultOpts.ConsumerGroup), ConsumerErrorHandler(defaultOpts.ErrHandler), LastMessages(defaultOpts.LastMessages), MaxAckTime(defaultOpts.MaxAckTime), MaxMsgDeliveries(defaultOpts.MaxMsgDeliveries), StartConsumeFromSequence(defaultOpts.StartConsumeFromSequence))
+			con, err := c.CreateConsumer(stationName, consumerName, BatchMaxWaitTime(defaultOpts.BatchMaxTimeToWait), BatchSize(defaultOpts.BatchSize), ConsumerGroup(defaultOpts.ConsumerGroup), ConsumerErrorHandler(defaultOpts.ErrHandler), LastMessages(defaultOpts.LastMessages), MaxAckTime(defaultOpts.MaxAckTime), MaxMsgDeliveries(defaultOpts.MaxMsgDeliveries), StartConsumeFromSequence(defaultOpts.StartConsumeFromSequence))
 			if err != nil {
 				return nil, err
 			}
@@ -652,7 +656,7 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, batchSize 
 	} else {
 		consumer = cons
 	}
-	msgs, err := consumer.Fetch(batchSize)
+	msgs, err := consumer.Fetch(defaultOpts.BatchSize)
 	if err != nil {
 		return nil, err
 	}
@@ -662,7 +666,7 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, batchSize 
 // ConsumerName - name for the consumer.
 func FetchConsumerName(name string) FetchOpt {
 	return func(opts *FetchOpts) error {
-		opts.Name = name
+		opts.ConsumerName = name
 		return nil
 	}
 }

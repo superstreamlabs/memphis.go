@@ -207,8 +207,7 @@ func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...Consumer
 	if err != nil {
 		return nil, memphisError(err)
 	}
-	cm := c.getConsumersMap()
-	cm.setConsumer(consumer)
+	c.cacheConsumer(consumer)
 
 	return consumer, nil
 }
@@ -413,14 +412,14 @@ func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
 	}()
 	select {
 	case <-time.After(timeoutDuration):
-		return nil, nil
+		return nil, memphisError(errors.New("fetch timed out"))
 	case fetchRes := <-out:
 		return fetchRes.msgs, memphisError(fetchRes.err)
 
 	}
 }
 
-// Fetch - immediately fetch a message batch.
+// Fetch - immediately fetch a batch of messages.
 func (c *Consumer) Fetch(batchSize int) ([]*Msg, error) {
 	c.BatchSize = batchSize
 	var msgs []*Msg
