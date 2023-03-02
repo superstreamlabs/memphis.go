@@ -137,7 +137,7 @@ func TestFetch(t *testing.T) {
 		t.Error(err)
 	}
 
-	msgs, err := consumer.Fetch()
+	msgs, err := consumer.Fetch(consumer.BatchSize)
 	if err != nil {
 		t.Error(err)
 	}

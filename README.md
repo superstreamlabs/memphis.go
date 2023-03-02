@@ -256,7 +256,7 @@ p.Destroy();
 consumer0, err = s.CreateConsumer("<consumer-name>",
   memphis.ConsumerGroup("<consumer-group>"), // defaults to consumer name
   memphis.PullInterval(<pull interval time.Duration), // defaults to 1 second
-  memphis.BatchSize(<batch-size int), // defaults to 10
+  memphis.BatchSize(<batch-size> int), // defaults to 10
   memphis.BatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds, has to be at least 1 ms
   memphis.MaxAckTime(<time.Duration>), // defaults to 30 sec
   memphis.MaxMsgDeliveries(<int>), // defaults to 10
@@ -295,10 +295,23 @@ func handler(msgs []*memphis.Msg, err error, ctx context.Context) {
 consumer.Consume(handler)
 ```
 
-You can trigger a single fetch with the Fetch() method
+### Fetch a single batch of messages
+```go
+msgs, err := conn.FetchMessages("<station-name>", "<consumer-name>",
+  memphis.FetchBatchSize(<int>) // defaults to 10
+  memphis.FetchConsumerGroup("<consumer-group>"), // defaults to consumer name
+  memphis.FetchBatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds, has to be at least 1 ms
+  memphis.FetchMaxAckTime(<time.Duration>), // defaults to 30 sec
+  memphis.FetchMaxMsgDeliveries(<int>), // defaults to 10
+  memphis.FetchConsumerGenUniqueSuffix(),
+  memphis.FetchConsumerErrorHandler(func(*Consumer, error){})
+  memphis.FetchStartConsumeFromSeq(<uint64>)// start consuming from a specific sequence. defaults to 1
+  memphis.FetchLastMessages(<int64>)// consume the last N messages, defaults to -1 (all messages in the station))
+```
 
-```shell
-msgs, err := consumer.Fetch()
+### Fetch a single batch of messages after creating a consumer
+```go
+msgs, err := consumer.Fetch(<batch-size> int)
 ```
 
 ### Acknowledging a Message

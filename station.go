@@ -180,6 +180,8 @@ func (s *Station) Destroy() error {
 
 	pm := s.conn.getProducersMap()
 	pm.unsetStationProducers(s.Name)
+	cm := s.conn.getConsumersMap()
+	cm.unsetStationConsumers(s.Name)
 
 	return nil
 }
