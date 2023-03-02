@@ -287,7 +287,8 @@ consumer.Consume(handler)
 
 ### Fetch a single batch of messages
 ```go
-msgs, err := conn.FetchMessages("<station-name>", "<consumer-name>", <batch-size> int,
+msgs, err := conn.FetchMessages("<station-name>", "<consumer-name>",
+  memphis.FetchBatchSize(<int>) // defaults to 10
   memphis.FetchConsumerGroup("<consumer-group>"), // defaults to consumer name
   memphis.FetchBatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds, has to be at least 1 ms
   memphis.FetchMaxAckTime(<time.Duration>), // defaults to 30 sec
