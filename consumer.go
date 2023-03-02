@@ -523,22 +523,6 @@ func (c *Consumer) getDestructionReq() any {
 	return removeConsumerReq{Name: c.Name, StationName: c.stationName, Username: c.conn.username}
 }
 
-// ConsumerName - name for the consumer.
-func ConsumerName(name string) ConsumerOpt {
-	return func(opts *ConsumerOpts) error {
-		opts.Name = name
-		return nil
-	}
-}
-
-// StationNameOpt - station name to consume messages from.
-func StationNameOpt(stationName string) ConsumerOpt {
-	return func(opts *ConsumerOpts) error {
-		opts.StationName = stationName
-		return nil
-	}
-}
-
 // ConsumerGroup - consumer group name, default is "".
 func ConsumerGroup(cg string) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {

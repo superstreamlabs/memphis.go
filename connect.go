@@ -37,9 +37,7 @@ const configurationUpdatesSubject = "$memphis_sdk_configurations_updates"
 
 // Option is a function on the options for a connection.
 type Option func(*Options) error
-
 type ProducersMap map[string]*Producer
-
 type ConsumersMap map[string]*Consumer
 
 type TLSOpts struct {
@@ -663,21 +661,6 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 	return msgs, nil
 }
 
-// ConsumerName - name for the consumer.
-func FetchConsumerName(name string) FetchOpt {
-	return func(opts *FetchOpts) error {
-		opts.ConsumerName = name
-		return nil
-	}
-}
-
-// StationNameOpt - station name to consume messages from.
-func FetchStationNameOpt(stationName string) FetchOpt {
-	return func(opts *FetchOpts) error {
-		opts.StationName = stationName
-		return nil
-	}
-}
 
 // ConsumerGroup - consumer group name, default is "".
 func FetchConsumerGroup(cg string) FetchOpt {
