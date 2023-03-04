@@ -173,6 +173,7 @@ type configurationsUpdateSub struct {
 	ConfigUpdateSub            *nats.Subscription
 	ClusterConfigurations      map[string]bool
 	StationSchemaverseToDlsMap map[string]bool
+	ProducersMap               map[string]*Producer
 }
 
 // Connect - creates connection with memphis.
@@ -510,10 +511,11 @@ func (c *Conn) listenToConfigurationUpdates() error {
 		ConfigUpdatesCh:            make(chan ConfigurationsUpdate),
 		ClusterConfigurations:      make(map[string]bool),
 		StationSchemaverseToDlsMap: make(map[string]bool),
+		ProducersMap:               c.producersMap,
 	}
 	cus := c.configUpdatesSub
 
-	go cus.configurationsUpdatesHandler(&c.configUpdatesMu)
+	go cus.configurationsUpdatesHandler(c)
 	var err error
 	cus.ConfigUpdateSub, err = c.brokerConn.Subscribe(configurationUpdatesSubject, cus.createUpdatesHandler())
 	if err != nil {
@@ -529,14 +531,15 @@ func (cus *configurationsUpdateSub) createUpdatesHandler() nats.MsgHandler {
 		var update ConfigurationsUpdate
 		err := json.Unmarshal(msg.Data, &update)
 		if err != nil {
-			log.Printf("schema update unmarshal error: %v\n", memphisError(err))
+			log.Printf("update unmarshal error: %v\n", memphisError(err))
 			return
 		}
 		cus.ConfigUpdatesCh <- update
 	}
 }
 
-func (cus *configurationsUpdateSub) configurationsUpdatesHandler(lock *sync.RWMutex) {
+func (cus *configurationsUpdateSub) configurationsUpdatesHandler(c *Conn) {
+	lock := &c.configUpdatesMu
 	for {
 		update, ok := <-cus.ConfigUpdatesCh
 		if !ok {
@@ -548,6 +551,11 @@ func (cus *configurationsUpdateSub) configurationsUpdatesHandler(lock *sync.RWMu
 			cus.ClusterConfigurations[update.Type] = update.Update
 		case "schemaverse_to_dls":
 			cus.StationSchemaverseToDlsMap[getInternalName(update.StationName)] = update.Update
+		case "remove_station":
+			pm := c.getProducersMap()
+			for k := range pm {
+				pm.unsetProducer(k)
+			}
 		}
 		lock.Unlock()
 	}
@@ -660,7 +668,6 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 	}
 	return msgs, nil
 }
-
 
 // ConsumerGroup - consumer group name, default is "".
 func FetchConsumerGroup(cg string) FetchOpt {
