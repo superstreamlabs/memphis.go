@@ -593,8 +593,10 @@ func (pm *ProducersMap) unsetProducer(key string) {
 }
 
 func (pm *ProducersMap) unsetStationProducers(stationName string) {
+	internalStationName := getInternalName(stationName)
 	for k, v := range *pm {
-		if v.stationName == stationName {
+		intetnalStationV := getInternalName(v.stationName)
+		if intetnalStationV == internalStationName {
 			pm.unsetProducer(k)
 		}
 	}
