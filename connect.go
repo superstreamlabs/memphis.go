@@ -33,7 +33,7 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-const configurationUpdatesSubject = "$memphis_sdk_configurations_updates"
+const sdkClientsUpdatesSubject = "$memphis_sdk_clients_updates"
 
 // Option is a function on the options for a connection.
 type Option func(*Options) error
@@ -62,7 +62,7 @@ type queryReq struct {
 	resp chan bool
 }
 
-type ConfigurationsUpdate struct {
+type SdkClientsUpdate struct {
 	StationName string `json:"station_name"`
 	Type        string `json:"type"`
 	Update      bool   `json:"update"`
@@ -124,17 +124,17 @@ func (c *Conn) setConsumersMap(consumersMap ConsumersMap) {
 
 // Conn - holds the connection with memphis.
 type Conn struct {
-	opts               Options
-	ConnId             string
-	username           string
-	brokerConn         *nats.Conn
-	js                 nats.JetStreamContext
-	stationUpdatesMu   sync.RWMutex
-	stationUpdatesSubs map[string]*stationUpdateSub
-	configUpdatesMu    sync.RWMutex
-	configUpdatesSub   configurationsUpdateSub
-	producersMap       ProducersMap
-	consumersMap       ConsumersMap
+	opts                Options
+	ConnId              string
+	username            string
+	brokerConn          *nats.Conn
+	js                  nats.JetStreamContext
+	stationUpdatesMu    sync.RWMutex
+	stationUpdatesSubs  map[string]*stationUpdateSub
+	sdkClientsUpdatesMu sync.RWMutex
+	clientsUpdatesSub   sdkClientsUpdateSub
+	producersMap        ProducersMap
+	consumersMap        ConsumersMap
 }
 
 type attachSchemaReq struct {
@@ -168,12 +168,11 @@ type errorResp struct {
 	Message string `json:"message"`
 }
 
-type configurationsUpdateSub struct {
-	ConfigUpdatesCh            chan ConfigurationsUpdate
-	ConfigUpdateSub            *nats.Subscription
+type sdkClientsUpdateSub struct {
+	SdkClientsUpdatesCh        chan SdkClientsUpdate
+	SdkClientsUpdateSub        *nats.Subscription
 	ClusterConfigurations      map[string]bool
 	StationSchemaverseToDlsMap map[string]bool
-	ProducersMap               map[string]*Producer
 }
 
 // Connect - creates connection with memphis.
@@ -195,7 +194,7 @@ func Connect(host, username, connectionToken string, options ...Option) (*Conn, 
 	if err != nil {
 		return nil, err
 	}
-	err = conn.listenToConfigurationUpdates()
+	err = conn.listenToSdkClientsUpdates()
 	if err != nil {
 		return nil, err
 	}
@@ -506,42 +505,41 @@ func replaceDelimiters(in string) string {
 	return strings.Replace(in, delimToReplace, delimReplacement, -1)
 }
 
-func (c *Conn) listenToConfigurationUpdates() error {
-	c.configUpdatesSub = configurationsUpdateSub{
-		ConfigUpdatesCh:            make(chan ConfigurationsUpdate),
+func (c *Conn) listenToSdkClientsUpdates() error {
+	c.clientsUpdatesSub = sdkClientsUpdateSub{
+		SdkClientsUpdatesCh:        make(chan SdkClientsUpdate),
 		ClusterConfigurations:      make(map[string]bool),
 		StationSchemaverseToDlsMap: make(map[string]bool),
-		ProducersMap:               c.producersMap,
 	}
-	cus := c.configUpdatesSub
+	cus := c.clientsUpdatesSub
 
-	go cus.configurationsUpdatesHandler(c)
+	go cus.sdkClientUpdatesHandler(c)
 	var err error
-	cus.ConfigUpdateSub, err = c.brokerConn.Subscribe(configurationUpdatesSubject, cus.createUpdatesHandler())
+	cus.SdkClientsUpdateSub, err = c.brokerConn.Subscribe(sdkClientsUpdatesSubject, cus.createUpdatesHandler())
 	if err != nil {
-		close(cus.ConfigUpdatesCh)
+		close(cus.SdkClientsUpdatesCh)
 		return memphisError(err)
 	}
 
 	return nil
 }
 
-func (cus *configurationsUpdateSub) createUpdatesHandler() nats.MsgHandler {
+func (cus *sdkClientsUpdateSub) createUpdatesHandler() nats.MsgHandler {
 	return func(msg *nats.Msg) {
-		var update ConfigurationsUpdate
+		var update SdkClientsUpdate
 		err := json.Unmarshal(msg.Data, &update)
 		if err != nil {
 			log.Printf("update unmarshal error: %v\n", memphisError(err))
 			return
 		}
-		cus.ConfigUpdatesCh <- update
+		cus.SdkClientsUpdatesCh <- update
 	}
 }
 
-func (cus *configurationsUpdateSub) configurationsUpdatesHandler(c *Conn) {
-	lock := &c.configUpdatesMu
+func (cus *sdkClientsUpdateSub) sdkClientUpdatesHandler(c *Conn) {
+	lock := &c.sdkClientsUpdatesMu
 	for {
-		update, ok := <-cus.ConfigUpdatesCh
+		update, ok := <-cus.SdkClientsUpdatesCh
 		if !ok {
 			return
 		}
