@@ -553,9 +553,9 @@ func (cus *configurationsUpdateSub) configurationsUpdatesHandler(c *Conn) {
 			cus.StationSchemaverseToDlsMap[getInternalName(update.StationName)] = update.Update
 		case "remove_station":
 			pm := c.getProducersMap()
-			for k := range pm {
-				pm.unsetProducer(k)
-			}
+			pm.unsetStationProducers(update.StationName)
+			cm := c.getConsumersMap()
+			cm.unsetStationConsumers(update.StationName)
 		}
 		lock.Unlock()
 	}
