@@ -256,11 +256,11 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 	sd.handleSchemaUpdateInit(cr.SchemaUpdateInit)
 	p.conn.stationUpdatesMu.Unlock()
 
-	p.conn.configUpdatesMu.Lock()
-	cu := &p.conn.configUpdatesSub
+	p.conn.sdkClientsUpdatesMu.Lock()
+	cu := &p.conn.clientsUpdatesSub
 	cu.ClusterConfigurations["send_notification"] = cr.ClusterSendNotification
 	cu.StationSchemaverseToDlsMap[sn] = cr.SchemaVerseToDls
-	p.conn.configUpdatesMu.Unlock()
+	p.conn.sdkClientsUpdatesMu.Unlock()
 
 	return nil
 }
@@ -405,7 +405,7 @@ func (p *Producer) msgToString(msg any) string {
 
 func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error) {
 	internStation := getInternalName(p.stationName)
-	if p.conn.configUpdatesSub.StationSchemaverseToDlsMap[internStation] {
+	if p.conn.clientsUpdatesSub.StationSchemaverseToDlsMap[internStation] {
 		msgToSend := p.msgToString(msg)
 		timeSent := time.Now()
 		id := GetDlsMsgId(internStation, p.Name, time.Now().String())
@@ -431,7 +431,7 @@ func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error)
 		msgToPublish, _ := json.Marshal(schemaFailMsg)
 		_ = p.conn.brokerConn.Publish(GetDlsSubject("schema", internStation, id), msgToPublish)
 
-		if p.conn.configUpdatesSub.ClusterConfigurations["send_notification"] {
+		if p.conn.clientsUpdatesSub.ClusterConfigurations["send_notification"] {
 			p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend, schemaVFailAlertType)
 		}
 	}
