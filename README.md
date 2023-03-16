@@ -71,7 +71,7 @@ It is possible to pass connection configuration parameters, as function-paramete
 // function params
 c, err := memphis.Connect("<memphis-host>", 
 	"<application type username>", 
-	"<broker-token>",
+	"<broker-token>", // you will get it on application type user creation
 	memphis.Port(<int>),        
 	memphis.Reconnect(<bool>),
 	memphis.MaxReconnect(<int>),
