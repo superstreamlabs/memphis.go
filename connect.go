@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gofrs/uuid"
 	"github.com/nats-io/nats.go"
 )
 
@@ -224,13 +225,13 @@ func (opts Options) connect() (*Conn, error) {
 		opts.MaxReconnect = 0
 	}
 
-	connId, err := randomHex(12)
+	connId, err := uuid.NewV4()
 	if err != nil {
 		return nil, memphisError(err)
 	}
 
 	c := Conn{
-		ConnId:       connId,
+		ConnId:       connId.String(),
 		opts:         opts,
 		producersMap: make(ProducersMap),
 		consumersMap: make(ConsumersMap),

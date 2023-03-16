@@ -8,7 +8,10 @@ require (
 	google.golang.org/protobuf v1.28.1
 )
 
-require github.com/santhosh-tekuri/jsonschema/v5 v5.1.0
+require (
+	github.com/gofrs/uuid v4.4.0+incompatible
+	github.com/santhosh-tekuri/jsonschema/v5 v5.1.0
+)
 
 require (
 	github.com/golang/protobuf v1.5.2 // indirect
