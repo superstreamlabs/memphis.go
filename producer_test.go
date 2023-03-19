@@ -291,7 +291,7 @@ func TestFullFlow(t *testing.T) {
 	conn, err := Connect("127.0.0.1", "root", "memphis")
 
 	if err != nil {
-
+		t.Errorf("Connection creation failed: %v\n", err)
 	}
 
 	defer conn.Close()
@@ -299,37 +299,31 @@ func TestFullFlow(t *testing.T) {
 	station, err := conn.CreateStation("station_test_name")
 	if err != nil {
 		t.Errorf("Station creation failed: %v\n", err)
-
 	}
 
 	err = station.Destroy()
 	if err != nil {
 		t.Errorf("Station destruction failed: %v\n", err)
-
 	}
 
 	station, err = conn.CreateStation("station_test_name")
 	if err != nil {
 		t.Errorf("Station creation failed: %v\n", err)
-
 	}
 	defer station.Destroy()
 
 	p, err := conn.CreateProducer(station.Name, "test_producer")
 	if err != nil {
 		t.Errorf("Producer creation failed: %v\n", err)
-
 	}
 	err = p.Destroy()
 	if err != nil {
 		t.Errorf("Producer destruction failed: %v\n", err)
-
 	}
 
 	p, err = conn.CreateProducer(station.Name, "test_producer")
 	if err != nil {
 		t.Errorf("Produce failed: %v\n", err)
-
 	}
 	err = p.Produce([]byte("You have a message!"))
 
@@ -342,7 +336,6 @@ func TestFullFlow(t *testing.T) {
 
 	if err != nil {
 		t.Errorf("Consumer creation failed: %v\n", err)
-
 	}
 
 	handlerCh := make(chan struct{})

@@ -100,11 +100,12 @@ type Notification struct {
 }
 
 type DlsMessage struct {
-	ID           string            `json:"_id"`
-	StationName  string            `json:"station_name"`
-	Producer     ProducerDetails   `json:"producer"`
-	Message      MessagePayloadDls `json:"message"`
-	CreationDate time.Time         `json:"creation_date"`
+	ID              string            `json:"_id"`
+	StationName     string            `json:"station_name"`
+	Producer        ProducerDetails   `json:"producer"`
+	Message         MessagePayloadDls `json:"message"`
+	CreationDate    time.Time         `json:"creation_date"`
+	ValidationError string            `json:"validation_error"`
 }
 
 type ProducerDetails struct {
@@ -426,7 +427,8 @@ func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error)
 				Data:     hex.EncodeToString([]byte(msgToSend)),
 				Headers:  headersForDls,
 			},
-			CreationDate: timeSent,
+			CreationDate:    timeSent,
+			ValidationError: err.Error(),
 		}
 		msgToPublish, _ := json.Marshal(schemaFailMsg)
 		_ = p.conn.brokerConn.Publish(GetDlsSubject("schema", internStation, id), msgToPublish)
@@ -452,14 +454,19 @@ func (p *Producer) validateMsg(msg any, headers map[string][]string) ([]byte, er
 		case map[string]interface{}:
 			return json.Marshal(msg)
 		default:
-			return nil, memphisError(errors.New("Unsupported message type"))
+			return nil, memphisError(errors.New("unsupported message type"))
 		}
 
 	}
 
 	msgBytes, err := sd.validateMsg(msg)
 	if err != nil {
-		p.sendMsgToDls(msg, headers, err)
+		msgToSend := msg
+		if msgBytes != nil {
+			msgToSend = msgBytes
+		}
+		
+		p.sendMsgToDls(msgToSend, headers, err)
 		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
 	}
 
