@@ -32,11 +32,14 @@ const (
 	dlsSubjPrefix                  = "$memphis_dls"
 	memphisPmAckSubject            = "$memphis_pm_acks"
 	lastConsumerCreationReqVersion = 1
+	nakAck                         = "-NAK"
 )
 
 var (
 	ConsumerErrStationUnreachable = errors.New("station unreachable")
 	ConsumerErrConsumeInactive    = errors.New("consumer is inactive")
+	MaxDeliveriesLimitReached     = errors.New("Max Deliveries limit is reached")
+	ConsumerNil                   = errors.New("Consumer is nil")
 )
 
 // Consumer - memphis consumer object.
@@ -69,9 +72,10 @@ type Consumer struct {
 
 // Msg - a received message, can be acked.
 type Msg struct {
-	msg    *nats.Msg
-	conn   *Conn
-	cgName string
+	msg      *nats.Msg
+	conn     *Conn
+	cgName   string
+	consumer *Consumer
 }
 
 type PMsgToAck struct {
@@ -125,6 +129,32 @@ func (m *Msg) GetHeaders() map[string]string {
 		headers[key] = value[0]
 	}
 	return headers
+}
+
+func (m *Msg) RedeliverAfter(duration time.Duration) error {
+	numDelivered, err := m.getNumDelivered()
+	if err != nil {
+		return memphisError(err)
+	}
+	if m.consumer != nil {
+		if numDelivered >= uint64(m.consumer.MaxMsgDeliveries) {
+			return MaxDeliveriesLimitReached
+		}
+	} else {
+		return ConsumerNil
+	}
+
+	data := []byte(nakAck)
+	data = append(data, []byte(duration.String())...)
+	return memphisError(m.msg.Respond(data))
+}
+
+func (m *Msg) getNumDelivered() (uint64, error) {
+	meta, err := m.msg.Metadata()
+	if err != nil {
+		return 0, memphisError(err)
+	}
+	return meta.NumDelivered, nil
 }
 
 // ConsumerErrHandler is used to process asynchronous errors.
@@ -389,7 +419,7 @@ func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 	wrappedMsgs := make([]*Msg, 0, batchSize)
 
 	for _, msg := range msgs {
-		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup})
+		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, consumer: c})
 	}
 	return wrappedMsgs, nil
 }
@@ -444,7 +474,7 @@ func (c *Consumer) createDlsMsgHandler() nats.MsgHandler {
 	return func(msg *nats.Msg) {
 		// if a consume function is active
 		if c.dlsHandlerFunc != nil {
-			dlsMsg := []*Msg{{msg: msg, conn: c.conn, cgName: c.ConsumerGroup}}
+			dlsMsg := []*Msg{{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, consumer: c}}
 			c.dlsHandlerFunc(dlsMsg, nil, nil)
 		} else {
 			// for fetch function
@@ -454,9 +484,9 @@ func (c *Consumer) createDlsMsgHandler() nats.MsgHandler {
 				if indexToInsert >= 10000 {
 					indexToInsert = indexToInsert % 10000
 				}
-				c.dlsMsgs[indexToInsert] = &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup}
+				c.dlsMsgs[indexToInsert] = &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, consumer: c}
 			} else {
-				c.dlsMsgs = append(c.dlsMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup})
+				c.dlsMsgs = append(c.dlsMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, consumer: c})
 			}
 			c.dlsCurrentIndex = c.dlsCurrentIndex + 1
 			c.dlsMsgsMutex.Unlock()
