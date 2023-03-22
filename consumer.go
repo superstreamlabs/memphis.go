@@ -132,29 +132,7 @@ func (m *Msg) GetHeaders() map[string]string {
 }
 
 func (m *Msg) RedeliverAfter(duration time.Duration) error {
-	numDelivered, err := m.getNumDelivered()
-	if err != nil {
-		return memphisError(err)
-	}
-	if m.consumer != nil {
-		if numDelivered >= uint64(m.consumer.MaxMsgDeliveries) {
-			return MaxDeliveriesLimitReached
-		}
-	} else {
-		return ConsumerNil
-	}
-
-	data := []byte(nakAck)
-	data = append(data, []byte(duration.String())...)
-	return memphisError(m.msg.Respond(data))
-}
-
-func (m *Msg) getNumDelivered() (uint64, error) {
-	meta, err := m.msg.Metadata()
-	if err != nil {
-		return 0, memphisError(err)
-	}
-	return meta.NumDelivered, nil
+	return memphisError(m.msg.NakWithDelay(duration))
 }
 
 // ConsumerErrHandler is used to process asynchronous errors.
