@@ -32,14 +32,11 @@ const (
 	dlsSubjPrefix                  = "$memphis_dls"
 	memphisPmAckSubject            = "$memphis_pm_acks"
 	lastConsumerCreationReqVersion = 1
-	nakAck                         = "-NAK"
 )
 
 var (
 	ConsumerErrStationUnreachable = errors.New("station unreachable")
 	ConsumerErrConsumeInactive    = errors.New("consumer is inactive")
-	MaxDeliveriesLimitReached     = errors.New("Max Deliveries limit is reached")
-	ConsumerNil                   = errors.New("Consumer is nil")
 )
 
 // Consumer - memphis consumer object.
@@ -72,10 +69,9 @@ type Consumer struct {
 
 // Msg - a received message, can be acked.
 type Msg struct {
-	msg      *nats.Msg
-	conn     *Conn
-	cgName   string
-	consumer *Consumer
+	msg    *nats.Msg
+	conn   *Conn
+	cgName string
 }
 
 type PMsgToAck struct {
@@ -397,7 +393,7 @@ func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 	wrappedMsgs := make([]*Msg, 0, batchSize)
 
 	for _, msg := range msgs {
-		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, consumer: c})
+		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup})
 	}
 	return wrappedMsgs, nil
 }
@@ -452,7 +448,7 @@ func (c *Consumer) createDlsMsgHandler() nats.MsgHandler {
 	return func(msg *nats.Msg) {
 		// if a consume function is active
 		if c.dlsHandlerFunc != nil {
-			dlsMsg := []*Msg{{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, consumer: c}}
+			dlsMsg := []*Msg{{msg: msg, conn: c.conn, cgName: c.ConsumerGroup}}
 			c.dlsHandlerFunc(dlsMsg, nil, nil)
 		} else {
 			// for fetch function
@@ -462,9 +458,9 @@ func (c *Consumer) createDlsMsgHandler() nats.MsgHandler {
 				if indexToInsert >= 10000 {
 					indexToInsert = indexToInsert % 10000
 				}
-				c.dlsMsgs[indexToInsert] = &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, consumer: c}
+				c.dlsMsgs[indexToInsert] = &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup}
 			} else {
-				c.dlsMsgs = append(c.dlsMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, consumer: c})
+				c.dlsMsgs = append(c.dlsMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup})
 			}
 			c.dlsCurrentIndex = c.dlsCurrentIndex + 1
 			c.dlsMsgsMutex.Unlock()
