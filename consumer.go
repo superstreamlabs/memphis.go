@@ -127,7 +127,7 @@ func (m *Msg) GetHeaders() map[string]string {
 	return headers
 }
 
-func (m *Msg) RedeliverAfter(duration time.Duration) error {
+func (m *Msg) Delay(duration time.Duration) error {
 	return memphisError(m.msg.NakWithDelay(duration))
 }
 
