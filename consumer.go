@@ -31,13 +31,13 @@ const (
 	consumerDefaultPingInterval    = 30 * time.Second
 	dlsSubjPrefix                  = "$memphis_dls"
 	memphisPmAckSubject            = "$memphis_pm_acks"
-	memphisPmNakSubject            = "$memphis_pm_naks"
 	lastConsumerCreationReqVersion = 1
 )
 
 var (
 	ConsumerErrStationUnreachable = errors.New("station unreachable")
 	ConsumerErrConsumeInactive    = errors.New("consumer is inactive")
+	ConsumerErrDelayDlsMsg        = errors.New("cannot delay DLS message")
 )
 
 // Consumer - memphis consumer object.
@@ -129,27 +129,18 @@ func (m *Msg) GetHeaders() map[string]string {
 }
 
 func (m *Msg) Delay(duration time.Duration) error {
-	err := m.msg.NakWithDelay(duration)
-	if err != nil {
-		headers := m.GetHeaders()
-		id, ok := headers["$memphis_pm_id"]
+	headers := m.GetHeaders()
+	_, ok := headers["$memphis_pm_id"]
+	if !ok {
+		return m.msg.NakWithDelay(duration)
+	} else {
+		_, ok := headers["$memphis_pm_sequence"]
 		if !ok {
-			return err
+			return m.msg.NakWithDelay(duration)
 		} else {
-			seq, ok := headers["$memphis_pm_sequence"]
-			if !ok {
-				return err
-			} else {
-				msgToAck := PMsgToAck{
-					ID:       id,
-					Sequence: seq,
-				}
-				msgToPublish, _ := json.Marshal(msgToAck)
-				m.conn.brokerConn.Publish(memphisPmNakSubject, msgToPublish)
-			}
+			return memphisError(ConsumerErrDelayDlsMsg)
 		}
 	}
-	return nil
 }
 
 // ConsumerErrHandler is used to process asynchronous errors.
