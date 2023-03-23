@@ -31,6 +31,7 @@ const (
 	consumerDefaultPingInterval    = 30 * time.Second
 	dlsSubjPrefix                  = "$memphis_dls"
 	memphisPmAckSubject            = "$memphis_pm_acks"
+	memphisPmNakSubject            = "$memphis_pm_naks"
 	lastConsumerCreationReqVersion = 1
 )
 
@@ -128,7 +129,27 @@ func (m *Msg) GetHeaders() map[string]string {
 }
 
 func (m *Msg) Delay(duration time.Duration) error {
-	return memphisError(m.msg.NakWithDelay(duration))
+	err := m.msg.NakWithDelay(duration)
+	if err != nil {
+		headers := m.GetHeaders()
+		id, ok := headers["$memphis_pm_id"]
+		if !ok {
+			return err
+		} else {
+			seq, ok := headers["$memphis_pm_sequence"]
+			if !ok {
+				return err
+			} else {
+				msgToAck := PMsgToAck{
+					ID:       id,
+					Sequence: seq,
+				}
+				msgToPublish, _ := json.Marshal(msgToAck)
+				m.conn.brokerConn.Publish(memphisPmNakSubject, msgToPublish)
+			}
+		}
+	}
+	return nil
 }
 
 // ConsumerErrHandler is used to process asynchronous errors.
