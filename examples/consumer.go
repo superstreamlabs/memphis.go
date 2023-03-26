@@ -9,9 +9,10 @@ import (
 	"github.com/memphisdev/memphis.go"
 )
 
-func main() {
-	conn, err := memphis.Connect("<memphis-host>", "<application type username>", "<broker-token>")
+func main1() {
+	conn, err := memphis.Connect("localhost", "root", memphis.ConnectionToken("<broker-token>"))
 	if err != nil {
+		fmt.Printf("Connection failed: %v", err)
 		os.Exit(1)
 	}
 	defer conn.Close()
