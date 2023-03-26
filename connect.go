@@ -223,7 +223,7 @@ func (opts Options) connect() (*Conn, error) {
 		return nil, memphisError(errors.New("Can't connect with connection token and password - must choose one method"))
 	}
 	if opts.ConnectionToken == "" && opts.Password == "" {
-		return nil, memphisError(errors.New("Must connect with connection token or password - both can't be empty"))
+		return nil, memphisError(errors.New("Must connect with connection token or password - must choose one method"))
 	}
 
 	connId, err := uuid.NewV4()
