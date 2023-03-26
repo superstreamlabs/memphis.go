@@ -22,7 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"log"
 	"regexp"
 	"strconv"
@@ -58,10 +58,6 @@ type Options struct {
 	Timeout           time.Duration
 	TLSOpts           TLSOpts
 	Password          string
-}
-
-type queryReq struct {
-	resp chan bool
 }
 
 type SdkClientsUpdate struct {
@@ -166,10 +162,6 @@ func getDefaultOptions() Options {
 		ConnectionToken: "",
 		Password:        "",
 	}
-}
-
-type errorResp struct {
-	Message string `json:"message"`
 }
 
 type sdkClientsUpdateSub struct {
@@ -284,13 +276,13 @@ func (c *Conn) startConn() error {
 
 	if (opts.TLSOpts.TlsCert != "") || (opts.TLSOpts.TlsKey != "") || (opts.TLSOpts.CaFile != "") {
 		if opts.TLSOpts.TlsCert == "" {
-			return memphisError(errors.New("Must provide a TLS cert file"))
+			return memphisError(errors.New("must provide a TLS cert file"))
 		}
 		if opts.TLSOpts.TlsKey == "" {
-			return memphisError(errors.New("Must provide a TLS key file"))
+			return memphisError(errors.New("must provide a TLS key file"))
 		}
 		if opts.TLSOpts.CaFile == "" {
-			return memphisError(errors.New("Must provide a TLS ca file"))
+			return memphisError(errors.New("must provide a TLS ca file"))
 		}
 		cert, err := tls.LoadX509KeyPair(opts.TLSOpts.TlsCert, opts.TLSOpts.TlsKey)
 		if err != nil {
@@ -304,7 +296,7 @@ func (c *Conn) startConn() error {
 		TLSConfig.Certificates = []tls.Certificate{cert}
 		certs := x509.NewCertPool()
 
-		pemData, err := ioutil.ReadFile(opts.TLSOpts.CaFile)
+		pemData, err := os.ReadFile(opts.TLSOpts.CaFile)
 		if err != nil {
 			return memphisError(errors.New("memphis: error loading ca file: " + err.Error()))
 		}
@@ -331,10 +323,6 @@ func (c *Conn) Close() {
 	c.brokerConn.Close()
 	c.setProducersMap(nil)
 	c.setConsumersMap(nil)
-}
-
-func (c *Conn) brokerCorePublish(subject, reply string, msg []byte) error {
-	return c.brokerConn.PublishRequest(subject, reply, msg)
 }
 
 func (c *Conn) brokerPublish(msg *nats.Msg, opts ...nats.PubOpt) (nats.PubAckFuture, error) {

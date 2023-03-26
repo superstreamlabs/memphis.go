@@ -35,8 +35,8 @@ const (
 )
 
 var (
-	ConsumerErrStationUnreachable = errors.New("Station unreachable")
-	ConsumerErrConsumeInactive    = errors.New("Consumer is inactive")
+	ConsumerErrStationUnreachable = errors.New("station unreachable")
+	ConsumerErrConsumeInactive    = errors.New("consumer is inactive")
 )
 
 // Consumer - memphis consumer object.
@@ -142,10 +142,6 @@ type createConsumerReq struct {
 	StartConsumeFromSequence uint64 `json:"start_consume_from_sequence"`
 	LastMessages             int64  `json:"last_messages"`
 	RequestVersion           int    `json:"req_version"`
-}
-
-type createConsumerResp struct {
-	Err string `json:"error"`
 }
 
 type removeConsumerReq struct {

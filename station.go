@@ -190,10 +190,6 @@ func (s *Station) getCreationSubject() string {
 	return "$memphis_station_creations"
 }
 
-func (s *Station) getSchemaDetachSubject() string {
-	return "$memphis_schema_detachments"
-}
-
 func (s *Station) getCreationReq() any {
 	return createStationReq{
 		Name:                    s.Name,
@@ -488,7 +484,7 @@ func (sd *schemaDetails) validateMsg(msg any) ([]byte, error) {
 	case "graphql":
 		return sd.validateGraphQlMsg(msg)
 	default:
-		return nil, memphisError(errors.New("Invalid schema type"))
+		return nil, memphisError(errors.New("invalid schema type"))
 	}
 }
 
@@ -520,16 +516,16 @@ func (sd *schemaDetails) validateProtoMsg(msg any) ([]byte, error) {
 			return nil, memphisError(err)
 		}
 	default:
-		return nil, memphisError(errors.New("Unsupported message type"))
+		return nil, memphisError(errors.New("unsupported message type"))
 	}
 
 	protoMsg := dynamicpb.NewMessage(sd.msgDescriptor)
 	err = proto.Unmarshal(msgBytes, protoMsg)
 	if err != nil {
 		if strings.Contains(err.Error(), "cannot parse invalid wire-format data") {
-			err = errors.New("Invalid message format, expecting protobuf")
+			err = errors.New("invalid message format, expecting protobuf")
 		}
-		return nil, memphisError(err)
+		return msgBytes, memphisError(err)
 	}
 
 	return msgBytes, nil
@@ -567,11 +563,11 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 				return nil, memphisError(err)
 			}
 		} else {
-			return nil, memphisError(errors.New("Unsupported message type"))
+			return nil, memphisError(errors.New("unsupported message type"))
 		}
 	}
 	if err = sd.jsonSchema.Validate(message); err != nil {
-		return nil, memphisError(err)
+		return msgBytes, memphisError(err)
 	}
 
 	return msgBytes, nil
@@ -606,10 +602,10 @@ func (sd *schemaDetails) validateGraphQlMsg(msg any) ([]byte, error) {
 			validateErrorGql = strings.Join(validateErrors, resultErr)
 		}
 		if strings.Contains(validateErrorGql, "syntax error") {
-			return nil, memphisError(errors.New("Invalid message format, expecting GraphQL"))
+			return nil, memphisError(errors.New("invalid message format, expecting GraphQL"))
 		}
 
-		return nil, memphisError(errors.New(validateErrorGql))
+		return msgBytes, memphisError(errors.New(validateErrorGql))
 	}
 	return msgBytes, nil
 }
