@@ -22,8 +22,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"log"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -220,10 +220,10 @@ func (opts Options) connect() (*Conn, error) {
 	}
 
 	if opts.ConnectionToken != "" && opts.Password != "" {
-		return nil, memphisError(errors.New("Can't connect with connection token and password - must choose one method"))
+		return nil, memphisError(errors.New("You have to connect with only one of the following methods: connection token / password"))
 	}
 	if opts.ConnectionToken == "" && opts.Password == "" {
-		return nil, memphisError(errors.New("Must connect with connection token or password - must choose one method"))
+		return nil, memphisError(errors.New("You have to connect with one of the following methods: connection token / password"))
 	}
 
 	connId, err := uuid.NewV4()
