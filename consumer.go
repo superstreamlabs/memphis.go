@@ -128,6 +128,7 @@ func (m *Msg) GetHeaders() map[string]string {
 	return headers
 }
 
+// Msg.Delay - Delay a message redelivery
 func (m *Msg) Delay(duration time.Duration) error {
 	headers := m.GetHeaders()
 	_, ok := headers["$memphis_pm_id"]
