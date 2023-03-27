@@ -580,17 +580,6 @@ func (cus *sdkClientsUpdateSub) sdkClientUpdatesHandler(c *Conn) {
 	}
 }
 
-func GetDlsSubject(subjType string, stationName string, id string) string {
-	return fmt.Sprintf("$memphis-%s-dls", stationName) + "." + subjType + "." + id
-}
-
-func GetDlsMsgId(stationName string, producerName string, timeSent string) string {
-	// Remove any spaces might be in ID
-	msgId := strings.ReplaceAll(stationName+"~"+producerName+"~0~"+timeSent, " ", "")
-	msgId = strings.ReplaceAll(msgId, ",", "+")
-	return msgId
-}
-
 func (pm *ProducersMap) getProducer(key string) *Producer {
 	if (*pm) != nil && (*pm)[key] != nil {
 		return (*pm)[key]
