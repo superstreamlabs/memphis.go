@@ -322,7 +322,7 @@ message.Ack();
 ```
 
 ### Delay the message after a given duration
-Delay the message and tell Memphis server to re-send the same message <br>again to the same consumer group.
+Delay the message and tell Memphis server to re-send the same message again to the same consumer group. <br>A message can only be delayed `Consumer.MaxMsgDeliveries` number of times.
 
 ```go
 message.Delay(<time.Duration>);
