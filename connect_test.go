@@ -5,7 +5,7 @@ import (
 )
 
 func TestConnect(t *testing.T) {
-	c, err := Connect("localhost", "root", "memphis")
+	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
 	if err != nil {
 		t.Error()
 		return
@@ -28,7 +28,7 @@ func TestNormalizeHost(t *testing.T) {
 }
 
 func TestProduceNoProducer(t *testing.T) {
-	c, err := Connect("localhost", "root", "memphis")
+	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
 	if err != nil {
 		t.Error(err)
 	}

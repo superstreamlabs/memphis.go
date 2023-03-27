@@ -22,8 +22,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"log"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -57,6 +57,7 @@ type Options struct {
 	ReconnectInterval time.Duration
 	Timeout           time.Duration
 	TLSOpts           TLSOpts
+	Password          string
 }
 
 type SdkClientsUpdate struct {
@@ -158,6 +159,8 @@ func getDefaultOptions() Options {
 			TlsKey:  "",
 			CaFile:  "",
 		},
+		ConnectionToken: "",
+		Password:        "",
 	}
 }
 
@@ -169,12 +172,11 @@ type sdkClientsUpdateSub struct {
 }
 
 // Connect - creates connection with memphis.
-func Connect(host, username, connectionToken string, options ...Option) (*Conn, error) {
+func Connect(host, username string, options ...Option) (*Conn, error) {
 	opts := getDefaultOptions()
 
 	opts.Host = normalizeHost(host)
 	opts.Username = username
-	opts.ConnectionToken = connectionToken
 
 	for _, opt := range options {
 		if opt != nil {
@@ -217,6 +219,13 @@ func (opts Options) connect() (*Conn, error) {
 		opts.MaxReconnect = 0
 	}
 
+	if opts.ConnectionToken != "" && opts.Password != "" {
+		return nil, memphisError(errors.New("you have to connect with one of the following methods: connection token / password"))
+	}
+	if opts.ConnectionToken == "" && opts.Password == "" {
+		return nil, memphisError(errors.New("you have to connect with one of the following methods: connection token / password"))
+	}
+
 	connId, err := uuid.NewV4()
 	if err != nil {
 		return nil, memphisError(err)
@@ -254,10 +263,17 @@ func (c *Conn) startConn() error {
 		MaxReconnect:      opts.MaxReconnect,
 		ReconnectWait:     opts.ReconnectInterval,
 		Timeout:           opts.Timeout,
-		Token:             opts.ConnectionToken,
 		DisconnectedErrCB: disconnectedError,
 		Name:              c.ConnId + "::" + opts.Username,
 	}
+
+	if opts.ConnectionToken != "" {
+		natsOpts.Token = opts.ConnectionToken
+	} else {
+		natsOpts.Password = opts.Password
+		natsOpts.User = opts.Username
+	}
+
 	if (opts.TLSOpts.TlsCert != "") || (opts.TLSOpts.TlsKey != "") || (opts.TLSOpts.CaFile != "") {
 		if opts.TLSOpts.TlsCert == "" {
 			return memphisError(errors.New("must provide a TLS cert file"))
@@ -365,6 +381,22 @@ func ReconnectInterval(reconnectInterval time.Duration) Option {
 func Timeout(timeout time.Duration) Option {
 	return func(o *Options) error {
 		o.Timeout = timeout
+		return nil
+	}
+}
+
+// ConnectionToken - string connection token.
+func ConnectionToken(connectionToken string) Option {
+	return func(o *Options) error {
+		o.ConnectionToken = connectionToken
+		return nil
+	}
+}
+
+// Password - string password.
+func Password(password string) Option {
+	return func(o *Options) error {
+		o.Password = password
 		return nil
 	}
 }

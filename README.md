@@ -62,7 +62,8 @@ import "github.com/memphisdev/memphis.go"
 ```go
 c, err := memphis.Connect("<memphis-host>", 
 	"<application type username>", 
-	"<broker-token>")
+	memphis.ConnectionToken("<connection-token>"), // you will get it on application type user creation
+	memphis.Password("<password>")) // depends on how Memphis deployed - default is connection token-based authentication
 ```
 <br>
 It is possible to pass connection configuration parameters, as function-parameters.
@@ -71,8 +72,9 @@ It is possible to pass connection configuration parameters, as function-paramete
 // function params
 c, err := memphis.Connect("<memphis-host>", 
 	"<application type username>", 
-	"<broker-token>", // you will get it on application type user creation
-	memphis.Port(<int>),        
+	memphis.ConnectionToken("<connection-token>"), // you will get it on application type user creation
+	memphis.Password("<password>"), // depends on how Memphis deployed - default is connection token-based authentication
+  memphis.Port(<int>),        
 	memphis.Reconnect(<bool>),
 	memphis.MaxReconnect(<int>),
 	// for TLS connection:
