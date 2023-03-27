@@ -7,7 +7,7 @@ import (
 )
 
 func TestCreateProducer(t *testing.T) {
-	c, err := Connect("localhost", "root", "memphis")
+	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -58,7 +58,7 @@ func TestCreateProducer(t *testing.T) {
 }
 
 func TestProduce(t *testing.T) {
-	c, err := Connect("localhost", "root", "memphis")
+	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -83,7 +83,7 @@ func TestProduce(t *testing.T) {
 }
 
 func TestRemoveProducer(t *testing.T) {
-	c, err := Connect("localhost", "root", "memphis")
+	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -108,7 +108,7 @@ func TestRemoveProducer(t *testing.T) {
 }
 
 func TestFetch(t *testing.T) {
-	c, err := Connect("localhost", "root", "memphis")
+	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -155,7 +155,7 @@ func TestFetch(t *testing.T) {
 	}
 }
 func TestConsume(t *testing.T) {
-	c, err := Connect("localhost", "root", "memphis")
+	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -201,7 +201,7 @@ func TestConsume(t *testing.T) {
 }
 
 func TestCreateConsumer(t *testing.T) {
-	c, err := Connect("localhost", "root", "memphis")
+	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -250,7 +250,7 @@ func TestCreateConsumer(t *testing.T) {
 }
 
 func TestRemoveConsumer(t *testing.T) {
-	c, err := Connect("localhost", "root", "memphis")
+	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -288,7 +288,7 @@ func TestRemoveConsumer(t *testing.T) {
 }
 
 func TestFullFlow(t *testing.T) {
-	conn, err := Connect("127.0.0.1", "root", "memphis")
+	conn, err := Connect("127.0.0.1", "root", ConnectionToken("memphis"))
 
 	if err != nil {
 		t.Errorf("Connection creation failed: %v\n", err)
