@@ -30,6 +30,7 @@ const (
 	memphisNotificationsSubject    = "$memphis_notifications"
 	schemaVFailAlertType           = "schema_validation_fail_alert"
 	lastProducerCreationReqVersion = 1
+	schemaVerseDlsSubject          = "$memphis_schemaverse_dls"
 )
 
 // Producer - memphis producer object.
@@ -100,11 +101,10 @@ type Notification struct {
 }
 
 type DlsMessage struct {
-	ID              string            `json:"_id"`
 	StationName     string            `json:"station_name"`
 	Producer        ProducerDetails   `json:"producer"`
 	Message         MessagePayloadDls `json:"message"`
-	CreationDate    time.Time         `json:"creation_date"`
+	CreatedAt       time.Time         `json:"created_at"`
 	ValidationError string            `json:"validation_error"`
 }
 
@@ -409,14 +409,12 @@ func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error)
 	if p.conn.clientsUpdatesSub.StationSchemaverseToDlsMap[internStation] {
 		msgToSend := p.msgToString(msg)
 		timeSent := time.Now()
-		id := GetDlsMsgId(internStation, p.Name, time.Now().String())
 		headersForDls := make(map[string]string)
 		for k, v := range headers {
 			concat := strings.Join(v, " ")
 			headersForDls[k] = concat
 		}
 		schemaFailMsg := &DlsMessage{
-			ID:          id,
 			StationName: internStation,
 			Producer: ProducerDetails{
 				Name:         p.Name,
@@ -427,11 +425,11 @@ func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error)
 				Data:     hex.EncodeToString([]byte(msgToSend)),
 				Headers:  headersForDls,
 			},
-			CreationDate:    timeSent,
+			CreatedAt:       timeSent,
 			ValidationError: err.Error(),
 		}
 		msgToPublish, _ := json.Marshal(schemaFailMsg)
-		_ = p.conn.brokerConn.Publish(GetDlsSubject("schema", internStation, id), msgToPublish)
+		_ = p.conn.brokerConn.Publish(schemaVerseDlsSubject, msgToPublish)
 
 		if p.conn.clientsUpdatesSub.ClusterConfigurations["send_notification"] {
 			p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend, schemaVFailAlertType)
@@ -465,7 +463,7 @@ func (p *Producer) validateMsg(msg any, headers map[string][]string) ([]byte, er
 		if msgBytes != nil {
 			msgToSend = msgBytes
 		}
-		
+
 		p.sendMsgToDls(msgToSend, headers, err)
 		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
 	}
