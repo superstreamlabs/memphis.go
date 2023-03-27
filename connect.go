@@ -172,7 +172,7 @@ type sdkClientsUpdateSub struct {
 }
 
 // Connect - creates connection with memphis.
-func Connect(host string, username string, options ...Option) (*Conn, error) {
+func Connect(host, username string, options ...Option) (*Conn, error) {
 	opts := getDefaultOptions()
 
 	opts.Host = normalizeHost(host)
@@ -220,10 +220,10 @@ func (opts Options) connect() (*Conn, error) {
 	}
 
 	if opts.ConnectionToken != "" && opts.Password != "" {
-		return nil, memphisError(errors.New("You have to connect with only one of the following methods: connection token / password"))
+		return nil, memphisError(errors.New("you have to connect with one of the following methods: connection token / password"))
 	}
 	if opts.ConnectionToken == "" && opts.Password == "" {
-		return nil, memphisError(errors.New("You have to connect with one of the following methods: connection token / password"))
+		return nil, memphisError(errors.New("you have to connect with one of the following methods: connection token / password"))
 	}
 
 	connId, err := uuid.NewV4()
