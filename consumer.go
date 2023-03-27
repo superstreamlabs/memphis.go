@@ -37,6 +37,7 @@ const (
 var (
 	ConsumerErrStationUnreachable = errors.New("station unreachable")
 	ConsumerErrConsumeInactive    = errors.New("consumer is inactive")
+	ConsumerErrDelayDlsMsg        = errors.New("cannot delay DLS message")
 )
 
 // Consumer - memphis consumer object.
@@ -125,6 +126,21 @@ func (m *Msg) GetHeaders() map[string]string {
 		headers[key] = value[0]
 	}
 	return headers
+}
+
+func (m *Msg) Delay(duration time.Duration) error {
+	headers := m.GetHeaders()
+	_, ok := headers["$memphis_pm_id"]
+	if !ok {
+		return m.msg.NakWithDelay(duration)
+	} else {
+		_, ok := headers["$memphis_pm_sequence"]
+		if !ok {
+			return m.msg.NakWithDelay(duration)
+		} else {
+			return memphisError(ConsumerErrDelayDlsMsg)
+		}
+	}
 }
 
 // ConsumerErrHandler is used to process asynchronous errors.
