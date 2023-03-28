@@ -323,6 +323,13 @@ Acknowledging a message indicates to the Memphis server to not <br>re-send the s
 message.Ack();
 ```
 
+### Delay the message after a given duration
+Delay the message and tell Memphis server to re-send the same message again to the same consumer group. <br>The message will be redelivered only in case `Consumer.MaxMsgDeliveries` is not reached yet.
+
+```go
+message.Delay(<time.Duration>);
+```
+
 ### Get headers 
 Get headers per message
 ```go
