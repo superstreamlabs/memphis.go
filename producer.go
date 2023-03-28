@@ -104,7 +104,6 @@ type DlsMessage struct {
 	StationName     string            `json:"station_name"`
 	Producer        ProducerDetails   `json:"producer"`
 	Message         MessagePayloadDls `json:"message"`
-	CreatedAt       time.Time         `json:"created_at"`
 	ValidationError string            `json:"validation_error"`
 }
 
@@ -114,10 +113,9 @@ type ProducerDetails struct {
 }
 
 type MessagePayloadDls struct {
-	TimeSent time.Time         `json:"time_sent"`
-	Size     int               `json:"size"`
-	Data     string            `json:"data"`
-	Headers  map[string]string `json:"headers"`
+	Size    int               `json:"size"`
+	Data    string            `json:"data"`
+	Headers map[string]string `json:"headers"`
 }
 
 // ProducerOpt - a function on the options for producer creation.
@@ -408,7 +406,6 @@ func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error)
 	internStation := getInternalName(p.stationName)
 	if p.conn.clientsUpdatesSub.StationSchemaverseToDlsMap[internStation] {
 		msgToSend := p.msgToString(msg)
-		timeSent := time.Now()
 		headersForDls := make(map[string]string)
 		for k, v := range headers {
 			concat := strings.Join(v, " ")
@@ -421,11 +418,9 @@ func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error)
 				ConnectionId: p.conn.ConnId,
 			},
 			Message: MessagePayloadDls{
-				TimeSent: timeSent,
-				Data:     hex.EncodeToString([]byte(msgToSend)),
-				Headers:  headersForDls,
+				Data:    hex.EncodeToString([]byte(msgToSend)),
+				Headers: headersForDls,
 			},
-			CreatedAt:       timeSent,
 			ValidationError: err.Error(),
 		}
 		msgToPublish, _ := json.Marshal(schemaFailMsg)
