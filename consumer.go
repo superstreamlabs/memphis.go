@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -75,8 +76,8 @@ type Msg struct {
 }
 
 type PMsgToAck struct {
-	ID       string `json:"id"`
-	Sequence string `json:"sequence"`
+	ID     int    `json:"id"`
+	CgName string `json:"cg_name"`
 }
 
 // Msg.Data - get message's data.
@@ -102,13 +103,17 @@ func (m *Msg) Ack() error {
 		if !ok {
 			return err
 		} else {
-			seq, ok := headers["$memphis_pm_sequence"]
+			idNumber, err := strconv.Atoi(id)
+			if err != nil {
+				return err
+			}
+			cgName, ok := headers["$memphis_pm_cg_name"]
 			if !ok {
 				return err
 			} else {
 				msgToAck := PMsgToAck{
-					ID:       id,
-					Sequence: seq,
+					ID:     idNumber,
+					CgName: cgName,
 				}
 				msgToPublish, _ := json.Marshal(msgToAck)
 				m.conn.brokerConn.Publish(memphisPmAckSubject, msgToPublish)
