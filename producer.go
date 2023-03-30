@@ -164,8 +164,14 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 	if err != nil {
 		return nil, memphisError(err)
 	}
+	producer := Producer{
+		Name:        name,
+		stationName: strings.ToLower(stationName),
+		conn:        c,
+		realName:    nameWithoutSuffix,
+	}
 
-	if err = c.create(&p); err != nil {
+	if err = c.create(&producer); err != nil {
 		if err := c.removeSchemaUpdatesListener(stationName); err != nil {
 			return nil, memphisError(err)
 		}
