@@ -438,7 +438,7 @@ func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
 }
 
 // Fetch - immediately fetch a batch of messages.
-func (c *Consumer) Fetch(batchSize int) ([]*Msg, error) {
+func (c *Consumer) Fetch(batchSize int, prefetch bool) ([]*Msg, error) {
 	c.BatchSize = batchSize
 	var msgs []*Msg
 	if len(c.dlsMsgs) > 0 {
@@ -453,7 +453,43 @@ func (c *Consumer) Fetch(batchSize int) ([]*Msg, error) {
 		c.dlsMsgsMutex.Unlock()
 		return msgs, nil
 	}
+
+	if prefetch {
+		go c.prefetchMsgs()
+	}
+	c.conn.prefetchedMsgs.lock.Lock()
+	defer c.conn.prefetchedMsgs.lock.Unlock()
+	if prefetchedMsgsForStation, ok := c.conn.prefetchedMsgs.msgs[c.stationName]; ok {
+		if prefetchedMsgsForCG, ok := prefetchedMsgsForStation[c.Name]; ok {
+			if len(prefetchedMsgsForCG) > 0 {
+				if len(prefetchedMsgsForCG) <= batchSize {
+					msgs = prefetchedMsgsForCG
+					prefetchedMsgsForCG = []*Msg{}
+				} else {
+					msgs = prefetchedMsgsForCG[:batchSize-1]
+					prefetchedMsgsForCG = prefetchedMsgsForCG[batchSize-1:]
+				}
+				c.conn.prefetchedMsgs.msgs[c.stationName][c.Name] = prefetchedMsgsForCG
+				return msgs, nil
+			}
+		}
+	}
 	return c.fetchSubscriprionWithTimeout()
+}
+
+func (c *Consumer) prefetchMsgs() {
+	c.conn.prefetchedMsgs.lock.Lock()
+	defer c.conn.prefetchedMsgs.lock.Unlock()
+	if _, ok := c.conn.prefetchedMsgs.msgs[c.stationName]; !ok {
+		c.conn.prefetchedMsgs.msgs[c.stationName] = make(map[string][]*Msg)
+	}
+	if _, ok := c.conn.prefetchedMsgs.msgs[c.stationName][c.Name]; !ok {
+		c.conn.prefetchedMsgs.msgs[c.stationName][c.Name] = make([]*Msg, 0)
+	}
+	msgs, err := c.fetchSubscriprionWithTimeout()
+	if err == nil {
+		c.conn.prefetchedMsgs.msgs[c.stationName][c.Name] = append(c.conn.prefetchedMsgs.msgs[c.stationName][c.Name], msgs...)
+	}
 }
 
 func (c *Consumer) dlsSubscriptionInit() error {

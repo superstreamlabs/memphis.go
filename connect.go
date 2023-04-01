@@ -40,6 +40,10 @@ const sdkClientsUpdatesSubject = "$memphis_sdk_clients_updates"
 type Option func(*Options) error
 type ProducersMap map[string]*Producer
 type ConsumersMap map[string]*Consumer
+type PrefetchedMsgs struct {
+	msgs map[string]map[string][]*Msg
+	lock sync.Mutex
+}
 
 type TLSOpts struct {
 	TlsCert string
@@ -133,6 +137,7 @@ type Conn struct {
 	clientsUpdatesSub   sdkClientsUpdateSub
 	producersMap        ProducersMap
 	consumersMap        ConsumersMap
+	prefetchedMsgs      PrefetchedMsgs
 }
 
 type attachSchemaReq struct {
@@ -232,10 +237,11 @@ func (opts Options) connect() (*Conn, error) {
 	}
 
 	c := Conn{
-		ConnId:       connId.String(),
-		opts:         opts,
-		producersMap: make(ProducersMap),
-		consumersMap: make(ConsumersMap),
+		ConnId:         connId.String(),
+		opts:           opts,
+		producersMap:   make(ProducersMap),
+		consumersMap:   make(ConsumersMap),
+		prefetchedMsgs: PrefetchedMsgs{msgs: make(map[string]map[string][]*Msg)},
 	}
 
 	if err := c.startConn(); err != nil {
@@ -672,7 +678,7 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 	} else {
 		consumer = cons
 	}
-	msgs, err := consumer.Fetch(defaultOpts.BatchSize)
+	msgs, err := consumer.Fetch(defaultOpts.BatchSize, true)
 	if err != nil {
 		return nil, err
 	}
