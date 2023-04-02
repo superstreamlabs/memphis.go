@@ -151,8 +151,8 @@ func getDefaultOptions() Options {
 	return Options{
 		Port:              6666,
 		Reconnect:         true,
-		MaxReconnect:      3,
-		ReconnectInterval: 200 * time.Millisecond,
+		MaxReconnect:      10,
+		ReconnectInterval: 1 * time.Second,
 		Timeout:           15 * time.Second,
 		TLSOpts: TLSOpts{
 			TlsCert: "",
