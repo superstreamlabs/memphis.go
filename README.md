@@ -312,8 +312,9 @@ msgs, err := conn.FetchMessages("<station-name>", "<consumer-name>",
 ```
 
 ### Fetch a single batch of messages after creating a consumer
+`prefetch = true` will prefetch next batch of messages and save it in memory for future Fetch() request
 ```go
-msgs, err := consumer.Fetch(<batch-size> int)
+msgs, err := consumer.Fetch(<batch-size> int, <prefetch> bool)
 ```
 
 ### Acknowledging a Message
