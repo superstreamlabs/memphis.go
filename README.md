@@ -74,9 +74,11 @@ c, err := memphis.Connect("<memphis-host>",
 	"<application type username>", 
 	memphis.ConnectionToken("<connection-token>"), // you will get it on application type user creation
 	memphis.Password("<password>"), // depends on how Memphis deployed - default is connection token-based authentication
-  memphis.Port(<int>),        
-	memphis.Reconnect(<bool>),
-	memphis.MaxReconnect(<int>),
+  memphis.Port(<int>), // defaults to 6666       
+	memphis.Reconnect(<bool>), // defaults to true
+	memphis.MaxReconnect(<int>), // defaults to 10
+  memphis.ReconnectInterval(<time.Duration>) // defaults to 1 second
+  memphis.Timeout(<time.Duration>) // defaults to 15 seconds
 	// for TLS connection:
 	memphis.Tls("<cert-client.pem>", "<key-client.pem>",  "<rootCA.pem>"),
 	)
