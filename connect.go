@@ -83,6 +83,7 @@ type FetchOpts struct {
 	ErrHandler               ConsumerErrHandler
 	StartConsumeFromSequence uint64
 	LastMessages             int64
+	Prefetch                 bool
 }
 
 // getDefaultConsumerOptions - returns default configuration options for consumers.
@@ -97,6 +98,7 @@ func getDefaultFetchOptions() FetchOpts {
 		ErrHandler:               DefaultConsumerErrHandler,
 		StartConsumeFromSequence: 1,
 		LastMessages:             -1,
+		Prefetch:                 true,
 	}
 }
 
@@ -678,7 +680,7 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 	} else {
 		consumer = cons
 	}
-	msgs, err := consumer.Fetch(defaultOpts.BatchSize, true)
+	msgs, err := consumer.Fetch(defaultOpts.BatchSize, defaultOpts.Prefetch)
 	if err != nil {
 		return nil, err
 	}
@@ -740,6 +742,14 @@ func FetchConsumerGenUniqueSuffix() FetchOpt {
 func FetchConsumerErrorHandler(ceh ConsumerErrHandler) FetchOpt {
 	return func(opts *FetchOpts) error {
 		opts.ErrHandler = ceh
+		return nil
+	}
+}
+
+// FetchPrefetch - whether to prefetch next batch for consumption
+func FetchPrefetch() FetchOpt {
+	return func(opts *FetchOpts) error {
+		opts.Prefetch = true
 		return nil
 	}
 }
