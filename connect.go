@@ -34,7 +34,10 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-const sdkClientsUpdatesSubject = "$memphis_sdk_clients_updates"
+const (
+	sdkClientsUpdatesSubject = "$memphis_sdk_clients_updates"
+	maxBatchSize             = 5000
+)
 
 // Option is a function on the options for a connection.
 type Option func(*Options) error
@@ -655,6 +658,9 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 				return nil, memphisError(err)
 			}
 		}
+	}
+	if defaultOpts.BatchSize > maxBatchSize {
+		return nil, memphisError(errors.New("batch size parameter should be with value of " + strconv.Itoa(maxBatchSize) + " maximum"))
 	}
 	if cons == nil {
 		if defaultOpts.GenUniqueSuffix {
