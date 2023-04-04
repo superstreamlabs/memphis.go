@@ -98,7 +98,7 @@ func getDefaultFetchOptions() FetchOpts {
 		ErrHandler:               DefaultConsumerErrHandler,
 		StartConsumeFromSequence: 1,
 		LastMessages:             -1,
-		Prefetch:                 true,
+		Prefetch:                 false,
 	}
 }
 
