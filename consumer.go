@@ -273,7 +273,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	}
 
 	if consumer.BatchSize > maxBatchSize {
-		return nil, memphisError(errors.New("batch size parameter should be with value of " + strconv.Itoa(maxBatchSize) + " maximum"))
+		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize)))
 	}
 
 	err = c.create(&consumer)
@@ -444,8 +444,9 @@ func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
 // Fetch - immediately fetch a batch of messages.
 func (c *Consumer) Fetch(batchSize int) ([]*Msg, error) {
 	if batchSize > maxBatchSize {
-		return nil, memphisError(errors.New("batch size parameter should be with value of " + strconv.Itoa(maxBatchSize) + " maximum"))
+		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize)))
 	}
+
 	c.BatchSize = batchSize
 	var msgs []*Msg
 	if len(c.dlsMsgs) > 0 {
