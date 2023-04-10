@@ -19,10 +19,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 const (
@@ -446,8 +449,29 @@ func (p *Producer) validateMsg(msg any, headers map[string][]string) ([]byte, er
 			return msg.([]byte), nil
 		case map[string]interface{}:
 			return json.Marshal(msg)
+		case protoreflect.ProtoMessage:
+			msgBytes, err := proto.Marshal(msg.(protoreflect.ProtoMessage))
+			if err != nil {
+				return nil, memphisError(err)
+			}
+			return msgBytes, nil
+		case string:
+			msgBytes, err := json.Marshal(msg)
+			if err != nil {
+				return nil, memphisError(err)
+			}
+			return msgBytes, nil
 		default:
-			return nil, memphisError(errors.New("unsupported message type"))
+			msgType := reflect.TypeOf(msg).Kind()
+			if msgType == reflect.Struct {
+				msgBytes, err := json.Marshal(msg)
+				if err != nil {
+					return nil, memphisError(err)
+				}
+				return msgBytes, nil
+			} else {
+				return nil, memphisError(errors.New("unsupported message type"))
+			}
 		}
 
 	}
