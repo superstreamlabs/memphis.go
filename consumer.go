@@ -454,11 +454,7 @@ func (c *Consumer) Fetch(batchSize int, prefetch bool) ([]*Msg, error) {
 		return msgs, nil
 	}
 
-	if prefetch {
-		go c.prefetchMsgs()
-	}
 	c.conn.prefetchedMsgs.lock.Lock()
-	defer c.conn.prefetchedMsgs.lock.Unlock()
 	if prefetchedMsgsForStation, ok := c.conn.prefetchedMsgs.msgs[c.stationName]; ok {
 		if prefetchedMsgsForCG, ok := prefetchedMsgsForStation[c.Name]; ok {
 			if len(prefetchedMsgsForCG) > 0 {
@@ -470,9 +466,15 @@ func (c *Consumer) Fetch(batchSize int, prefetch bool) ([]*Msg, error) {
 					prefetchedMsgsForCG = prefetchedMsgsForCG[batchSize-1:]
 				}
 				c.conn.prefetchedMsgs.msgs[c.stationName][c.Name] = prefetchedMsgsForCG
-				return msgs, nil
 			}
 		}
+	}
+	c.conn.prefetchedMsgs.lock.Unlock()
+	if prefetch {
+		go c.prefetchMsgs()
+	}
+	if len(msgs) > 0 {
+		return msgs, nil
 	}
 	return c.fetchSubscriprionWithTimeout()
 }
