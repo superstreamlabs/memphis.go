@@ -212,14 +212,15 @@ func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...Consumer
 
 	defaultOpts.Name = consumerName
 	defaultOpts.StationName = stationName
-	defaultOpts.ConsumerGroup = consumerName
-
 	for _, opt := range opts {
 		if opt != nil {
 			if err := opt(&defaultOpts); err != nil {
 				return nil, memphisError(err)
 			}
 		}
+	}
+	if defaultOpts.ConsumerGroup == "" {
+		defaultOpts.ConsumerGroup = consumerName
 	}
 	consumer, err := defaultOpts.createConsumer(c)
 	if err != nil {
@@ -294,7 +295,6 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		durable,
 		nats.ManualAck(),
 		nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
-		nats.MaxRequestBatch(opts.BatchSize),
 		nats.MaxDeliver(opts.MaxMsgDeliveries))
 
 	if err != nil {

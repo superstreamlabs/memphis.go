@@ -90,6 +90,7 @@ c.Close();
 ```
 
 ### Creating a Station
+**Unexist stations will be created automatically through the SDK on the first producer/consumer connection with default values.**<br><br>
 Stations can be created from Conn<br>
 Passing optional parameters using functions<br>
 _If a station already exists nothing happens, the new configuration will not be applied_<br>
