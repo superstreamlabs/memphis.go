@@ -54,6 +54,7 @@ type Options struct {
 	Host              string
 	Port              int
 	Username          string
+	AccountId         int
 	ConnectionToken   string
 	Reconnect         bool
 	MaxReconnect      int
@@ -128,6 +129,7 @@ type Conn struct {
 	opts                Options
 	ConnId              string
 	username            string
+	accountId           int
 	brokerConn          *nats.Conn
 	js                  nats.JetStreamContext
 	stationUpdatesMu    sync.RWMutex
@@ -164,6 +166,7 @@ func getDefaultOptions() Options {
 		},
 		ConnectionToken: "",
 		Password:        "",
+		AccountId:       1,
 	}
 }
 
@@ -274,7 +277,7 @@ func (c *Conn) startConn() error {
 		natsOpts.Token = opts.ConnectionToken
 	} else {
 		natsOpts.Password = opts.Password
-		natsOpts.User = opts.Username
+		natsOpts.User = opts.Username + "$" + strconv.Itoa(opts.AccountId)
 	}
 
 	if (opts.TLSOpts.TlsCert != "") || (opts.TLSOpts.TlsKey != "") || (opts.TLSOpts.CaFile != "") {
