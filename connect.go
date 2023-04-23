@@ -419,6 +419,14 @@ func Tls(TlsCert string, TlsKey string, CaFile string) Option {
 	}
 }
 
+// AccountId - default is 1.
+func AccountId(accountId int) Option {
+	return func(o *Options) error {
+		o.AccountId = accountId
+		return nil
+	}
+}
+
 type directObj interface {
 	getCreationSubject() string
 	getCreationReq() any
