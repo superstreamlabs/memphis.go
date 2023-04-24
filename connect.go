@@ -528,6 +528,10 @@ func getInternalName(name string) string {
 	return replaceDelimiters(name)
 }
 
+func getLowerCaseName(name string) string {
+	return strings.ToLower(name)
+}
+
 const (
 	delimToReplace   = "."
 	delimReplacement = "#"
