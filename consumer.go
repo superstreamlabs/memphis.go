@@ -464,7 +464,7 @@ func (c *Consumer) Fetch(batchSize int, prefetch bool) ([]*Msg, error) {
 
 	c.conn.prefetchedMsgs.lock.Lock()
 	if prefetchedMsgsForStation, ok := c.conn.prefetchedMsgs.msgs[c.stationName]; ok {
-		if prefetchedMsgsForCG, ok := prefetchedMsgsForStation[c.Name]; ok {
+		if prefetchedMsgsForCG, ok := prefetchedMsgsForStation[c.ConsumerGroup]; ok {
 			if len(prefetchedMsgsForCG) > 0 {
 				if len(prefetchedMsgsForCG) <= batchSize {
 					msgs = prefetchedMsgsForCG
@@ -473,7 +473,7 @@ func (c *Consumer) Fetch(batchSize int, prefetch bool) ([]*Msg, error) {
 					msgs = prefetchedMsgsForCG[:batchSize-1]
 					prefetchedMsgsForCG = prefetchedMsgsForCG[batchSize-1:]
 				}
-				c.conn.prefetchedMsgs.msgs[c.stationName][c.Name] = prefetchedMsgsForCG
+				c.conn.prefetchedMsgs.msgs[c.stationName][c.ConsumerGroup] = prefetchedMsgsForCG
 			}
 		}
 	}
@@ -493,12 +493,12 @@ func (c *Consumer) prefetchMsgs() {
 	if _, ok := c.conn.prefetchedMsgs.msgs[c.stationName]; !ok {
 		c.conn.prefetchedMsgs.msgs[c.stationName] = make(map[string][]*Msg)
 	}
-	if _, ok := c.conn.prefetchedMsgs.msgs[c.stationName][c.Name]; !ok {
-		c.conn.prefetchedMsgs.msgs[c.stationName][c.Name] = make([]*Msg, 0)
+	if _, ok := c.conn.prefetchedMsgs.msgs[c.stationName][c.ConsumerGroup]; !ok {
+		c.conn.prefetchedMsgs.msgs[c.stationName][c.ConsumerGroup] = make([]*Msg, 0)
 	}
 	msgs, err := c.fetchSubscriprionWithTimeout()
 	if err == nil {
-		c.conn.prefetchedMsgs.msgs[c.stationName][c.Name] = append(c.conn.prefetchedMsgs.msgs[c.stationName][c.Name], msgs...)
+		c.conn.prefetchedMsgs.msgs[c.stationName][c.ConsumerGroup] = append(c.conn.prefetchedMsgs.msgs[c.stationName][c.ConsumerGroup], msgs...)
 	}
 }
 
