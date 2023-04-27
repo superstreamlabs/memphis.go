@@ -43,6 +43,10 @@ const (
 type Option func(*Options) error
 type ProducersMap map[string]*Producer
 type ConsumersMap map[string]*Consumer
+type PrefetchedMsgs struct {
+	msgs map[string]map[string][]*Msg
+	lock sync.Mutex
+}
 
 type TLSOpts struct {
 	TlsCert string
@@ -83,6 +87,7 @@ type FetchOpts struct {
 	ErrHandler               ConsumerErrHandler
 	StartConsumeFromSequence uint64
 	LastMessages             int64
+	Prefetch                 bool
 }
 
 // getDefaultConsumerOptions - returns default configuration options for consumers.
@@ -97,6 +102,7 @@ func getDefaultFetchOptions() FetchOpts {
 		ErrHandler:               DefaultConsumerErrHandler,
 		StartConsumeFromSequence: 1,
 		LastMessages:             -1,
+		Prefetch:                 false,
 	}
 }
 
@@ -138,6 +144,7 @@ type Conn struct {
 	clientsUpdatesSub   sdkClientsUpdateSub
 	producersMap        ProducersMap
 	consumersMap        ConsumersMap
+	prefetchedMsgs      PrefetchedMsgs
 }
 
 type attachSchemaReq struct {
@@ -238,10 +245,11 @@ func (opts Options) connect() (*Conn, error) {
 	}
 
 	c := Conn{
-		ConnId:       connId.String(),
-		opts:         opts,
-		producersMap: make(ProducersMap),
-		consumersMap: make(ConsumersMap),
+		ConnId:         connId.String(),
+		opts:           opts,
+		producersMap:   make(ProducersMap),
+		consumersMap:   make(ConsumersMap),
+		prefetchedMsgs: PrefetchedMsgs{msgs: make(map[string]map[string][]*Msg)},
 	}
 
 	if err := c.startConn(); err != nil {
@@ -531,6 +539,10 @@ func getInternalName(name string) string {
 	return replaceDelimiters(name)
 }
 
+func getLowerCaseName(name string) string {
+	return strings.ToLower(name)
+}
+
 const (
 	delimToReplace   = "."
 	delimReplacement = "#"
@@ -690,7 +702,7 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 	} else {
 		consumer = cons
 	}
-	msgs, err := consumer.Fetch(defaultOpts.BatchSize)
+	msgs, err := consumer.Fetch(defaultOpts.BatchSize, defaultOpts.Prefetch)
 	if err != nil {
 		return nil, err
 	}
@@ -752,6 +764,14 @@ func FetchConsumerGenUniqueSuffix() FetchOpt {
 func FetchConsumerErrorHandler(ceh ConsumerErrHandler) FetchOpt {
 	return func(opts *FetchOpts) error {
 		opts.ErrHandler = ceh
+		return nil
+	}
+}
+
+// FetchPrefetch - whether to prefetch next batch for consumption
+func FetchPrefetch() FetchOpt {
+	return func(opts *FetchOpts) error {
+		opts.Prefetch = true
 		return nil
 	}
 }

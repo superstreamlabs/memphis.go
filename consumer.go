@@ -442,7 +442,7 @@ func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
 }
 
 // Fetch - immediately fetch a batch of messages.
-func (c *Consumer) Fetch(batchSize int) ([]*Msg, error) {
+func (c *Consumer) Fetch(batchSize int, prefetch bool) ([]*Msg, error) {
 	if batchSize > maxBatchSize {
 		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize)))
 	}
@@ -461,7 +461,47 @@ func (c *Consumer) Fetch(batchSize int) ([]*Msg, error) {
 		c.dlsMsgsMutex.Unlock()
 		return msgs, nil
 	}
+
+	c.conn.prefetchedMsgs.lock.Lock()
+	lowerCaseStationName := getLowerCaseName(c.stationName)
+	if prefetchedMsgsForStation, ok := c.conn.prefetchedMsgs.msgs[lowerCaseStationName]; ok {
+		if prefetchedMsgsForCG, ok := prefetchedMsgsForStation[c.ConsumerGroup]; ok {
+			if len(prefetchedMsgsForCG) > 0 {
+				if len(prefetchedMsgsForCG) <= batchSize {
+					msgs = prefetchedMsgsForCG
+					prefetchedMsgsForCG = []*Msg{}
+				} else {
+					msgs = prefetchedMsgsForCG[:batchSize-1]
+					prefetchedMsgsForCG = prefetchedMsgsForCG[batchSize-1:]
+				}
+				c.conn.prefetchedMsgs.msgs[lowerCaseStationName][c.ConsumerGroup] = prefetchedMsgsForCG
+			}
+		}
+	}
+	c.conn.prefetchedMsgs.lock.Unlock()
+	if prefetch {
+		go c.prefetchMsgs()
+	}
+	if len(msgs) > 0 {
+		return msgs, nil
+	}
 	return c.fetchSubscriprionWithTimeout()
+}
+
+func (c *Consumer) prefetchMsgs() {
+	c.conn.prefetchedMsgs.lock.Lock()
+	defer c.conn.prefetchedMsgs.lock.Unlock()
+	lowerCaseStationName := getLowerCaseName(c.stationName)
+	if _, ok := c.conn.prefetchedMsgs.msgs[lowerCaseStationName]; !ok {
+		c.conn.prefetchedMsgs.msgs[lowerCaseStationName] = make(map[string][]*Msg)
+	}
+	if _, ok := c.conn.prefetchedMsgs.msgs[lowerCaseStationName][c.ConsumerGroup]; !ok {
+		c.conn.prefetchedMsgs.msgs[lowerCaseStationName][c.ConsumerGroup] = make([]*Msg, 0)
+	}
+	msgs, err := c.fetchSubscriprionWithTimeout()
+	if err == nil {
+		c.conn.prefetchedMsgs.msgs[lowerCaseStationName][c.ConsumerGroup] = append(c.conn.prefetchedMsgs.msgs[lowerCaseStationName][c.ConsumerGroup], msgs...)
+	}
 }
 
 func (c *Consumer) dlsSubscriptionInit() error {
