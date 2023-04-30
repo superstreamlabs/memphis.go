@@ -37,6 +37,7 @@ import (
 const (
 	sdkClientsUpdatesSubject = "$memphis_sdk_clients_updates"
 	maxBatchSize             = 5000
+	memphisGlobalAccountName = "$memphis"
 )
 
 // Option is a function on the options for a connection.
@@ -59,6 +60,7 @@ type Options struct {
 	Port              int
 	Username          string
 	AccountId         int
+	AccountName       string
 	ConnectionToken   string
 	Reconnect         bool
 	MaxReconnect      int
@@ -136,6 +138,7 @@ type Conn struct {
 	ConnId              string
 	username            string
 	accountId           int
+	accountName         string
 	brokerConn          *nats.Conn
 	js                  nats.JetStreamContext
 	stationUpdatesMu    sync.RWMutex
@@ -174,6 +177,7 @@ func getDefaultOptions() Options {
 		ConnectionToken: "",
 		Password:        "",
 		AccountId:       1,
+		AccountName:     memphisGlobalAccountName,
 	}
 }
 
@@ -206,7 +210,7 @@ func Connect(host, username string, options ...Option) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	conn.accountId = opts.AccountId
+	conn.accountName = opts.AccountName
 
 	return conn, nil
 }

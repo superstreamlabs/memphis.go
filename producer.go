@@ -108,7 +108,7 @@ type DlsMessage struct {
 	Producer        ProducerDetails   `json:"producer"`
 	Message         MessagePayloadDls `json:"message"`
 	ValidationError string            `json:"validation_error"`
-	AccountId       int               `json:"account_id"`
+	AccountName     string            `json:"account_name"`
 }
 
 type ProducerDetails struct {
@@ -426,7 +426,7 @@ func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error)
 				Headers: headersForDls,
 			},
 			ValidationError: err.Error(),
-			AccountId:       p.conn.accountId,
+			AccountName:     p.conn.accountName,
 		}
 		msgToPublish, _ := json.Marshal(schemaFailMsg)
 		_ = p.conn.brokerConn.Publish(schemaVerseDlsSubject, msgToPublish)
