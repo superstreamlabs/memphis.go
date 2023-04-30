@@ -138,7 +138,7 @@ type Conn struct {
 	ConnId              string
 	username            string
 	accountId           int
-	accountName         string
+	tenantName          string
 	brokerConn          *nats.Conn
 	js                  nats.JetStreamContext
 	stationUpdatesMu    sync.RWMutex
@@ -159,6 +159,15 @@ type attachSchemaReq struct {
 type detachSchemaReq struct {
 	StationName string `json:"station_name"`
 	Username    string `json:"username"`
+}
+
+type getTenantIdReq struct {
+	TenantId int `json:"tenant_id"`
+}
+
+type getTenantNameResponse struct {
+	TenantName string `json:"tenant_name"`
+	Err        string `json:"error"`
 }
 
 // getDefaultOptions - returns default configuration options for the client.
@@ -210,7 +219,11 @@ func Connect(host, username string, options ...Option) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	conn.accountName = opts.AccountName
+
+	err = conn.GetTenantName()
+	if err != nil {
+		return nil, err
+	}
 
 	return conn, nil
 }
@@ -364,6 +377,10 @@ func (c *Conn) getSchemaDetachSubject() string {
 	return "$memphis_schema_detachments"
 }
 
+func (c *Conn) getTenantNameSubject() string {
+	return "$memphis_get_tenant_name"
+}
+
 // Port - default is 6666.
 func Port(port int) Option {
 	return func(o *Options) error {
@@ -436,14 +453,6 @@ func Tls(TlsCert string, TlsKey string, CaFile string) Option {
 func AccountId(accountId int) Option {
 	return func(o *Options) error {
 		o.AccountId = accountId
-		return nil
-	}
-}
-
-// AccountName - defaults to $memphis.
-func AccountName(accountName string) Option {
-	return func(o *Options) error {
-		o.AccountName = accountName
 		return nil
 	}
 }
@@ -544,6 +553,35 @@ func (c *Conn) destroy(o directObj) error {
 		return memphisError(errors.New(string(msg.Data)))
 	}
 
+	return nil
+}
+
+func (c *Conn) GetTenantName() error {
+	subject := c.getTenantNameSubject()
+
+	req := &getTenantIdReq{
+		TenantId: c.opts.AccountId,
+	}
+
+	b, err := json.Marshal(req)
+	if err != nil {
+		return memphisError(err)
+	}
+
+	msg, err := c.brokerConn.Request(subject, b, 5*time.Second)
+	if err != nil {
+		return memphisError(err)
+	}
+	var tenantNameResp getTenantNameResponse
+	err = json.Unmarshal(msg.Data, &tenantNameResp)
+	if err != nil {
+		return err
+	}
+	if tenantNameResp.Err != "" {
+		return memphisError(errors.New(string(msg.Data)))
+	}
+
+	c.tenantName = tenantNameResp.TenantName
 	return nil
 }
 

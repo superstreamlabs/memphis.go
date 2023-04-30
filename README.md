@@ -78,7 +78,6 @@ c, err := memphis.Connect("<memphis-host>",
   memphis.Timeout(<time.Duration>) // defaults to 15 seconds
 	// for TLS connection:
 	memphis.Tls("<cert-client.pem>", "<key-client.pem>",  "<rootCA.pem>"),
-  memphis.AccountName(<string>) // defaults to $memphis
 	)
 ```
 
