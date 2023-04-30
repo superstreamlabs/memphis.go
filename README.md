@@ -70,7 +70,7 @@ c, err := memphis.Connect("<memphis-host>",
 	"<application type username>", 
 	memphis.ConnectionToken("<connection-token>"), // you will get it on application type user creation
 	memphis.Password("<password>"), // depends on how Memphis deployed - default is connection token-based authentication
-  memphis.AccountId(<int>) // You can find it on the profile page in the Memphis UI. This field should be sent only on the cloud version of Memphis, otherwise it will be ignored. You can leave it empty and connect with only username and password, there is backward compatibility.
+  memphis.AccountId(<int>) // You can find it on the profile page in the Memphis UI. This field should be sent only on the cloud version of Memphis, otherwise it will be ignored
   memphis.Port(<int>), // defaults to 6666       
 	memphis.Reconnect(<bool>), // defaults to true
 	memphis.MaxReconnect(<int>), // defaults to 10
