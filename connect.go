@@ -440,6 +440,14 @@ func AccountId(accountId int) Option {
 	}
 }
 
+// AccountName - defaults to $memphis.
+func AccountName(accountName string) Option {
+	return func(o *Options) error {
+		o.AccountName = accountName
+		return nil
+	}
+}
+
 type directObj interface {
 	getCreationSubject() string
 	getCreationReq() any
