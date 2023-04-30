@@ -15,6 +15,7 @@
 package memphis
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -433,7 +434,11 @@ func (sd *schemaDetails) handleSchemaUpdateDrop() {
 
 func (sd *schemaDetails) compileDescriptor() error {
 	descriptorSet := descriptorpb.FileDescriptorSet{}
-	err := proto.Unmarshal([]byte(sd.activeVersion.Descriptor), &descriptorSet)
+	descriptorBytes, err := base64.StdEncoding.DecodeString(sd.activeVersion.Descriptor)
+	if err != nil {
+		return memphisError(err)
+	}
+	err = proto.Unmarshal(descriptorBytes, &descriptorSet)
 	if err != nil {
 		return memphisError(err)
 	}
