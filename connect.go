@@ -321,6 +321,7 @@ func (c *Conn) startConn() error {
 
 	c.brokerConn, err = natsOpts.Connect()
 	if err != nil {
+		// this code allow backward compatibility.
 		if strings.Contains(err.Error(), "Authorization Violation") && natsOpts.User != "" && natsOpts.Password != "" {
 			natsOpts.User = opts.Username
 			c.brokerConn, err = natsOpts.Connect()
