@@ -566,11 +566,20 @@ func (c *Conn) GetTenantName() error {
 	}
 
 	msg, err := c.brokerConn.Request(subject, b, 5*time.Second)
+	var message []byte
+	if msg == nil {
+		message = []byte(`{"tenant_name":"","error":""}`)
+	} else {
+		message = msg.Data
+	}
+
 	if err != nil {
-		return memphisError(err)
+		if !strings.Contains(err.Error(), "nats: no responders available for request") {
+			return memphisError(err)
+		}
 	}
 	var tenantNameResp getTenantNameResponse
-	err = json.Unmarshal(msg.Data, &tenantNameResp)
+	err = json.Unmarshal(message, &tenantNameResp)
 	if err != nil {
 		return err
 	}
