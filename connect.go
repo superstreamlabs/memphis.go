@@ -206,7 +206,6 @@ func Connect(host, username string, options ...Option) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	conn.accountId = opts.AccountId
 
 	return conn, nil
 }
