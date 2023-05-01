@@ -37,6 +37,7 @@ import (
 const (
 	sdkClientsUpdatesSubject = "$memphis_sdk_clients_updates"
 	maxBatchSize             = 5000
+	memphisGlobalAccountName = "$memphis"
 )
 
 // Option is a function on the options for a connection.
@@ -217,10 +218,11 @@ func Connect(host, username string, options ...Option) (*Conn, error) {
 		return nil, err
 	}
 
-	err = conn.GetTenantName()
+	tenantName, err := conn.GetTenantName()
 	if err != nil {
 		return nil, err
 	}
+	conn.tenantName = tenantName
 
 	return conn, nil
 }
@@ -553,7 +555,7 @@ func (c *Conn) destroy(o directObj) error {
 	return nil
 }
 
-func (c *Conn) GetTenantName() error {
+func (c *Conn) GetTenantName() (string, error) {
 	subject := c.getTenantNameSubject()
 
 	req := &getTenantIdReq{
@@ -562,33 +564,33 @@ func (c *Conn) GetTenantName() error {
 
 	b, err := json.Marshal(req)
 	if err != nil {
-		return memphisError(err)
+		return memphisGlobalAccountName, memphisError(err)
 	}
 
 	msg, err := c.brokerConn.Request(subject, b, 5*time.Second)
 	var message []byte
+	if err != nil {
+		if !strings.Contains(err.Error(), "nats: no responders available for request") {
+			return memphisGlobalAccountName, memphisError(err)
+		}
+	}
+	//for backward compatibility
 	if msg == nil {
 		message = []byte(`{"tenant_name":"","error":""}`)
 	} else {
 		message = msg.Data
 	}
 
-	if err != nil {
-		if !strings.Contains(err.Error(), "nats: no responders available for request") {
-			return memphisError(err)
-		}
-	}
 	var tenantNameResp getTenantNameResponse
 	err = json.Unmarshal(message, &tenantNameResp)
 	if err != nil {
-		return err
+		return memphisGlobalAccountName, err
 	}
 	if tenantNameResp.Err != "" {
-		return memphisError(errors.New(string(msg.Data)))
+		return memphisGlobalAccountName, memphisError(errors.New(string(msg.Data)))
 	}
 
-	c.tenantName = tenantNameResp.TenantName
-	return nil
+	return tenantNameResp.TenantName, nil
 }
 
 func getInternalName(name string) string {
