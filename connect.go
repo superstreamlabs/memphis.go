@@ -576,7 +576,7 @@ func (c *Conn) GetTenantName() (string, error) {
 	}
 	//for backward compatibility
 	if msg == nil {
-		message = []byte(`{"tenant_name":"","error":""}`)
+		message = []byte(fmt.Sprintf(`{"tenant_name":"%s","error":""}`, memphisGlobalAccountName))
 	} else {
 		message = msg.Data
 	}
