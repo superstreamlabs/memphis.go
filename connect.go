@@ -153,11 +153,13 @@ type attachSchemaReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
 	Username    string `json:"username"`
+	TenantName  string `json:"tenant_name"`
 }
 
 type detachSchemaReq struct {
 	StationName string `json:"station_name"`
 	Username    string `json:"username"`
+	TenantName  string `json:"tenant_name"`
 }
 
 type getTenantIdReq struct {
@@ -504,6 +506,7 @@ func (c *Conn) AttachSchema(name string, stationName string) error {
 		Name:        name,
 		StationName: stationName,
 		Username:    c.username,
+		TenantName:  c.tenantName,
 	}
 
 	b, err := json.Marshal(creationReq)
@@ -527,6 +530,7 @@ func (c *Conn) DetachSchema(stationName string) error {
 	req := &detachSchemaReq{
 		StationName: stationName,
 		Username:    c.username,
+		TenantName:  c.tenantName,
 	}
 
 	b, err := json.Marshal(req)
