@@ -534,6 +534,9 @@ func AsyncProduce() ProduceOpt {
 // MsgId - set an id for a message for idempotent producer
 func MsgId(id string) ProduceOpt {
 	return func(opts *ProduceOpts) error {
+		if id == "" {
+			return errors.New("msg id can not be empty")
+		}
 		opts.MsgHeaders.MsgHeaders["msg-id"] = []string{id}
 		return nil
 	}
