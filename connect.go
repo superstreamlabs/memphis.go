@@ -178,7 +178,7 @@ func getDefaultOptions() Options {
 		Reconnect:         true,
 		MaxReconnect:      10,
 		ReconnectInterval: 1 * time.Second,
-		Timeout:           15 * time.Second,
+		Timeout:           2 * time.Second,
 		TLSOpts: TLSOpts{
 			TlsCert: "",
 			TlsKey:  "",
