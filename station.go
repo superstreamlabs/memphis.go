@@ -87,11 +87,13 @@ type createStationReq struct {
 	DlsConfiguration        dlsConfiguration `json:"dls_configuration"`
 	Username                string           `json:"username"`
 	TieredStorageEnabled    bool             `json:"tiered_storage_enabled"`
+	TenantName              string           `json:"tenant_name"`
 }
 
 type removeStationReq struct {
-	Name     string `json:"station_name"`
-	Username string `json:"username"`
+	Name       string `json:"station_name"`
+	Username   string `json:"username"`
+	TenantName string `json:"tenant_name"`
 }
 
 // StationsOpts - configuration options for a station.
@@ -203,6 +205,7 @@ func (s *Station) getCreationReq() any {
 		DlsConfiguration:        s.DlsConfiguration,
 		Username:                s.conn.username,
 		TieredStorageEnabled:    s.TieredStorageEnabled,
+		TenantName:              s.conn.tenantName,
 	}
 }
 
@@ -215,7 +218,7 @@ func (s *Station) getDestructionSubject() string {
 }
 
 func (s *Station) getDestructionReq() any {
-	return removeStationReq{Name: s.Name, Username: s.conn.username}
+	return removeStationReq{Name: s.Name, Username: s.conn.username, TenantName: s.conn.tenantName}
 }
 
 // Name - station's name

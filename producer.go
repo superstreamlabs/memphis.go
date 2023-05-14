@@ -51,6 +51,7 @@ type createProducerReq struct {
 	ProducerType   string `json:"producer_type"`
 	RequestVersion int    `json:"req_version"`
 	Username       string `json:"username"`
+	TenantName     string `json:"tenant_name"`
 }
 
 type createProducerResp struct {
@@ -89,6 +90,7 @@ type removeProducerReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
 	Username    string `json:"username"`
+	TenantName  string `json:"tenant_name"`
 }
 
 // ProducerOpts - configuration options for producer creation.
@@ -237,6 +239,7 @@ func (p *Producer) getCreationReq() any {
 		ProducerType:   "application",
 		RequestVersion: lastProducerCreationReqVersion,
 		Username:       p.conn.username,
+		TenantName:     p.conn.tenantName,
 	}
 }
 
@@ -273,7 +276,7 @@ func (p *Producer) getDestructionSubject() string {
 }
 
 func (p *Producer) getDestructionReq() any {
-	return removeProducerReq{Name: p.Name, StationName: p.stationName, Username: p.conn.username}
+	return removeProducerReq{Name: p.Name, StationName: p.stationName, Username: p.conn.username, TenantName: p.conn.tenantName}
 }
 
 // Destroy - destoy this producer.
