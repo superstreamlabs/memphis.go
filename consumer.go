@@ -408,7 +408,7 @@ func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 	subscription := c.subscription
 	batchSize := c.BatchSize
 	msgs, err := subscription.Fetch(batchSize)
-	if err != nil {
+	if err != nil && err != nats.ErrTimeout {
 		return nil, memphisError(err)
 	}
 
