@@ -337,19 +337,30 @@ func (c *Conn) startConn() error {
 		TLSConfig.RootCAs = certs
 		natsOpts.TLSConfig = TLSConfig
 	}
+	// allow backward compatibility.
+	if natsOpts.User != "" {
+		pingNatsOpts := natsOpts
+		pingNatsOpts.AllowReconnect = false
+
+		c.brokerConn, err = pingNatsOpts.Connect()
+		if err != nil {
+			if strings.Contains(err.Error(), "Authorization Violation") {
+				pingNatsOpts.User = opts.Username
+				c.brokerConn, err = pingNatsOpts.Connect()
+				if err != nil {
+					return memphisError(err)
+				}
+				natsOpts.User = opts.Username
+			} else {
+				return memphisError(err)
+			}
+		}
+		c.brokerConn.Close()
+	}
 
 	c.brokerConn, err = natsOpts.Connect()
 	if err != nil {
-		// this code allow backward compatibility.
-		if strings.Contains(err.Error(), "Authorization Violation") && natsOpts.User != "" && natsOpts.Password != "" {
-			natsOpts.User = opts.Username
-			c.brokerConn, err = natsOpts.Connect()
-			if err != nil {
-				return memphisError(err)
-			}
-		} else {
-			return memphisError(err)
-		}
+		return memphisError(err)
 	}
 	c.js, err = c.brokerConn.JetStream()
 
