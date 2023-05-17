@@ -294,20 +294,20 @@ func (c *Conn) getBrokerConnection(natsOpts nats.Options) (*nats.Conn, error) {
 		pingNatsOpts := natsOpts
 		pingNatsOpts.AllowReconnect = false
 
-		c.brokerConn, err = pingNatsOpts.Connect()
+		connection, err := pingNatsOpts.Connect()
 		if err != nil {
 			if strings.Contains(err.Error(), "Authorization Violation") {
 				pingNatsOpts.User = opts.Username
-				c.brokerConn, err = pingNatsOpts.Connect()
+				connection, err = pingNatsOpts.Connect()
 				if err != nil {
-					return c.brokerConn, memphisError(err)
+					return connection, memphisError(err)
 				}
 				natsOpts.User = opts.Username
 			} else {
-				return c.brokerConn, memphisError(err)
+				return connection, memphisError(err)
 			}
 		}
-		c.brokerConn.Close()
+		connection.Close()
 	}
 
 	c.brokerConn, err = natsOpts.Connect()
