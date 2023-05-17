@@ -287,7 +287,7 @@ func disconnectedError(conn *nats.Conn, err error) {
 }
 
 func (c *Conn) getBrokerConnection(natsOpts nats.Options) (*nats.Conn, error) {
-	// allow backward compatibility.
+	// for backward compatibility.
 	var err error
 	opts := &c.opts
 	if natsOpts.User != "" {
@@ -371,7 +371,6 @@ func (c *Conn) startConn() error {
 	}
 	c.brokerConn, err = c.getBrokerConnection(natsOpts)
 	if err != nil {
-		c.brokerConn.Close()
 		return memphisError(err)
 	}
 	c.js, err = c.brokerConn.JetStream()
