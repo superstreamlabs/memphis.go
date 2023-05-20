@@ -51,7 +51,6 @@ type createProducerReq struct {
 	ProducerType   string `json:"producer_type"`
 	RequestVersion int    `json:"req_version"`
 	Username       string `json:"username"`
-	TenantName     string `json:"tenant_name"`
 }
 
 type createProducerResp struct {
@@ -239,7 +238,6 @@ func (p *Producer) getCreationReq() any {
 		ProducerType:   "application",
 		RequestVersion: lastProducerCreationReqVersion,
 		Username:       p.conn.username,
-		TenantName:     p.conn.tenantName,
 	}
 }
 
@@ -276,7 +274,7 @@ func (p *Producer) getDestructionSubject() string {
 }
 
 func (p *Producer) getDestructionReq() any {
-	return removeProducerReq{Name: p.Name, StationName: p.stationName, Username: p.conn.username, TenantName: p.conn.tenantName}
+	return removeProducerReq{Name: p.Name, StationName: p.stationName, Username: p.conn.username}
 }
 
 // Destroy - destoy this producer.
@@ -429,7 +427,6 @@ func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error)
 				Headers: headersForDls,
 			},
 			ValidationError: err.Error(),
-			TenantName:      p.conn.tenantName,
 		}
 		msgToPublish, _ := json.Marshal(schemaFailMsg)
 		_ = p.conn.brokerConn.Publish(schemaVerseDlsSubject, msgToPublish)

@@ -164,14 +164,12 @@ type createConsumerReq struct {
 	StartConsumeFromSequence uint64 `json:"start_consume_from_sequence"`
 	LastMessages             int64  `json:"last_messages"`
 	RequestVersion           int    `json:"req_version"`
-	TenantName               string `json:"tenant_name"`
 }
 
 type removeConsumerReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
 	Username    string `json:"username"`
-	TenantName  string `json:"tenant_name"`
 }
 
 // ConsumerOpts - configuration options for a consumer.
@@ -576,7 +574,6 @@ func (c *Consumer) getCreationReq() any {
 		StartConsumeFromSequence: c.StartConsumeFromSequence,
 		LastMessages:             c.LastMessages,
 		RequestVersion:           lastConsumerCreationReqVersion,
-		TenantName:               c.conn.tenantName,
 	}
 }
 
@@ -589,7 +586,7 @@ func (c *Consumer) getDestructionSubject() string {
 }
 
 func (c *Consumer) getDestructionReq() any {
-	return removeConsumerReq{Name: c.Name, StationName: c.stationName, Username: c.conn.username, TenantName: c.conn.tenantName}
+	return removeConsumerReq{Name: c.Name, StationName: c.stationName, Username: c.conn.username}
 }
 
 // ConsumerGroup - consumer group name, default is "".

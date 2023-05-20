@@ -137,7 +137,6 @@ type Conn struct {
 	ConnId              string
 	username            string
 	accountId           int
-	tenantName          string
 	brokerConn          *nats.Conn
 	js                  nats.JetStreamContext
 	stationUpdatesMu    sync.RWMutex
@@ -153,13 +152,11 @@ type attachSchemaReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
 	Username    string `json:"username"`
-	TenantName  string `json:"tenant_name"`
 }
 
 type detachSchemaReq struct {
 	StationName string `json:"station_name"`
 	Username    string `json:"username"`
-	TenantName  string `json:"tenant_name"`
 }
 
 type getTenantIdReq struct {
@@ -219,12 +216,6 @@ func Connect(host, username string, options ...Option) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	tenantName, err := conn.GetTenantName()
-	if err != nil {
-		return nil, err
-	}
-	conn.tenantName = tenantName
 
 	return conn, nil
 }
@@ -528,7 +519,6 @@ func (c *Conn) AttachSchema(name string, stationName string) error {
 		Name:        name,
 		StationName: stationName,
 		Username:    c.username,
-		TenantName:  c.tenantName,
 	}
 
 	b, err := json.Marshal(creationReq)
@@ -552,7 +542,6 @@ func (c *Conn) DetachSchema(stationName string) error {
 	req := &detachSchemaReq{
 		StationName: stationName,
 		Username:    c.username,
-		TenantName:  c.tenantName,
 	}
 
 	b, err := json.Marshal(req)
