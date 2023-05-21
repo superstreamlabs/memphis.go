@@ -159,10 +159,6 @@ type detachSchemaReq struct {
 	Username    string `json:"username"`
 }
 
-type getTenantIdReq struct {
-	TenantId int `json:"tenant_id"`
-}
-
 // getDefaultOptions - returns default configuration options for the client.
 func getDefaultOptions() Options {
 	return Options{
