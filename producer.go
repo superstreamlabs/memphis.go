@@ -89,7 +89,6 @@ type removeProducerReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
 	Username    string `json:"username"`
-	TenantName  string `json:"tenant_name"`
 }
 
 // ProducerOpts - configuration options for producer creation.

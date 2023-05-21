@@ -163,11 +163,6 @@ type getTenantIdReq struct {
 	TenantId int `json:"tenant_id"`
 }
 
-type getTenantNameResponse struct {
-	TenantName string `json:"tenant_name"`
-	Err        string `json:"error"`
-}
-
 // getDefaultOptions - returns default configuration options for the client.
 func getDefaultOptions() Options {
 	return Options{
@@ -400,10 +395,6 @@ func (c *Conn) getSchemaDetachSubject() string {
 	return "$memphis_schema_detachments"
 }
 
-func (c *Conn) getTenantNameSubject() string {
-	return "$memphis_get_tenant_name"
-}
-
 // Port - default is 6666.
 func Port(port int) Option {
 	return func(o *Options) error {
@@ -577,44 +568,6 @@ func (c *Conn) destroy(o directObj) error {
 	}
 
 	return nil
-}
-
-func (c *Conn) GetTenantName() (string, error) {
-	subject := c.getTenantNameSubject()
-
-	req := &getTenantIdReq{
-		TenantId: c.opts.AccountId,
-	}
-
-	b, err := json.Marshal(req)
-	if err != nil {
-		return memphisGlobalAccountName, memphisError(err)
-	}
-
-	msg, err := c.brokerConn.Request(subject, b, 5*time.Second)
-	var message []byte
-	if err != nil {
-		if !strings.Contains(err.Error(), "nats: no responders available for request") {
-			return memphisGlobalAccountName, memphisError(err)
-		}
-	}
-	//for backward compatibility
-	if msg == nil {
-		message = []byte(fmt.Sprintf(`{"tenant_name":"%s","error":""}`, memphisGlobalAccountName))
-	} else {
-		message = msg.Data
-	}
-
-	var tenantNameResp getTenantNameResponse
-	err = json.Unmarshal(message, &tenantNameResp)
-	if err != nil {
-		return memphisGlobalAccountName, err
-	}
-	if tenantNameResp.Err != "" {
-		return memphisGlobalAccountName, memphisError(errors.New(string(msg.Data)))
-	}
-
-	return tenantNameResp.TenantName, nil
 }
 
 func getInternalName(name string) string {
