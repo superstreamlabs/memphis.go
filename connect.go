@@ -279,6 +279,9 @@ func (c *Conn) getBrokerConnection(natsOpts nats.Options) (*nats.Conn, error) {
 		connection, err := pingNatsOpts.Connect()
 		if err != nil {
 			if strings.Contains(err.Error(), "Authorization Violation") {
+				if strings.Contains(opts.Host, "localhost") { // for handling bad quality networks like port fwd
+					time.Sleep(1 * time.Second)
+				}
 				pingNatsOpts.User = opts.Username
 				connection, err = pingNatsOpts.Connect()
 				if err != nil {
@@ -292,6 +295,9 @@ func (c *Conn) getBrokerConnection(natsOpts nats.Options) (*nats.Conn, error) {
 		connection.Close()
 	}
 
+	if strings.Contains(opts.Host, "localhost") { // for handling bad quality networks like port fwd
+		time.Sleep(1 * time.Second)
+	}
 	c.brokerConn, err = natsOpts.Connect()
 	if err != nil {
 		return c.brokerConn, memphisError(err)
