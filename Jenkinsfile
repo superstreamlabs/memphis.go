@@ -4,7 +4,12 @@ def repoUrlPrefix = "memphisos"
 
 node ("small-ec2-fleet") {
   git credentialsId: 'main-github', url: gitURL, branch: gitBranch
-  def versionTag = readFile "./version.conf"
+  if (env.BRANCH_NAME ==~ /(master)/) { 
+    versionTag = readFile "./version-beta.conf"
+  }
+  else {
+    versionTag = readFile "./version.conf"
+  }
   
   try{
     stage ('Install GoLang') {
@@ -20,11 +25,13 @@ node ("small-ec2-fleet") {
       sh "GOPROXY=proxy.golang.org /usr/local/go/bin/go list -m github.com/memphisdev/memphis.go@v$versionTag"
     }
     
-     stage('Checkout to version branch'){
-      withCredentials([sshUserPrivateKey(keyFileVariable:'check',credentialsId: 'main-github')]) {
-        sh "git reset --hard origin/latest"
-        sh "GIT_SSH_COMMAND='ssh -i $check'  git checkout -b $versionTag"
-        sh "GIT_SSH_COMMAND='ssh -i $check' git push --set-upstream origin $versionTag"
+    if (env.BRANCH_NAME ==~ /(latest)/) {
+      stage('Checkout to version branch'){
+        withCredentials([sshUserPrivateKey(keyFileVariable:'check',credentialsId: 'main-github')]) {
+          sh "git reset --hard origin/latest"
+          sh "GIT_SSH_COMMAND='ssh -i $check'  git checkout -b $versionTag"
+          sh "GIT_SSH_COMMAND='ssh -i $check' git push --set-upstream origin $versionTag"
+        }
       }
     }
     
