@@ -23,6 +23,7 @@ type Schema struct {
 	Type              string `json:"type"`
 	CreatedByUsername string `json:"created_by_username"`
 	SchemaContent     string `json:"schema_content"`
+	MessageStructName string `json:"message_struct_name"`
 }
 
 type createSchemaReq struct {
@@ -30,6 +31,7 @@ type createSchemaReq struct {
 	Type              string `json:"type"`
 	CreatedByUsername string `json:"created_by_username"`
 	SchemaContent     string `json:"schema_content"`
+	MessageStructName string `json:"message_struct_name"`
 }
 
 type createSchemaResp struct {
@@ -98,11 +100,13 @@ func (c *Conn) CreateSchema(name, schemaType, path string) error {
 		return memphisError(err)
 	}
 
+	//fix the message struct name with protobuf
 	s := Schema{
 		Name:              name,
 		Type:              schemaType,
 		CreatedByUsername: c.username,
 		SchemaContent:     schemaContent,
+		MessageStructName: "",
 	}
 
 	if err = c.create(&s); err != nil {

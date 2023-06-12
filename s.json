@@ -11,7 +11,7 @@
         "type": "string"
         },
         "locality": {
-        "type": "number"
+        "type": "string"
         },
         "region": {
         "type": "number"
