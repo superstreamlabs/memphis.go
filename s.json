@@ -1,0 +1,27 @@
+{
+    "type": "object",
+    "properties": {
+        "post-office-box": {
+        "type": "number"
+        },
+        "extended-address": {
+        "type": "number"
+        },
+        "street-address": {
+        "type": "string"
+        },
+        "locality": {
+        "type": "number"
+        },
+        "region": {
+        "type": "number"
+        },
+        "postal-code": {
+        "type": "number"
+        },
+        "country-name": {
+        "type": "string"
+        }
+    },
+    "required": [ "locality" ]
+}
