@@ -77,6 +77,19 @@ func (s *Schema) getDestructionReq() any {
 	return removeSchemaReq{Name: s.Name}
 }
 
+func (c *Conn) DeleteSchema(name string) error {
+	s := Schema{
+		Name: name,
+	}
+
+	if err := c.destroy(&s); err != nil {
+		return memphisError(err)
+	}
+
+	return nil
+
+}
+
 func (c *Conn) CreateSchema(name, schemaType, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {

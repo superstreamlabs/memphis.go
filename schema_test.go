@@ -6,16 +6,60 @@ import (
 )
 
 func TestCreateSchema(t *testing.T) {
-	c, err := Connect("localhost", "schematest", Password("1234"))
+	c, err := Connect("localhost", "root", Password("memphis"))
 	if err != nil {
-		fmt.Printf(err.Error())
+		fmt.Println(err.Error())
 	}
 	defer c.Close()
 
-	err = c.CreateSchema("sdk_test_schema", "json", "./s.json")
+	err = c.CreateSchema("sdk_test_schema_graphql", "graphql", "./test_schemas/test.graphqls")
 	if err != nil {
-		fmt.Printf(err.Error())
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println(" qraphql Created!!")
 	}
-	fmt.Println("success!!")
 
+	err = c.CreateSchema("sdk_test_schema_protobuf", "protobuf", "./test_schemas/test.proto")
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println("protobuf Created!!")
+	}
+
+	err = c.CreateSchema("sdk_test_schema_json", "json", "./test_schemas/test.json")
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println("json Created!!")
+	}
+
+}
+
+func TestDeleteSchema(t *testing.T) {
+	c, err := Connect("localhost", "root", Password("memphis"))
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	defer c.Close()
+
+	err = c.DeleteSchema("sdk_test_schema_graphql")
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println("graphql Deleted!!")
+	}
+
+	err = c.DeleteSchema("sdk_test_schema_proto")
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println("protobuf Deleted!!")
+	}
+
+	err = c.DeleteSchema("sdk_test_schema_json")
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println("json Deleted!!")
+	}
 }
