@@ -5,13 +5,13 @@
         "type": "number"
         },
         "extended-address": {
-        "type": "number"
+        "type": "string"
         },
         "street-address": {
         "type": "string"
         },
         "locality": {
-        "type": "string"
+        "type": "number"
         },
         "region": {
         "type": "integer"

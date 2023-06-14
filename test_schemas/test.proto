@@ -1,6 +1,6 @@
-syntax = "proto3";
+syntax = "proto2";
 message Test2 {
     optional string field1 = 1;
-    int32  field2 = 2;
-    int32  field3 = 3;
+    optional string field2 = 2;
+    optional int32  field3 = 3;
 }
