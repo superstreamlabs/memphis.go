@@ -19,7 +19,14 @@ func TestCreateSchema(t *testing.T) {
 		fmt.Println("qraphql Created!!")
 	}
 
-	err = c.CreateSchema("sdk_test_schema_protobuf", "protobuf", "./test_schemas/test.proto")
+	err = c.CreateSchema("sdk_test_schema_protobuf2", "protobuf", "./test_schemas/test_p2.proto")
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println("protobuf Created!!")
+	}
+
+	err = c.CreateSchema("sdk_test_schema_protobuf3", "protobuf", "./test_schemas/test_p3.proto")
 	if err != nil {
 		fmt.Println(err.Error())
 	} else {

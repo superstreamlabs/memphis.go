@@ -5,16 +5,15 @@ go 1.18
 require (
 	github.com/graph-gophers/graphql-go v1.5.0
 	github.com/nats-io/nats.go v1.25.0
-	google.golang.org/protobuf v1.28.2-0.20230222093303-bc1253ad3743
+	google.golang.org/protobuf v1.28.1
 )
 
 require (
 	github.com/gofrs/uuid v4.4.0+incompatible
-	github.com/santhosh-tekuri/jsonschema/v5 v5.3.0
+	github.com/santhosh-tekuri/jsonschema/v5 v5.1.0
 )
 
 require (
-	github.com/bufbuild/protocompile v0.4.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/jhump/protoreflect v1.13.0 // indirect
 	github.com/nats-io/nats-server/v2 v2.9.5 // indirect

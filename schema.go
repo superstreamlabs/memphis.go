@@ -4,14 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"regexp"
-	"strings"
-
-	"github.com/graph-gophers/graphql-go"
-	"github.com/jhump/protoreflect/desc/protoparse"
-	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
 const (
@@ -84,11 +78,6 @@ func (c *Conn) CreateSchema(name, schemaType, path string) error {
 
 	schemaContent := string(data)
 
-	err = validateSchemaContent(schemaContent, schemaType)
-	if err != nil {
-		return memphisError(err)
-	}
-
 	err = validateSchemaName(name)
 	if err != nil {
 		return memphisError(err)
@@ -112,64 +101,6 @@ func (c *Conn) CreateSchema(name, schemaType, path string) error {
 		return memphisError(err)
 	}
 
-	return nil
-}
-
-func validateSchemaContent(schemaContent, schemaType string) error {
-	if len(schemaContent) == 0 {
-		return errors.New("your schema content is invalid")
-	}
-
-	switch schemaType {
-	case "protobuf":
-		err := validateProtobufContent(schemaContent)
-		if err != nil {
-			return err
-		}
-	case "json":
-		err := validateJsonSchemaContent(schemaContent)
-		if err != nil {
-			return err
-		}
-	case "graphql":
-		err := validateGraphqlSchemaContent(schemaContent)
-		if err != nil {
-			return err
-		}
-	case "avro":
-		break
-	}
-	return nil
-}
-
-func validateProtobufContent(schemaContent string) error {
-	parser := protoparse.Parser{
-		Accessor: func(filename string) (io.ReadCloser, error) {
-			return io.NopCloser(strings.NewReader(schemaContent)), nil
-		},
-	}
-	_, err := parser.ParseFiles("")
-	if err != nil {
-		return errors.New("your Proto file is invalid: " + err.Error())
-	}
-
-	return nil
-}
-
-func validateJsonSchemaContent(schemaContent string) error {
-	_, err := jsonschema.CompileString("test", schemaContent)
-	if err != nil {
-		return errors.New("your json schema is invalid")
-	}
-
-	return nil
-}
-
-func validateGraphqlSchemaContent(schemaContent string) error {
-	_, err := graphql.ParseSchema(schemaContent, nil)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
