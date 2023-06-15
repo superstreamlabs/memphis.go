@@ -148,7 +148,7 @@ type Conn struct {
 	prefetchedMsgs      PrefetchedMsgs
 }
 
-type attachSchemaReq struct {
+type enforceSchemaReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
 	Username    string `json:"username"`
@@ -389,7 +389,7 @@ func (c *Conn) brokerQueueSubscribe(subj, queue string, cb nats.MsgHandler) (*na
 	return c.brokerConn.QueueSubscribe(subj, queue, cb)
 }
 
-func (c *Conn) getSchemaAttachSubject() string {
+func (c *Conn) getSchemaEnforceSubject() string {
 	return "$memphis_schema_attachments"
 }
 
@@ -505,10 +505,15 @@ func (c *Conn) create(do directObj) error {
 	return do.handleCreationResp(msg.Data)
 }
 
+// AttachSchema Is Depreciated
 func (c *Conn) AttachSchema(name string, stationName string) error {
-	subject := c.getSchemaAttachSubject()
+	return c.EnforceSchema(name, stationName)
+}
 
-	creationReq := &attachSchemaReq{
+func (c *Conn) EnforceSchema(name string, stationName string) error {
+	subject := c.getSchemaEnforceSubject()
+
+	creationReq := &enforceSchemaReq{
 		Name:        name,
 		StationName: stationName,
 		Username:    c.username,
