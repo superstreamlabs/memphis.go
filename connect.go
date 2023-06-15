@@ -510,6 +510,7 @@ func (c *Conn) AttachSchema(name string, stationName string) error {
 	return c.EnforceSchema(name, stationName)
 }
 
+// EnforceSchema - -Enforcing a schema on a chosen station
 func (c *Conn) EnforceSchema(name string, stationName string) error {
 	subject := c.getSchemaEnforceSubject()
 

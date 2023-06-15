@@ -177,6 +177,12 @@ err := conn.CreateSchema("<schema-name>", "<schema-type>", "<schema-file-path>")
 err := conn.EnforceSchema("<schema-name>", "<station-name>")
 ```
 
+### Deprecated - Attaching Schema
+use EnforceSchema instead
+```go
+err := conn.AttachSchema("<schema-name>", "<station-name>")
+```
+
 ### Detaching a Schema from Station
 
 ```go
