@@ -70,6 +70,7 @@ func (s *Schema) getDestructionReq() any {
 	return nil
 }
 
+// CreateSchema - validates and uploads a new schema to the Broker
 func (c *Conn) CreateSchema(name, schemaType, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -88,7 +89,6 @@ func (c *Conn) CreateSchema(name, schemaType, path string) error {
 		return memphisError(err)
 	}
 
-	//fix the message struct name with protobuf
 	s := Schema{
 		Name:              name,
 		Type:              schemaType,

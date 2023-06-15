@@ -165,10 +165,16 @@ Destroying a station will remove all its resources (including producers and cons
 err := s.Destroy();
 ```
 
-### Attaching a Schema to an Existing Station
+### Creating a new Schema
 
 ```go
-err := conn.AttachSchema("<schema-name>", "<station-name>")
+err := conn.CreateSchema("<schema-name>", "<schema-type>", "<schema-file-path>")
+```
+
+### Enforcing a Schema to an Existing Station
+
+```go
+err := conn.EnforceSchema("<schema-name>", "<station-name>")
 ```
 
 ### Detaching a Schema from Station
