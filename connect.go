@@ -505,7 +505,7 @@ func (c *Conn) create(do directObj) error {
 	return do.handleCreationResp(msg.Data)
 }
 
-// AttachSchema Is Depreciated
+// Depreciated - use EnforceSchema instead
 func (c *Conn) AttachSchema(name string, stationName string) error {
 	return c.EnforceSchema(name, stationName)
 }

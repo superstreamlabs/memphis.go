@@ -171,7 +171,7 @@ err := s.Destroy();
 err := conn.CreateSchema("<schema-name>", "<schema-type>", "<schema-file-path>")
 ```
 
-### Enforcing a Schema to an Existing Station
+### Enforcing a Schema on an Existing Station
 
 ```go
 err := conn.EnforceSchema("<schema-name>", "<station-name>")
