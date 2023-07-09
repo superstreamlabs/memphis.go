@@ -34,6 +34,7 @@ const (
 	schemaVFailAlertType           = "schema_validation_fail_alert"
 	lastProducerCreationReqVersion = 1
 	schemaVerseDlsSubject          = "$memphis_schemaverse_dls"
+	lastProducerDestroyReqVersion  = 1
 )
 
 // Producer - memphis producer object.
@@ -86,9 +87,11 @@ type SchemaVersion struct {
 }
 
 type removeProducerReq struct {
-	Name        string `json:"name"`
-	StationName string `json:"station_name"`
-	Username    string `json:"username"`
+	Name           string `json:"name"`
+	StationName    string `json:"station_name"`
+	Username       string `json:"username"`
+	ConnectionId   string `json:"connection_id"`
+	RequestVersion int    `json:"req_version"`
 }
 
 // ProducerOpts - configuration options for producer creation.
@@ -272,7 +275,7 @@ func (p *Producer) getDestructionSubject() string {
 }
 
 func (p *Producer) getDestructionReq() any {
-	return removeProducerReq{Name: p.Name, StationName: p.stationName, Username: p.conn.username}
+	return removeProducerReq{Name: p.Name, StationName: p.stationName, Username: p.conn.username, ConnectionId: p.conn.ConnId, RequestVersion: lastProducerDestroyReqVersion}
 }
 
 // Destroy - destoy this producer.

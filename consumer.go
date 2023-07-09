@@ -33,6 +33,7 @@ const (
 	dlsSubjPrefix                  = "$memphis_dls"
 	memphisPmAckSubject            = "$memphis_pm_acks"
 	lastConsumerCreationReqVersion = 1
+	lastConsumerDestroyReqVersion  = 1
 )
 
 var (
@@ -167,9 +168,11 @@ type createConsumerReq struct {
 }
 
 type removeConsumerReq struct {
-	Name        string `json:"name"`
-	StationName string `json:"station_name"`
-	Username    string `json:"username"`
+	Name           string `json:"name"`
+	StationName    string `json:"station_name"`
+	Username       string `json:"username"`
+	ConnectionId   string `json:"connection_id"`
+	RequestVersion int    `json:"req_version"`
 }
 
 // ConsumerOpts - configuration options for a consumer.
@@ -586,7 +589,7 @@ func (c *Consumer) getDestructionSubject() string {
 }
 
 func (c *Consumer) getDestructionReq() any {
-	return removeConsumerReq{Name: c.Name, StationName: c.stationName, Username: c.conn.username}
+	return removeConsumerReq{Name: c.Name, StationName: c.stationName, Username: c.conn.username, ConnectionId: c.conn.ConnId, RequestVersion: lastConsumerDestroyReqVersion}
 }
 
 // ConsumerGroup - consumer group name, default is "".
