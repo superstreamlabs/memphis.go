@@ -650,6 +650,15 @@ func (sd *schemaDetails) validAvroSchemaMsg(msg any) ([]byte, error) {
 			err = errors.New("Bad Avro format - " + err.Error())
 			return nil, memphisError(err)
 		}
+	case map[string]interface{}:
+		msgBytes, err = json.Marshal(msg)
+		if err != nil {
+			return nil, memphisError(err)
+		}
+		if err := json.Unmarshal(msgBytes, &message); err != nil {
+			err = errors.New("Bad Avro format - " + err.Error())
+			return nil, memphisError(err)
+		}
 		
 	default:
 		msgType := reflect.TypeOf(msg).Kind()
