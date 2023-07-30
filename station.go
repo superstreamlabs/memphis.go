@@ -318,6 +318,8 @@ type schemaDetails struct {
 
 func (c *Conn) listenToSchemaUpdates(stationName string) error {
 	sn := getInternalName(stationName)
+	stationUpdatesSubsLock.Lock()
+	defer stationUpdatesSubsLock.Unlock()
 	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
 		c.stationUpdatesSubs[sn] = &stationUpdateSub{
@@ -358,7 +360,8 @@ func (c *Conn) removeSchemaUpdatesListener(stationName string) error {
 
 	c.stationUpdatesMu.Lock()
 	defer c.stationUpdatesMu.Unlock()
-
+	stationUpdatesSubsLock.Lock()
+	defer stationUpdatesSubsLock.Unlock()
 	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
 		return memphisError(errors.New("listener doesn't exist"))
