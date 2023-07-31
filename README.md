@@ -100,7 +100,7 @@ _If a station already exists nothing happens, the new configuration will not be 
 s0, err = c.CreateStation("<station-name>")
 
 s1, err = c.CreateStation("<station-name>", 
- memphis.RetentionTypeOpt(<Messages/MaxMessageAgeSeconds/Bytes>),
+ memphis.RetentionTypeOpt(<Messages/MaxMessageAgeSeconds/Bytes/AckBased>), // AckBased - cloud only
  memphis.RetentionVal(<int>), 
  memphis.StorageTypeOpt(<Memory/Disk>), 
  memphis.Replicas(<int>), 
@@ -133,13 +133,19 @@ memphis.Bytes
 
 The above means that after maximum number of saved bytes (set in retention value)<br>has been reached, the oldest messages will be deleted.
 
+```go
+memphis.AckBased // for cloud users only
+```
+
+The above means that after a message is getting acked by all interested consumer groups it will be deleted from the Station.
+
 ### Retention Values
 
 The `retention values` are directly related to the `retention types` mentioned above,<br> where the values vary according to the type of retention chosen.
 
 All retention values are of type `int` but with different representations as follows:
 
-`memphis.MaxMessageAgeSeconds` is represented **in seconds**, `memphis.Messages` in a **number of messages** <br> and finally `memphis.Bytes` in a **number of bytes**.
+`memphis.MaxMessageAgeSeconds` is represented **in seconds**, `memphis.Messages` in a **number of messages** <br> `memphis.Bytes` in a **number of bytes**, and finally `memphis.AckBased` is not using the retentionValue param at all. 
 
 After these limits are reached oldest messages will be deleted.
 
