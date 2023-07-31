@@ -58,10 +58,11 @@ const (
 	MaxMessageAgeSeconds RetentionType = iota
 	Messages
 	Bytes
+	AckBased
 )
 
 func (r RetentionType) String() string {
-	return [...]string{"message_age_sec", "messages", "bytes"}[r]
+	return [...]string{"message_age_sec", "messages", "bytes", "ack_based"}[r]
 }
 
 // StorageType - station's message storage type
