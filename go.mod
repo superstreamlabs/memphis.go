@@ -15,7 +15,12 @@ require (
 
 require (
 	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/hamba/avro/v2 v2.13.0 // indirect
 	github.com/jhump/protoreflect v1.13.0 // indirect
+	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/mitchellh/mapstructure v1.5.0 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
+	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/nats-io/nats-server/v2 v2.9.5 // indirect
 	github.com/nats-io/nkeys v0.4.4 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect

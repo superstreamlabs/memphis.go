@@ -40,4 +40,10 @@ func TestCreateSchema(t *testing.T) {
 		fmt.Println("json Created!!")
 	}
 
+	err = c.CreateSchema("sdk_test_schema_avro", "avro", "./test_schemas/test.avsc")
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println("avro Created!!")
+	}
 }

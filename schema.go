@@ -144,13 +144,9 @@ func validateName(name, objectType string) error {
 func validateSchemaType(schemaType string) error {
 	invalidTypeErrStr := "unsupported schema type"
 	invalidTypeErr := errors.New(invalidTypeErrStr)
-	invalidSupportTypeErrStr := "avro is not supported at this time"
-	invalidSupportTypeErr := errors.New(invalidSupportTypeErrStr)
 
-	if schemaType == "protobuf" || schemaType == "json" || schemaType == "graphql" {
+	if schemaType == "protobuf" || schemaType == "json" || schemaType == "graphql" || schemaType == "avro" {
 		return nil
-	} else if schemaType == "avro" {
-		return invalidSupportTypeErr
 	} else {
 		return invalidTypeErr
 	}
