@@ -227,6 +227,26 @@ Creating a producer first (receiver function of the producer struct).
 ```go
 p.Produce("<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema) or []byte or map[string]interface{} or struct with avro tags(schema validated station - avro schema)>", memphis.AckWaitSec(15)) // defaults to 15 seconds
 ```
+Note: 
+When producing a message using avro format([]byte or map[string]interface{}), int types are converted to float64. Type conversion of `Golang float64` equals `Avro double`. So when creating an avro schema, it can't have int types. use double instead.
+E.g.
+```
+myData :=  map[string]interface{}{
+"username": "John",
+"age": 30
+}
+```
+```
+{
+	"type": "record",
+	"namespace": "com.example",
+	"name": "test_schema",
+	"fields": [
+		{ "name": "username", "type": "string" },
+		{ "name": "age", "type": "double" }
+	]
+}
+```
 
 ### Add headers
 
