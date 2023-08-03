@@ -56,9 +56,14 @@ type createProducerReq struct {
 
 type createProducerResp struct {
 	SchemaUpdateInit        SchemaUpdateInit `json:"schema_update"`
+	PartitionsUpdate        PartitionsUpdate `json:"partitions_update"`
 	SchemaVerseToDls        bool             `json:"schemaverse_to_dls"`
 	ClusterSendNotification bool             `json:"send_notification"`
 	Err                     string           `json:"error"`
+}
+
+type PartitionsUpdate struct {
+	PartitionsList []int `json:"partitions_list"`
 }
 
 type SchemaUpdateType int

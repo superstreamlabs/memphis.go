@@ -49,6 +49,7 @@ type Station struct {
 	SchemaName           string
 	DlsConfiguration     dlsConfiguration
 	TieredStorageEnabled bool
+	PartitionNumber      int
 }
 
 // RetentionType - station's message retention type
@@ -87,6 +88,7 @@ type createStationReq struct {
 	DlsConfiguration        dlsConfiguration `json:"dls_configuration"`
 	Username                string           `json:"username"`
 	TieredStorageEnabled    bool             `json:"tiered_storage_enabled"`
+	PartitionNumber         int              `json:"partition_number"`
 }
 
 type removeStationReq struct {
@@ -106,6 +108,7 @@ type StationOpts struct {
 	SendPoisonMsgToDls       bool
 	SendSchemaFailedMsgToDls bool
 	TieredStorageEnabled     bool
+	PartitionNumber          int
 }
 
 type dlsConfiguration struct {
@@ -128,6 +131,7 @@ func GetStationDefaultOptions() StationOpts {
 		SendPoisonMsgToDls:       true,
 		SendSchemaFailedMsgToDls: true,
 		TieredStorageEnabled:     false,
+		PartitionNumber:          1,
 	}
 }
 
@@ -165,6 +169,7 @@ func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 			Schemaverse: opts.SendSchemaFailedMsgToDls,
 		},
 		TieredStorageEnabled: opts.TieredStorageEnabled,
+		PartitionNumber:      opts.PartitionNumber,
 	}
 
 	return &s, s.conn.create(&s)
@@ -203,6 +208,7 @@ func (s *Station) getCreationReq() any {
 		DlsConfiguration:        s.DlsConfiguration,
 		Username:                s.conn.username,
 		TieredStorageEnabled:    s.TieredStorageEnabled,
+		PartitionNumber:         s.PartitionNumber,
 	}
 }
 
@@ -270,6 +276,13 @@ func Replicas(replicas int) StationOpt {
 func IdempotencyWindow(idempotencyWindow time.Duration) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.IdempotencyWindow = idempotencyWindow
+		return nil
+	}
+}
+
+func PartitionNumber(partitionNumber int) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.PartitionNumber = partitionNumber
 		return nil
 	}
 }
