@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hamba/avro/v2"
 	"github.com/nats-io/nats.go"
 
 	graphqlParse "github.com/graph-gophers/graphql-go"
@@ -59,10 +60,11 @@ const (
 	MaxMessageAgeSeconds RetentionType = iota
 	Messages
 	Bytes
+	AckBased
 )
 
 func (r RetentionType) String() string {
-	return [...]string{"message_age_sec", "messages", "bytes"}[r]
+	return [...]string{"message_age_sec", "messages", "bytes", "ack_based"}[r]
 }
 
 // StorageType - station's message storage type
@@ -327,10 +329,13 @@ type schemaDetails struct {
 	msgDescriptor protoreflect.MessageDescriptor
 	jsonSchema    *jsonschema.Schema
 	graphQlSchema *graphqlParse.Schema
+	avroSchema    avro.Schema
 }
 
 func (c *Conn) listenToSchemaUpdates(stationName string) error {
 	sn := getInternalName(stationName)
+	stationUpdatesSubsLock.Lock()
+	defer stationUpdatesSubsLock.Unlock()
 	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
 		c.stationUpdatesSubs[sn] = &stationUpdateSub{
@@ -371,7 +376,8 @@ func (c *Conn) removeSchemaUpdatesListener(stationName string) error {
 
 	c.stationUpdatesMu.Lock()
 	defer c.stationUpdatesMu.Unlock()
-
+	stationUpdatesSubsLock.Lock()
+	defer stationUpdatesSubsLock.Unlock()
 	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
 		return memphisError(errors.New("listener doesn't exist"))
@@ -438,6 +444,10 @@ func (sd *schemaDetails) handleSchemaUpdateInit(sui SchemaUpdateInit) {
 		if err := sd.compileGraphQl(); err != nil {
 			log.Println(err.Error())
 		}
+	} else if sd.schemaType == "avro" {
+		if err := sd.compileAvroSchema(); err != nil {
+			log.Println(err.Error())
+		}
 	}
 }
 
@@ -493,6 +503,15 @@ func (sd *schemaDetails) compileGraphQl() error {
 	return nil
 }
 
+func (sd *schemaDetails) compileAvroSchema() error {
+	sch, err := avro.Parse(sd.activeVersion.Content)
+	if err != nil {
+		return memphisError(err)
+	}
+	sd.avroSchema = sch
+	return nil
+}
+
 func (sd *schemaDetails) validateMsg(msg any) ([]byte, error) {
 	switch sd.schemaType {
 	case "protobuf":
@@ -501,6 +520,8 @@ func (sd *schemaDetails) validateMsg(msg any) ([]byte, error) {
 		return sd.validJsonSchemaMsg(msg)
 	case "graphql":
 		return sd.validateGraphQlMsg(msg)
+	case "avro":
+		return sd.validAvroSchemaMsg(msg)
 	default:
 		return nil, memphisError(errors.New("invalid schema type"))
 	}
@@ -626,4 +647,59 @@ func (sd *schemaDetails) validateGraphQlMsg(msg any) ([]byte, error) {
 		return msgBytes, memphisError(errors.New(validateErrorGql))
 	}
 	return msgBytes, nil
+}
+
+func (sd *schemaDetails) validAvroSchemaMsg(msg any) ([]byte, error) {	
+	var (
+		msgBytes []byte
+		err      error
+		message  interface{}
+	)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	switch msg.(type) {
+	case []byte:
+		msgBytes = msg.([]byte)
+		if err := json.Unmarshal(msgBytes, &message); err != nil {
+			err = errors.New("Bad Avro format - " + err.Error())
+			return nil, memphisError(err)
+		}
+	case map[string]interface{}:
+		msgBytes, err = json.Marshal(msg)
+		if err != nil {
+			return nil, memphisError(err)
+		}
+		if err := json.Unmarshal(msgBytes, &message); err != nil {
+			err = errors.New("Bad Avro format - " + err.Error())
+			return nil, memphisError(err)
+		}
+		
+	default:
+		msgType := reflect.TypeOf(msg).Kind()
+		if msgType == reflect.Struct {
+			msgBytes, err = avro.Marshal(sd.avroSchema, msg)
+			if err != nil {
+				return nil, memphisError(err)
+			}
+			if err := avro.Unmarshal(sd.avroSchema, msgBytes, &message); err != nil {
+				return nil, memphisError(err)
+			}
+			// Serialize it back after validation and unmarshalling
+			msgBytes, err = json.Marshal(message)
+			if err != nil {
+				return nil, memphisError(err)
+			}
+		} else {
+			return nil, memphisError(errors.New("unsupported message type"))
+		}
+	}
+
+	if _, err = avro.Marshal(sd.avroSchema, message); err != nil {
+		return msgBytes, memphisError(err)
+	}
+
+	return  msgBytes, nil
 }

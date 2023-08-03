@@ -1,0 +1,11 @@
+{
+    "type": "record",
+    "namespace": "com.example",
+    "name": "test_schema",
+    "fields": [
+        { "name": "username", "type": "string", "default": "-2" },
+        { "name": "age", "type": "int" },
+        { "name": "phone", "type": "long" },
+        { "name": "country", "type": "string", "default": "NONE" }
+    ]
+}

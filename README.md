@@ -100,7 +100,7 @@ _If a station already exists nothing happens, the new configuration will not be 
 s0, err = c.CreateStation("<station-name>")
 
 s1, err = c.CreateStation("<station-name>", 
- memphis.RetentionTypeOpt(<Messages/MaxMessageAgeSeconds/Bytes>),
+ memphis.RetentionTypeOpt(<Messages/MaxMessageAgeSeconds/Bytes/AckBased>), // AckBased - cloud only
  memphis.RetentionVal(<int>), 
  memphis.StorageTypeOpt(<Memory/Disk>), 
  memphis.Replicas(<int>), 
@@ -133,13 +133,19 @@ memphis.Bytes
 
 The above means that after maximum number of saved bytes (set in retention value)<br>has been reached, the oldest messages will be deleted.
 
+```go
+memphis.AckBased // for cloud users only
+```
+
+The above means that after a message is getting acked by all interested consumer groups it will be deleted from the Station.
+
 ### Retention Values
 
 The `retention values` are directly related to the `retention types` mentioned above,<br> where the values vary according to the type of retention chosen.
 
 All retention values are of type `int` but with different representations as follows:
 
-`memphis.MaxMessageAgeSeconds` is represented **in seconds**, `memphis.Messages` in a **number of messages** <br> and finally `memphis.Bytes` in a **number of bytes**.
+`memphis.MaxMessageAgeSeconds` is represented **in seconds**, `memphis.Messages` in a **number of messages** <br> `memphis.Bytes` in a **number of bytes**, and finally `memphis.AckBased` is not using the retentionValue param at all. 
 
 After these limits are reached oldest messages will be deleted.
 
@@ -219,7 +225,27 @@ c.Produce("station_name_c_produce", "producer_name_a", []byte("Hey There!"), []m
 
 Creating a producer first (receiver function of the producer struct).
 ```go
-p.Produce("<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema)>", memphis.AckWaitSec(15)) // defaults to 15 seconds
+p.Produce("<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema) or []byte or map[string]interface{} or struct with avro tags(schema validated station - avro schema)>", memphis.AckWaitSec(15)) // defaults to 15 seconds
+```
+Note: 
+When producing a message using avro format([]byte or map[string]interface{}), int types are converted to float64. Type conversion of `Golang float64` equals `Avro double`. So when creating an avro schema, it can't have int types. use double instead.
+E.g.
+```
+myData :=  map[string]interface{}{
+"username": "John",
+"age": 30
+}
+```
+```
+{
+	"type": "record",
+	"namespace": "com.example",
+	"name": "test_schema",
+	"fields": [
+		{ "name": "username", "type": "string" },
+		{ "name": "age", "type": "double" }
+	]
+}
 ```
 
 ### Add headers
@@ -229,7 +255,7 @@ hdrs := memphis.Headers{}
 hdrs.New()
 err := hdrs.Add("key", "value")
 p.Produce(
-	"<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema)>",
+	"<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema) or []byte or map[string]interface{} or struct with avro tags(schema validated station - avro schema)>",
     memphis.AckWaitSec(15),
 	memphis.MsgHeaders(hdrs) // defaults to empty
 )
@@ -240,7 +266,7 @@ For better performance. The client won't block requests while waiting for an ack
 
 ```go
 p.Produce(
-	"<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema)>",
+	"<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema) or []byte or map[string]interface{} or struct with avro tags(schema validated station - avro schema)>",
     memphis.AckWaitSec(15),
 	memphis.AsyncProduce()
 )
@@ -251,7 +277,7 @@ Stations are idempotent by default for 2 minutes (can be configured), Idempotenc
 
 ```go
 p.Produce(
-	"<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema)>",
+	"<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema) or []byte or map[string]interface{} or struct with avro tags(schema validated station - avro schema)>",
     memphis.AckWaitSec(15),
 	memphis.MsgId("343")
 )

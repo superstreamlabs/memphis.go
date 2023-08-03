@@ -40,6 +40,9 @@ const (
 	memphisGlobalAccountName = "$memphis"
 )
 
+var stationUpdatesSubsLock sync.Mutex
+var lockProducersMap sync.Mutex
+
 // Option is a function on the options for a connection.
 type Option func(*Options) error
 type ProducersMap map[string]*Producer
@@ -120,7 +123,9 @@ func (c *Conn) getProducersMap() ProducersMap {
 }
 
 func (c *Conn) setProducersMap(producersMap ProducersMap) {
+	lockProducersMap.Lock()
 	c.producersMap = producersMap
+	lockProducersMap.Unlock()
 }
 
 func (c *Conn) getConsumersMap() ConsumersMap {
@@ -256,7 +261,8 @@ func (opts Options) connect() (*Conn, error) {
 	if err := c.startConn(); err != nil {
 		return nil, memphisError(err)
 	}
-
+	stationUpdatesSubsLock.Lock()
+	defer stationUpdatesSubsLock.Unlock()
 	c.stationUpdatesSubs = make(map[string]*stationUpdateSub)
 
 	return &c, nil
@@ -645,6 +651,7 @@ func (cus *sdkClientsUpdateSub) sdkClientUpdatesHandler(c *Conn) {
 			pm.unsetStationProducers(update.StationName)
 			cm := c.getConsumersMap()
 			cm.unsetStationConsumers(update.StationName)
+			c.removeSchemaUpdatesListener(update.StationName)
 		}
 		lock.Unlock()
 	}
@@ -658,17 +665,22 @@ func (pm *ProducersMap) getProducer(key string) *Producer {
 }
 
 func (pm *ProducersMap) setProducer(p *Producer) {
+	lockProducersMap.Lock()
 	stationName := getInternalName(p.stationName)
 	pn := fmt.Sprintf("%s_%s", stationName, p.realName)
 
 	if pm.getProducer(pn) != nil {
+		lockProducersMap.Unlock()
 		return
 	}
 	(*pm)[pn] = p
+	lockProducersMap.Unlock()
 }
 
 func (pm *ProducersMap) unsetProducer(key string) {
+	lockProducersMap.Lock()
 	delete(*pm, key)
+	lockProducersMap.Unlock()
 }
 
 func (pm *ProducersMap) unsetStationProducers(stationName string) {
