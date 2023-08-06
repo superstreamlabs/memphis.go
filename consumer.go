@@ -32,7 +32,7 @@ const (
 	consumerDefaultPingInterval    = 30 * time.Second
 	dlsSubjPrefix                  = "$memphis_dls"
 	memphisPmAckSubject            = "$memphis_pm_acks"
-	lastConsumerCreationReqVersion = 1
+	lastConsumerCreationReqVersion = 2
 	lastConsumerDestroyReqVersion  = 1
 )
 
@@ -53,7 +53,7 @@ type Consumer struct {
 	MaxMsgDeliveries         int
 	conn                     *Conn
 	stationName              string
-	subscription             *nats.Subscription
+	subscriptions            []*nats.Subscription
 	pingInterval             time.Duration
 	subscriptionActive       bool
 	consumeActive            bool
@@ -68,6 +68,7 @@ type Consumer struct {
 	dlsHandlerFunc           ConsumeHandler
 	dlsMsgs                  []*Msg
 	dlsMsgsMutex             sync.RWMutex
+	Partitions               []int
 }
 
 // Msg - a received message, can be acked.
@@ -191,6 +192,11 @@ type ConsumerOpts struct {
 	LastMessages             int64
 }
 
+type createConsumerResp struct {
+	Partitions []int  `json:"partitions"`
+	Err        string `json:"error"`
+}
+
 // getDefaultConsumerOptions - returns default configuration options for consumers.
 func getDefaultConsumerOptions() ConsumerOpts {
 	return ConsumerOpts{
@@ -291,17 +297,32 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	consumer.pingInterval = consumerDefaultPingInterval
 
 	subjInternalName := getInternalName(consumer.stationName)
-	subj := subjInternalName + ".final"
 
 	durable := getInternalName(consumer.ConsumerGroup)
-	consumer.subscription, err = c.brokerPullSubscribe(subj,
-		durable,
-		nats.ManualAck(),
-		nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
-		nats.MaxDeliver(opts.MaxMsgDeliveries))
-
-	if err != nil {
-		return nil, memphisError(err)
+	if len(consumer.Partitions) == 0 {
+		subj := subjInternalName + ".final"
+		sub, err := c.brokerPullSubscribe(subj,
+			durable,
+			nats.ManualAck(),
+			nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
+			nats.MaxDeliver(opts.MaxMsgDeliveries))
+		if err != nil {
+			return nil, memphisError(err)
+		}
+		consumer.subscriptions[0] = sub
+	} else {
+		for i := 0; i < len(consumer.Partitions); i++ {
+			subj := fmt.Sprintf("%s$%s.final", subjInternalName, strconv.Itoa(consumer.Partitions[i]+1))
+			sub, err := c.brokerPullSubscribe(subj,
+				durable,
+				nats.ManualAck(),
+				nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
+				nats.MaxDeliver(opts.MaxMsgDeliveries))
+			if err != nil {
+				return nil, memphisError(err)
+			}
+			consumer.subscriptions[i] = sub
+		}
 	}
 
 	consumer.subscriptionActive = true
@@ -340,12 +361,25 @@ func (c *Consumer) pingConsumer() {
 	for {
 		select {
 		case <-ticker.C:
-			_, err := c.subscription.ConsumerInfo()
-			if err != nil {
+			var generalErr error
+			wg := sync.WaitGroup{}
+			wg.Add(len(c.subscriptions))
+			for _, sub := range c.subscriptions {
+				go func(sub *nats.Subscription) {
+					_, err := sub.ConsumerInfo()
+					if err != nil {
+						generalErr = err
+						wg.Done()
+						return
+					}
+					wg.Done()
+				}(sub)
+			}
+			wg.Wait()
+			if generalErr != nil {
 				c.subscriptionActive = false
 				c.callErrHandler(ConsumerErrStationUnreachable)
 				c.StopConsume()
-				return
 			}
 		case <-c.pingQuit:
 			ticker.Stop()
@@ -407,18 +441,29 @@ func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 	if !c.subscriptionActive {
 		return nil, memphisError(errors.New("station unreachable"))
 	}
-
-	subscription := c.subscription
-	batchSize := c.BatchSize
-	msgs, err := subscription.Fetch(batchSize)
-	if err != nil && err != nats.ErrTimeout {
-		return nil, memphisError(err)
+	fetchSize := c.BatchSize / len(c.Partitions)
+	wrappedMsgs := make([]*Msg, 0, c.BatchSize)
+	var generalErr error
+	wg := sync.WaitGroup{}
+	wg.Add(len(c.subscriptions))
+	for _, sub := range c.subscriptions {
+		go func(sub *nats.Subscription) {
+			msgs, err := sub.Fetch(fetchSize)
+			if err != nil && err != nats.ErrTimeout {
+				generalErr = err
+				wg.Done()
+			}
+			for _, msg := range msgs {
+				wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup})
+			}
+			wg.Done()
+		}(sub)
 	}
-
-	wrappedMsgs := make([]*Msg, 0, batchSize)
-
-	for _, msg := range msgs {
-		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup})
+	wg.Wait()
+	if generalErr != nil {
+		c.subscriptionActive = false
+		c.callErrHandler(ConsumerErrStationUnreachable)
+		c.StopConsume()
 	}
 	return wrappedMsgs, nil
 }
@@ -581,7 +626,21 @@ func (c *Consumer) getCreationReq() any {
 }
 
 func (c *Consumer) handleCreationResp(resp []byte) error {
-	return defaultHandleCreationResp(resp)
+	cr := &createConsumerResp{}
+	err := json.Unmarshal(resp, cr)
+	if err != nil {
+		// unmarshal failed, we may be dealing with an old broker
+		c.Partitions = nil
+		return defaultHandleCreationResp(resp)
+	}
+
+	if cr.Err != "" {
+		return memphisError(errors.New(cr.Err))
+	}
+
+	c.Partitions = cr.Partitions
+
+	return nil
 }
 
 func (c *Consumer) getDestructionSubject() string {
