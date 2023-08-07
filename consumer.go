@@ -69,6 +69,28 @@ type Consumer struct {
 	dlsMsgs                  []*Msg
 	dlsMsgsMutex             sync.RWMutex
 	Partitions               []int
+	PartitionGenerator       *RoundRobinConsumerGenerator
+}
+
+type RoundRobinConsumerGenerator struct {
+	PartitionsLength int
+	Current          int
+	mutex            sync.Mutex
+}
+
+func newConsumerRoundRobinGenerator(partitionsLength int) *RoundRobinConsumerGenerator {
+	return &RoundRobinConsumerGenerator{
+		PartitionsLength: partitionsLength,
+		Current:          0,
+	}
+}
+
+func (rr *RoundRobinConsumerGenerator) Next() int {
+	rr.mutex.Lock()
+	defer rr.mutex.Unlock()
+	partitionNumber := rr.Current
+	rr.Current = (rr.Current + 1) % rr.PartitionsLength
+	return partitionNumber
 }
 
 // Msg - a received message, can be acked.
@@ -381,7 +403,6 @@ func (c *Consumer) pingConsumer() {
 			if generalErr != nil {
 				c.subscriptionActive = false
 				c.callErrHandler(ConsumerErrStationUnreachable)
-				c.StopConsume()
 			}
 		case <-c.pingQuit:
 			ticker.Stop()
@@ -443,33 +464,16 @@ func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 	if !c.subscriptionActive {
 		return nil, memphisError(errors.New("station unreachable"))
 	}
-	partitionsNumber := len(c.Partitions)
-	if partitionsNumber == 0 {
-		partitionsNumber = 1
-	}
-	fetchSize := c.BatchSize / partitionsNumber
 	wrappedMsgs := make([]*Msg, 0, c.BatchSize)
-	var generalErr error
-	wg := sync.WaitGroup{}
-	wg.Add(len(c.subscriptions))
-	for _, sub := range c.subscriptions {
-		go func(sub *nats.Subscription) {
-			msgs, err := sub.Fetch(fetchSize)
-			if err != nil && err != nats.ErrTimeout {
-				generalErr = err
-				wg.Done()
-			}
-			for _, msg := range msgs {
-				wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup})
-			}
-			wg.Done()
-		}(sub)
-	}
-	wg.Wait()
-	if generalErr != nil {
+	partitionNumber := c.PartitionGenerator.Next()
+	msgs, err := c.subscriptions[partitionNumber].Fetch(c.BatchSize)
+	if err != nil && err != nats.ErrTimeout {
 		c.subscriptionActive = false
 		c.callErrHandler(ConsumerErrStationUnreachable)
 		c.StopConsume()
+	}
+	for _, msg := range msgs {
+		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup})
 	}
 	return wrappedMsgs, nil
 }
@@ -645,6 +649,11 @@ func (c *Consumer) handleCreationResp(resp []byte) error {
 	}
 
 	c.Partitions = cr.Partitions
+	if len(c.Partitions) > 0 {
+		c.PartitionGenerator = newConsumerRoundRobinGenerator(len(cr.Partitions))
+	} else {
+		c.PartitionGenerator = newConsumerRoundRobinGenerator(1)
+	}
 
 	return nil
 }
