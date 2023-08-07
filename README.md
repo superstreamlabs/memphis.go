@@ -109,6 +109,7 @@ s1, err = c.CreateStation("<station-name>",
  memphis.SendPoisonMsgToDls(<bool>), // defaults to true
  memphis.SendSchemaFailedMsgToDls(<bool>), // defaults to true
  memphis.TieredStorageEnabled(<bool>) // defaults to false
+ memphis.PartitionsNumber(<int>) // default is 1 partition
 )
 ```
 
