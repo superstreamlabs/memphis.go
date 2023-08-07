@@ -135,15 +135,17 @@ type MessagePayloadDls struct {
 type ProducerOpt func(*ProducerOpts) error
 
 type RoundRobinProducerGenerator struct {
-	Partitions []int
-	Current    int
-	mutex      sync.Mutex
+	NumberOfPartitions int
+	Partitions         []int
+	Current            int
+	mutex              sync.Mutex
 }
 
 func newRoundRobinGenerator(partitions []int) *RoundRobinProducerGenerator {
 	return &RoundRobinProducerGenerator{
-		Partitions: partitions,
-		Current:    0,
+		NumberOfPartitions: len(partitions),
+		Partitions:         partitions,
+		Current:            0,
 	}
 }
 
@@ -152,7 +154,7 @@ func (rr *RoundRobinProducerGenerator) Next() int {
 	defer rr.mutex.Unlock()
 
 	partitionNumber := rr.Partitions[rr.Current]
-	rr.Current = (rr.Current + 1) % len(rr.Partitions)
+	rr.Current = (rr.Current + 1) % rr.NumberOfPartitions
 	return partitionNumber
 }
 
