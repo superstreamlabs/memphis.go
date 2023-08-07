@@ -300,6 +300,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	durable := getInternalName(consumer.ConsumerGroup)
 	if len(consumer.Partitions) == 0 {
+		consumer.subscriptions = make([]*nats.Subscription, 1)
 		subj := subjInternalName + ".final"
 		sub, err := c.brokerPullSubscribe(subj,
 			durable,
@@ -311,8 +312,9 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		}
 		consumer.subscriptions[0] = sub
 	} else {
+		consumer.subscriptions = make([]*nats.Subscription, len(consumer.Partitions))
 		for i := 0; i < len(consumer.Partitions); i++ {
-			subj := fmt.Sprintf("%s$%s.final", subjInternalName, strconv.Itoa(consumer.Partitions[i]+1))
+			subj := fmt.Sprintf("%s$%s.final", subjInternalName, strconv.Itoa(consumer.Partitions[i]))
 			sub, err := c.brokerPullSubscribe(subj,
 				durable,
 				nats.ManualAck(),
@@ -441,7 +443,11 @@ func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 	if !c.subscriptionActive {
 		return nil, memphisError(errors.New("station unreachable"))
 	}
-	fetchSize := c.BatchSize / len(c.Partitions)
+	partitionsNumber := len(c.Partitions)
+	if partitionsNumber == 0 {
+		partitionsNumber = 1
+	}
+	fetchSize := c.BatchSize / partitionsNumber
 	wrappedMsgs := make([]*Msg, 0, c.BatchSize)
 	var generalErr error
 	wg := sync.WaitGroup{}
