@@ -39,10 +39,11 @@ const (
 
 // Producer - memphis producer object.
 type Producer struct {
-	Name        string
-	stationName string
-	conn        *Conn
-	realName    string
+	Name               string
+	stationName        string
+	conn               *Conn
+	realName           string
+	PartitionGenerator *RoundRobinProducerGenerator
 }
 
 type createProducerReq struct {
@@ -56,9 +57,14 @@ type createProducerReq struct {
 
 type createProducerResp struct {
 	SchemaUpdateInit        SchemaUpdateInit `json:"schema_update"`
+	PartitionsUpdate        PartitionsUpdate `json:"partitions_update"`
 	SchemaVerseToDls        bool             `json:"schemaverse_to_dls"`
 	ClusterSendNotification bool             `json:"send_notification"`
 	Err                     string           `json:"error"`
+}
+
+type PartitionsUpdate struct {
+	PartitionsList []int `json:"partitions_list"`
 }
 
 type SchemaUpdateType int
@@ -126,6 +132,24 @@ type MessagePayloadDls struct {
 
 // ProducerOpt - a function on the options for producer creation.
 type ProducerOpt func(*ProducerOpts) error
+
+type RoundRobinProducerGenerator struct {
+	Partitions []int
+	Current    int
+}
+
+func newRoundRobinGenerator(partitions []int) *RoundRobinProducerGenerator {
+	return &RoundRobinProducerGenerator{
+		Partitions: partitions,
+		Current:    0,
+	}
+}
+
+func (rr *RoundRobinProducerGenerator) Next() int {
+	partitionNumber := rr.Partitions[rr.Current]
+	rr.Current = (rr.Current + 1) % len(rr.Partitions)
+	return partitionNumber
+}
 
 // getDefaultProducerOpts - returns default configuration options for producer creation.
 func getDefaultProducerOpts() ProducerOpts {
@@ -261,6 +285,12 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 	sd.handleSchemaUpdateInit(cr.SchemaUpdateInit)
 	p.conn.stationUpdatesMu.Unlock()
 
+	p.conn.stationPartitions[sn] = &cr.PartitionsUpdate // length is 0 if its an old station
+	if len(p.conn.stationPartitions[sn].PartitionsList) != 0 {
+		pg := newRoundRobinGenerator(p.conn.stationPartitions[sn].PartitionsList)
+		p.PartitionGenerator = pg
+	}
+
 	p.conn.sdkClientsUpdatesMu.Lock()
 	cu := &p.conn.clientsUpdatesSub
 	cu.ClusterConfigurations["send_notification"] = cr.ClusterSendNotification
@@ -360,9 +390,17 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 		return memphisError(err)
 	}
 
+	var streamName string
+	if len(p.conn.stationPartitions[p.stationName].PartitionsList) != 0 {
+		partitionNumber := p.PartitionGenerator.Next()
+		streamName = fmt.Sprintf("%v$%v", getInternalName(p.stationName), partitionNumber)
+	} else {
+		streamName = getInternalName(p.stationName)
+	}
+
 	natsMessage := nats.Msg{
 		Header:  opts.MsgHeaders.MsgHeaders,
-		Subject: getInternalName(p.stationName) + ".final",
+		Subject: streamName + ".final",
 		Data:    data,
 	}
 
