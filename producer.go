@@ -33,7 +33,7 @@ const (
 	schemaUpdatesSubjectTemplate   = "$memphis_schema_updates_%s"
 	memphisNotificationsSubject    = "$memphis_notifications"
 	schemaVFailAlertType           = "schema_validation_fail_alert"
-	lastProducerCreationReqVersion = 1
+	lastProducerCreationReqVersion = 2
 	schemaVerseDlsSubject          = "$memphis_schemaverse_dls"
 	lastProducerDestroyReqVersion  = 1
 )
