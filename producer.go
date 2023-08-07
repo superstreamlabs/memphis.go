@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -136,6 +137,7 @@ type ProducerOpt func(*ProducerOpts) error
 type RoundRobinProducerGenerator struct {
 	Partitions []int
 	Current    int
+	mutex      sync.Mutex
 }
 
 func newRoundRobinGenerator(partitions []int) *RoundRobinProducerGenerator {
@@ -146,6 +148,9 @@ func newRoundRobinGenerator(partitions []int) *RoundRobinProducerGenerator {
 }
 
 func (rr *RoundRobinProducerGenerator) Next() int {
+	rr.mutex.Lock()
+	defer rr.mutex.Unlock()
+
 	partitionNumber := rr.Partitions[rr.Current]
 	rr.Current = (rr.Current + 1) % len(rr.Partitions)
 	return partitionNumber
