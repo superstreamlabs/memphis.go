@@ -50,7 +50,7 @@ type Station struct {
 	SchemaName           string
 	DlsConfiguration     dlsConfiguration
 	TieredStorageEnabled bool
-	PartitionNumber      int
+	PartitionsNumber     int
 }
 
 // RetentionType - station's message retention type
@@ -90,7 +90,7 @@ type createStationReq struct {
 	DlsConfiguration        dlsConfiguration `json:"dls_configuration"`
 	Username                string           `json:"username"`
 	TieredStorageEnabled    bool             `json:"tiered_storage_enabled"`
-	PartitionNumber         int              `json:"partition_number"`
+	PartitionsNumber        int              `json:"partitions_number"`
 }
 
 type removeStationReq struct {
@@ -110,7 +110,7 @@ type StationOpts struct {
 	SendPoisonMsgToDls       bool
 	SendSchemaFailedMsgToDls bool
 	TieredStorageEnabled     bool
-	PartitionNumber          int
+	PartitionsNumber         int
 }
 
 type dlsConfiguration struct {
@@ -133,7 +133,7 @@ func GetStationDefaultOptions() StationOpts {
 		SendPoisonMsgToDls:       true,
 		SendSchemaFailedMsgToDls: true,
 		TieredStorageEnabled:     false,
-		PartitionNumber:          1,
+		PartitionsNumber:         1,
 	}
 }
 
@@ -171,7 +171,7 @@ func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 			Schemaverse: opts.SendSchemaFailedMsgToDls,
 		},
 		TieredStorageEnabled: opts.TieredStorageEnabled,
-		PartitionNumber:      opts.PartitionNumber,
+		PartitionsNumber:     opts.PartitionsNumber,
 	}
 
 	return &s, s.conn.create(&s)
@@ -210,7 +210,7 @@ func (s *Station) getCreationReq() any {
 		DlsConfiguration:        s.DlsConfiguration,
 		Username:                s.conn.username,
 		TieredStorageEnabled:    s.TieredStorageEnabled,
-		PartitionNumber:         s.PartitionNumber,
+		PartitionsNumber:        s.PartitionsNumber,
 	}
 }
 
@@ -282,9 +282,9 @@ func IdempotencyWindow(idempotencyWindow time.Duration) StationOpt {
 	}
 }
 
-func PartitionNumber(partitionNumber int) StationOpt {
+func PartitionsNumber(partitionsNumber int) StationOpt {
 	return func(opts *StationOpts) error {
-		opts.PartitionNumber = partitionNumber
+		opts.PartitionsNumber = partitionsNumber
 		return nil
 	}
 }
@@ -649,7 +649,7 @@ func (sd *schemaDetails) validateGraphQlMsg(msg any) ([]byte, error) {
 	return msgBytes, nil
 }
 
-func (sd *schemaDetails) validAvroSchemaMsg(msg any) ([]byte, error) {	
+func (sd *schemaDetails) validAvroSchemaMsg(msg any) ([]byte, error) {
 	var (
 		msgBytes []byte
 		err      error
@@ -676,7 +676,7 @@ func (sd *schemaDetails) validAvroSchemaMsg(msg any) ([]byte, error) {
 			err = errors.New("Bad Avro format - " + err.Error())
 			return nil, memphisError(err)
 		}
-		
+
 	default:
 		msgType := reflect.TypeOf(msg).Kind()
 		if msgType == reflect.Struct {
@@ -701,5 +701,5 @@ func (sd *schemaDetails) validAvroSchemaMsg(msg any) ([]byte, error) {
 		return msgBytes, memphisError(err)
 	}
 
-	return  msgBytes, nil
+	return msgBytes, nil
 }
