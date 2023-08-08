@@ -248,6 +248,8 @@ myData :=  map[string]interface{}{
 	]
 }
 ```
+Note:
+When producing to a station with more than one partition, the producer will produce messages in Round Robin to the partitions.
 
 ### Add headers
 
@@ -310,6 +312,8 @@ consumer0, err = s.CreateConsumer("<consumer-name>",
 // creation from a Conn
 consumer1, err = c.CreateConsumer("<station-name>", "<consumer-name>", ...) 
 ```
+Note:
+When consuming from a station with more than one partition, the consumer will consume messages in Round Robin from the partitions.
 
 ### Passing a context to a message handler
 
