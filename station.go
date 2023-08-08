@@ -149,6 +149,7 @@ func (c *Conn) CreateStation(Name string, opts ...StationOpt) (*Station, error) 
 			}
 		}
 	}
+
 	res, err := defaultOpts.createStation(c)
 	if err != nil && strings.Contains(err.Error(), "already exist") {
 		return res, nil
@@ -172,6 +173,10 @@ func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 		},
 		TieredStorageEnabled: opts.TieredStorageEnabled,
 		PartitionsNumber:     opts.PartitionsNumber,
+	}
+
+	if s.PartitionsNumber == 0 {
+		s.PartitionsNumber = 1
 	}
 
 	return &s, s.conn.create(&s)
