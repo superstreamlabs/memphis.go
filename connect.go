@@ -169,6 +169,30 @@ type detachSchemaReq struct {
 	Username    string `json:"username"`
 }
 
+type RoundRobinProducerConsumerGenerator struct {
+	NumberOfPartitions int
+	Partitions         []int
+	Current            int
+	mutex              sync.Mutex
+}
+
+func newRoundRobinGenerator(partitions []int) *RoundRobinProducerConsumerGenerator {
+	return &RoundRobinProducerConsumerGenerator{
+		NumberOfPartitions: len(partitions),
+		Partitions:         partitions,
+		Current:            0,
+	}
+}
+
+func (rr *RoundRobinProducerConsumerGenerator) Next() int {
+	rr.mutex.Lock()
+	defer rr.mutex.Unlock()
+
+	partitionNumber := rr.Partitions[rr.Current]
+	rr.Current = (rr.Current + 1) % rr.NumberOfPartitions
+	return partitionNumber
+}
+
 // getDefaultOptions - returns default configuration options for the client.
 func getDefaultOptions() Options {
 	return Options{

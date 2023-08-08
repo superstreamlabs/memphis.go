@@ -53,7 +53,7 @@ type Consumer struct {
 	MaxMsgDeliveries         int
 	conn                     *Conn
 	stationName              string
-	subscriptions            []*nats.Subscription
+	subscriptions            map[int]*nats.Subscription
 	pingInterval             time.Duration
 	subscriptionActive       bool
 	consumeActive            bool
@@ -68,28 +68,7 @@ type Consumer struct {
 	dlsHandlerFunc           ConsumeHandler
 	dlsMsgs                  []*Msg
 	dlsMsgsMutex             sync.RWMutex
-	PartitionGenerator       *RoundRobinConsumerGenerator
-}
-
-type RoundRobinConsumerGenerator struct {
-	PartitionsLength int
-	Current          int
-	mutex            sync.Mutex
-}
-
-func newConsumerRoundRobinGenerator(partitionsLength int) *RoundRobinConsumerGenerator {
-	return &RoundRobinConsumerGenerator{
-		PartitionsLength: partitionsLength,
-		Current:          0,
-	}
-}
-
-func (rr *RoundRobinConsumerGenerator) Next() int {
-	rr.mutex.Lock()
-	defer rr.mutex.Unlock()
-	partitionNumber := rr.Current
-	rr.Current = (rr.Current + 1) % rr.PartitionsLength
-	return partitionNumber
+	PartitionGenerator       *RoundRobinProducerConsumerGenerator
 }
 
 // Msg - a received message, can be acked.
@@ -321,7 +300,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	durable := getInternalName(consumer.ConsumerGroup)
 	if len(consumer.conn.stationPartitions[sn].PartitionsList) == 0 {
-		consumer.subscriptions = make([]*nats.Subscription, 1)
+		consumer.subscriptions = make(map[int]*nats.Subscription, 1)
 		subj := sn + ".final"
 		sub, err := c.brokerPullSubscribe(subj,
 			durable,
@@ -331,11 +310,11 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		if err != nil {
 			return nil, memphisError(err)
 		}
-		consumer.subscriptions[0] = sub
+		consumer.subscriptions[1] = sub
 	} else {
-		consumer.subscriptions = make([]*nats.Subscription, len(consumer.conn.stationPartitions[sn].PartitionsList))
-		for i := 0; i < len(consumer.conn.stationPartitions[sn].PartitionsList); i++ {
-			subj := fmt.Sprintf("%s$%s.final", sn, strconv.Itoa(consumer.conn.stationPartitions[sn].PartitionsList[i]))
+		consumer.subscriptions = make(map[int]*nats.Subscription, len(consumer.conn.stationPartitions[sn].PartitionsList))
+		for _, p := range consumer.conn.stationPartitions[sn].PartitionsList {
+			subj := fmt.Sprintf("%s$%s.final", sn, strconv.Itoa(p))
 			sub, err := c.brokerPullSubscribe(subj,
 				durable,
 				nats.ManualAck(),
@@ -344,7 +323,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 			if err != nil {
 				return nil, memphisError(err)
 			}
-			consumer.subscriptions[i] = sub
+			consumer.subscriptions[p] = sub
 		}
 	}
 
@@ -464,7 +443,10 @@ func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 		return nil, memphisError(errors.New("station unreachable"))
 	}
 	wrappedMsgs := make([]*Msg, 0, c.BatchSize)
-	partitionNumber := c.PartitionGenerator.Next()
+	partitionNumber := 1
+	if len(c.subscriptions) > 1 {
+		partitionNumber = c.PartitionGenerator.Next()
+	}
 	msgs, err := c.subscriptions[partitionNumber].Fetch(c.BatchSize)
 	if err != nil && err != nats.ErrTimeout {
 		c.subscriptionActive = false
@@ -648,9 +630,7 @@ func (c *Consumer) handleCreationResp(resp []byte) error {
 	sn := getInternalName(c.stationName)
 	c.conn.stationPartitions[sn] = &cr.PartitionsUpdate
 	if len(cr.PartitionsUpdate.PartitionsList) > 0 {
-		c.PartitionGenerator = newConsumerRoundRobinGenerator(len(cr.PartitionsUpdate.PartitionsList))
-	} else {
-		c.PartitionGenerator = newConsumerRoundRobinGenerator(1)
+		c.PartitionGenerator = newRoundRobinGenerator(cr.PartitionsUpdate.PartitionsList)
 	}
 
 	return nil
