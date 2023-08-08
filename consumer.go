@@ -32,7 +32,7 @@ const (
 	consumerDefaultPingInterval    = 30 * time.Second
 	dlsSubjPrefix                  = "$memphis_dls"
 	memphisPmAckSubject            = "$memphis_pm_acks"
-	lastConsumerCreationReqVersion = 1
+	lastConsumerCreationReqVersion = 2
 	lastConsumerDestroyReqVersion  = 1
 )
 
@@ -53,7 +53,7 @@ type Consumer struct {
 	MaxMsgDeliveries         int
 	conn                     *Conn
 	stationName              string
-	subscription             *nats.Subscription
+	subscriptions            []*nats.Subscription
 	pingInterval             time.Duration
 	subscriptionActive       bool
 	consumeActive            bool
@@ -68,6 +68,29 @@ type Consumer struct {
 	dlsHandlerFunc           ConsumeHandler
 	dlsMsgs                  []*Msg
 	dlsMsgsMutex             sync.RWMutex
+	Partitions               []int
+	PartitionGenerator       *RoundRobinConsumerGenerator
+}
+
+type RoundRobinConsumerGenerator struct {
+	PartitionsLength int
+	Current          int
+	mutex            sync.Mutex
+}
+
+func newConsumerRoundRobinGenerator(partitionsLength int) *RoundRobinConsumerGenerator {
+	return &RoundRobinConsumerGenerator{
+		PartitionsLength: partitionsLength,
+		Current:          0,
+	}
+}
+
+func (rr *RoundRobinConsumerGenerator) Next() int {
+	rr.mutex.Lock()
+	defer rr.mutex.Unlock()
+	partitionNumber := rr.Current
+	rr.Current = (rr.Current + 1) % rr.PartitionsLength
+	return partitionNumber
 }
 
 // Msg - a received message, can be acked.
@@ -191,6 +214,11 @@ type ConsumerOpts struct {
 	LastMessages             int64
 }
 
+type createConsumerResp struct {
+	Partitions []int  `json:"partitions"`
+	Err        string `json:"error"`
+}
+
 // getDefaultConsumerOptions - returns default configuration options for consumers.
 func getDefaultConsumerOptions() ConsumerOpts {
 	return ConsumerOpts{
@@ -291,17 +319,34 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	consumer.pingInterval = consumerDefaultPingInterval
 
 	subjInternalName := getInternalName(consumer.stationName)
-	subj := subjInternalName + ".final"
 
 	durable := getInternalName(consumer.ConsumerGroup)
-	consumer.subscription, err = c.brokerPullSubscribe(subj,
-		durable,
-		nats.ManualAck(),
-		nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
-		nats.MaxDeliver(opts.MaxMsgDeliveries))
-
-	if err != nil {
-		return nil, memphisError(err)
+	if len(consumer.Partitions) == 0 {
+		consumer.subscriptions = make([]*nats.Subscription, 1)
+		subj := subjInternalName + ".final"
+		sub, err := c.brokerPullSubscribe(subj,
+			durable,
+			nats.ManualAck(),
+			nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
+			nats.MaxDeliver(opts.MaxMsgDeliveries))
+		if err != nil {
+			return nil, memphisError(err)
+		}
+		consumer.subscriptions[0] = sub
+	} else {
+		consumer.subscriptions = make([]*nats.Subscription, len(consumer.Partitions))
+		for i := 0; i < len(consumer.Partitions); i++ {
+			subj := fmt.Sprintf("%s$%s.final", subjInternalName, strconv.Itoa(consumer.Partitions[i]))
+			sub, err := c.brokerPullSubscribe(subj,
+				durable,
+				nats.ManualAck(),
+				nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
+				nats.MaxDeliver(opts.MaxMsgDeliveries))
+			if err != nil {
+				return nil, memphisError(err)
+			}
+			consumer.subscriptions[i] = sub
+		}
 	}
 
 	consumer.subscriptionActive = true
@@ -340,12 +385,24 @@ func (c *Consumer) pingConsumer() {
 	for {
 		select {
 		case <-ticker.C:
-			_, err := c.subscription.ConsumerInfo()
-			if err != nil {
+			var generalErr error
+			wg := sync.WaitGroup{}
+			wg.Add(len(c.subscriptions))
+			for _, sub := range c.subscriptions {
+				go func(sub *nats.Subscription) {
+					_, err := sub.ConsumerInfo()
+					if err != nil {
+						generalErr = err
+						wg.Done()
+						return
+					}
+					wg.Done()
+				}(sub)
+			}
+			wg.Wait()
+			if generalErr != nil {
 				c.subscriptionActive = false
 				c.callErrHandler(ConsumerErrStationUnreachable)
-				c.StopConsume()
-				return
 			}
 		case <-c.pingQuit:
 			ticker.Stop()
@@ -407,16 +464,14 @@ func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 	if !c.subscriptionActive {
 		return nil, memphisError(errors.New("station unreachable"))
 	}
-
-	subscription := c.subscription
-	batchSize := c.BatchSize
-	msgs, err := subscription.Fetch(batchSize)
+	wrappedMsgs := make([]*Msg, 0, c.BatchSize)
+	partitionNumber := c.PartitionGenerator.Next()
+	msgs, err := c.subscriptions[partitionNumber].Fetch(c.BatchSize)
 	if err != nil && err != nats.ErrTimeout {
-		return nil, memphisError(err)
+		c.subscriptionActive = false
+		c.callErrHandler(ConsumerErrStationUnreachable)
+		c.StopConsume()
 	}
-
-	wrappedMsgs := make([]*Msg, 0, batchSize)
-
 	for _, msg := range msgs {
 		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup})
 	}
@@ -581,7 +636,26 @@ func (c *Consumer) getCreationReq() any {
 }
 
 func (c *Consumer) handleCreationResp(resp []byte) error {
-	return defaultHandleCreationResp(resp)
+	cr := &createConsumerResp{}
+	err := json.Unmarshal(resp, cr)
+	if err != nil {
+		// unmarshal failed, we may be dealing with an old broker
+		c.Partitions = nil
+		return defaultHandleCreationResp(resp)
+	}
+
+	if cr.Err != "" {
+		return memphisError(errors.New(cr.Err))
+	}
+
+	c.Partitions = cr.Partitions
+	if len(c.Partitions) > 0 {
+		c.PartitionGenerator = newConsumerRoundRobinGenerator(len(cr.Partitions))
+	} else {
+		c.PartitionGenerator = newConsumerRoundRobinGenerator(1)
+	}
+
+	return nil
 }
 
 func (c *Consumer) getDestructionSubject() string {

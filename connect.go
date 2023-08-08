@@ -146,6 +146,7 @@ type Conn struct {
 	js                  nats.JetStreamContext
 	stationUpdatesMu    sync.RWMutex
 	stationUpdatesSubs  map[string]*stationUpdateSub
+	stationPartitions   map[string]*PartitionsUpdate
 	sdkClientsUpdatesMu sync.RWMutex
 	clientsUpdatesSub   sdkClientsUpdateSub
 	producersMap        ProducersMap
@@ -264,6 +265,7 @@ func (opts Options) connect() (*Conn, error) {
 	stationUpdatesSubsLock.Lock()
 	defer stationUpdatesSubsLock.Unlock()
 	c.stationUpdatesSubs = make(map[string]*stationUpdateSub)
+	c.stationPartitions = make(map[string]*PartitionsUpdate)
 
 	return &c, nil
 }
