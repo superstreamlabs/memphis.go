@@ -64,10 +64,6 @@ type createProducerResp struct {
 	Err                     string           `json:"error"`
 }
 
-type PartitionsUpdate struct {
-	PartitionsList []int `json:"partitions_list"`
-}
-
 type SchemaUpdateType int
 
 const (

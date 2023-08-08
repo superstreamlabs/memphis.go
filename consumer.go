@@ -68,7 +68,6 @@ type Consumer struct {
 	dlsHandlerFunc           ConsumeHandler
 	dlsMsgs                  []*Msg
 	dlsMsgsMutex             sync.RWMutex
-	Partitions               []int
 	PartitionGenerator       *RoundRobinConsumerGenerator
 }
 
@@ -215,8 +214,8 @@ type ConsumerOpts struct {
 }
 
 type createConsumerResp struct {
-	Partitions []int  `json:"partitions"`
-	Err        string `json:"error"`
+	PartitionsUpdate PartitionsUpdate `json:"partitions_update"`
+	Err              string           `json:"error"`
 }
 
 // getDefaultConsumerOptions - returns default configuration options for consumers.
@@ -318,12 +317,12 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	consumer.pingInterval = consumerDefaultPingInterval
 
-	subjInternalName := getInternalName(consumer.stationName)
+	sn := getInternalName(consumer.stationName)
 
 	durable := getInternalName(consumer.ConsumerGroup)
-	if len(consumer.Partitions) == 0 {
+	if len(consumer.conn.stationPartitions[sn].PartitionsList) == 0 {
 		consumer.subscriptions = make([]*nats.Subscription, 1)
-		subj := subjInternalName + ".final"
+		subj := sn + ".final"
 		sub, err := c.brokerPullSubscribe(subj,
 			durable,
 			nats.ManualAck(),
@@ -334,9 +333,9 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		}
 		consumer.subscriptions[0] = sub
 	} else {
-		consumer.subscriptions = make([]*nats.Subscription, len(consumer.Partitions))
-		for i := 0; i < len(consumer.Partitions); i++ {
-			subj := fmt.Sprintf("%s$%s.final", subjInternalName, strconv.Itoa(consumer.Partitions[i]))
+		consumer.subscriptions = make([]*nats.Subscription, len(consumer.conn.stationPartitions[sn].PartitionsList))
+		for i := 0; i < len(consumer.conn.stationPartitions[sn].PartitionsList); i++ {
+			subj := fmt.Sprintf("%s$%s.final", sn, strconv.Itoa(consumer.conn.stationPartitions[sn].PartitionsList[i]))
 			sub, err := c.brokerPullSubscribe(subj,
 				durable,
 				nats.ManualAck(),
@@ -640,17 +639,16 @@ func (c *Consumer) handleCreationResp(resp []byte) error {
 	err := json.Unmarshal(resp, cr)
 	if err != nil {
 		// unmarshal failed, we may be dealing with an old broker
-		c.Partitions = nil
 		return defaultHandleCreationResp(resp)
 	}
 
 	if cr.Err != "" {
 		return memphisError(errors.New(cr.Err))
 	}
-
-	c.Partitions = cr.Partitions
-	if len(c.Partitions) > 0 {
-		c.PartitionGenerator = newConsumerRoundRobinGenerator(len(cr.Partitions))
+	sn := getInternalName(c.stationName)
+	c.conn.stationPartitions[sn] = &cr.PartitionsUpdate
+	if len(cr.PartitionsUpdate.PartitionsList) > 0 {
+		c.PartitionGenerator = newConsumerRoundRobinGenerator(len(cr.PartitionsUpdate.PartitionsList))
 	} else {
 		c.PartitionGenerator = newConsumerRoundRobinGenerator(1)
 	}

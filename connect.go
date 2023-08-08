@@ -154,6 +154,10 @@ type Conn struct {
 	prefetchedMsgs      PrefetchedMsgs
 }
 
+type PartitionsUpdate struct {
+	PartitionsList []int `json:"partitions_list"`
+}
+
 type enforceSchemaReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
