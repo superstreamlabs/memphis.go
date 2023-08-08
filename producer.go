@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -44,7 +43,7 @@ type Producer struct {
 	stationName        string
 	conn               *Conn
 	realName           string
-	PartitionGenerator *RoundRobinProducerGenerator
+	PartitionGenerator *RoundRobinProducerConsumerGenerator
 }
 
 type createProducerReq struct {
@@ -62,10 +61,6 @@ type createProducerResp struct {
 	SchemaVerseToDls        bool             `json:"schemaverse_to_dls"`
 	ClusterSendNotification bool             `json:"send_notification"`
 	Err                     string           `json:"error"`
-}
-
-type PartitionsUpdate struct {
-	PartitionsList []int `json:"partitions_list"`
 }
 
 type SchemaUpdateType int
@@ -133,30 +128,6 @@ type MessagePayloadDls struct {
 
 // ProducerOpt - a function on the options for producer creation.
 type ProducerOpt func(*ProducerOpts) error
-
-type RoundRobinProducerGenerator struct {
-	NumberOfPartitions int
-	Partitions         []int
-	Current            int
-	mutex              sync.Mutex
-}
-
-func newRoundRobinGenerator(partitions []int) *RoundRobinProducerGenerator {
-	return &RoundRobinProducerGenerator{
-		NumberOfPartitions: len(partitions),
-		Partitions:         partitions,
-		Current:            0,
-	}
-}
-
-func (rr *RoundRobinProducerGenerator) Next() int {
-	rr.mutex.Lock()
-	defer rr.mutex.Unlock()
-
-	partitionNumber := rr.Partitions[rr.Current]
-	rr.Current = (rr.Current + 1) % rr.NumberOfPartitions
-	return partitionNumber
-}
 
 // getDefaultProducerOpts - returns default configuration options for producer creation.
 func getDefaultProducerOpts() ProducerOpts {
@@ -398,11 +369,12 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	}
 
 	var streamName string
-	if len(p.conn.stationPartitions[p.stationName].PartitionsList) != 0 {
+	sn := getInternalName(p.stationName)
+	if len(p.conn.stationPartitions[sn].PartitionsList) != 0 {
 		partitionNumber := p.PartitionGenerator.Next()
-		streamName = fmt.Sprintf("%v$%v", getInternalName(p.stationName), partitionNumber)
+		streamName = fmt.Sprintf("%v$%v", sn, partitionNumber)
 	} else {
-		streamName = getInternalName(p.stationName)
+		streamName = sn
 	}
 
 	natsMessage := nats.Msg{

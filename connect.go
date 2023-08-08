@@ -154,6 +154,10 @@ type Conn struct {
 	prefetchedMsgs      PrefetchedMsgs
 }
 
+type PartitionsUpdate struct {
+	PartitionsList []int `json:"partitions_list"`
+}
+
 type enforceSchemaReq struct {
 	Name        string `json:"name"`
 	StationName string `json:"station_name"`
@@ -163,6 +167,30 @@ type enforceSchemaReq struct {
 type detachSchemaReq struct {
 	StationName string `json:"station_name"`
 	Username    string `json:"username"`
+}
+
+type RoundRobinProducerConsumerGenerator struct {
+	NumberOfPartitions int
+	Partitions         []int
+	Current            int
+	mutex              sync.Mutex
+}
+
+func newRoundRobinGenerator(partitions []int) *RoundRobinProducerConsumerGenerator {
+	return &RoundRobinProducerConsumerGenerator{
+		NumberOfPartitions: len(partitions),
+		Partitions:         partitions,
+		Current:            0,
+	}
+}
+
+func (rr *RoundRobinProducerConsumerGenerator) Next() int {
+	rr.mutex.Lock()
+	defer rr.mutex.Unlock()
+
+	partitionNumber := rr.Partitions[rr.Current]
+	rr.Current = (rr.Current + 1) % rr.NumberOfPartitions
+	return partitionNumber
 }
 
 // getDefaultOptions - returns default configuration options for the client.
