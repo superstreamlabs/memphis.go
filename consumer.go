@@ -618,16 +618,17 @@ func (c *Consumer) getCreationReq() any {
 
 func (c *Consumer) handleCreationResp(resp []byte) error {
 	cr := &createConsumerResp{}
+	sn := getInternalName(c.stationName)
 	err := json.Unmarshal(resp, cr)
 	if err != nil {
 		// unmarshal failed, we may be dealing with an old broker
+		c.conn.stationPartitions[sn] = &PartitionsUpdate{}
 		return defaultHandleCreationResp(resp)
 	}
 
 	if cr.Err != "" {
 		return memphisError(errors.New(cr.Err))
 	}
-	sn := getInternalName(c.stationName)
 	c.conn.stationPartitions[sn] = &cr.PartitionsUpdate
 	if len(cr.PartitionsUpdate.PartitionsList) > 0 {
 		c.PartitionGenerator = newRoundRobinGenerator(cr.PartitionsUpdate.PartitionsList)
