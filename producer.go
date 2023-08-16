@@ -144,7 +144,6 @@ func extendNameWithRandSuffix(name string) (string, error) {
 
 // CreateProducer - creates a producer.
 func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*Producer, error) {
-
 	name = strings.ToLower(name)
 	defaultOpts := getDefaultProducerOpts()
 	var err error
