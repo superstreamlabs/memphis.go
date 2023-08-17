@@ -159,6 +159,13 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 		if err != nil {
 			return nil, memphisError(err)
 		}
+	} else {
+		stationNameInner := getInternalName(stationName)
+		pn := fmt.Sprintf("%s_%s", stationNameInner, name)
+
+		if cp := c.producersMap.getProducer(pn); cp != nil {
+			return cp, nil
+		}
 	}
 
 	p := Producer{
@@ -370,7 +377,9 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 
 	var streamName string
 	sn := getInternalName(p.stationName)
-	if len(p.conn.stationPartitions[sn].PartitionsList) != 0 {
+	if len(p.conn.stationPartitions[sn].PartitionsList) == 1 {
+		streamName = fmt.Sprintf("%v$%v", sn, p.conn.stationPartitions[sn].PartitionsList[0])
+	} else if len(p.conn.stationPartitions[sn].PartitionsList) > 1 {
 		partitionNumber := p.PartitionGenerator.Next()
 		streamName = fmt.Sprintf("%v$%v", sn, partitionNumber)
 	} else {
