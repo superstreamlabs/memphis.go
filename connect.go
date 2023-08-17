@@ -867,7 +867,6 @@ func FetchPrefetch() FetchOpt {
 func init() {
 	appId, err := uuid.NewV4()
 	if err != nil {
-		memphisError(err)
 		return
 	}
 	applicationId = appId.String()
