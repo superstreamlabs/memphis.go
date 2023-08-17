@@ -43,6 +43,8 @@ const (
 var stationUpdatesSubsLock sync.Mutex
 var lockProducersMap sync.Mutex
 
+var applicationId string
+
 // Option is a function on the options for a connection.
 type Option func(*Options) error
 type ProducersMap map[string]*Producer
@@ -860,4 +862,13 @@ func FetchPrefetch() FetchOpt {
 		opts.Prefetch = true
 		return nil
 	}
+}
+
+func init() {
+	appId, err := uuid.NewV4()
+	if err != nil {
+		memphisError(err)
+		return
+	}
+	applicationId = appId.String()
 }
