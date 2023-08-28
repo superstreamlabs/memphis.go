@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"strings"
 	"time"
@@ -325,7 +326,7 @@ type ProduceOpt func(*ProduceOpts) error
 // getDefaultProduceOpts - returns default configuration options for produce operations.
 func getDefaultProduceOpts() ProduceOpts {
 	msgHeaders := make(map[string][]string)
-	return ProduceOpts{AckWaitSec: 15, MsgHeaders: Headers{MsgHeaders: msgHeaders}, AsyncProduce: false}
+	return ProduceOpts{AckWaitSec: 15, MsgHeaders: Headers{MsgHeaders: msgHeaders}, AsyncProduce: true}
 }
 
 // Producer.Produce - produces a message into a station. message is of type []byte/protoreflect.ProtoMessage in case it is a schema validated station
@@ -523,9 +524,11 @@ func (p *Producer) getSchemaDetails() (schemaDetails, error) {
 	return p.conn.getSchemaDetails(p.stationName)
 }
 
+// Deprecated: will be stopped to be supported after November 1'st, 2023.
 // ProducerGenUniqueSuffix - whether to generate a unique suffix for this producer.
 func ProducerGenUniqueSuffix() ProducerOpt {
 	return func(opts *ProducerOpts) error {
+		log.Printf("Deprecation warning: ProducerGenUniqueSuffix will be stopped to be supported after November 1'st, 2023.")
 		opts.GenUniqueSuffix = true
 		return nil
 	}
@@ -551,6 +554,14 @@ func MsgHeaders(hdrs Headers) ProduceOpt {
 func AsyncProduce() ProduceOpt {
 	return func(opts *ProduceOpts) error {
 		opts.AsyncProduce = true
+		return nil
+	}
+}
+
+// SyncProduce - produce operation will wait for broker acknowledgement
+func SyncProduce() ProduceOpt {
+	return func(opts *ProduceOpts) error {
+		opts.AsyncProduce = false
 		return nil
 	}
 }

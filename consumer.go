@@ -696,9 +696,11 @@ func MaxMsgDeliveries(maxMsgDeliveries int) ConsumerOpt {
 	}
 }
 
+// Deprecated: will be stopped to be supported after November 1'st, 2023.
 // ConsumerGenUniqueSuffix - whether to generate a unique suffix for this consumer.
 func ConsumerGenUniqueSuffix() ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
+		log.Printf("Deprecation warning: ConsumerGenUniqueSuffix will be stopped to be supported after November 1'st, 2023.")
 		opts.GenUniqueSuffix = true
 		return nil
 	}

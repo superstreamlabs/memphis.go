@@ -209,7 +209,6 @@ In order to stop receiving messages, you have to call ```consumer.StopConsume()`
 p0, err := c.CreateProducer(
 	"<station-name>",
 	"<producer-name>",
-	memphis.ProducerGenUniqueSuffix()
 ) 
 
 // from a Station
@@ -275,6 +274,17 @@ p.Produce(
 )
 ```
 
+### Sync produce
+For better reliability. The client will block requests and will wait for an acknowledgment.
+
+```go
+p.Produce(
+	"<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema) or []byte or map[string]interface{} or struct with avro tags(schema validated station - avro schema)>",
+    memphis.AckWaitSec(15),
+	memphis.SyncProduce()
+)
+```
+
 ### Message ID
 Stations are idempotent by default for 2 minutes (can be configured), Idempotency achieved by adding a message id
 
@@ -303,7 +313,6 @@ consumer0, err = s.CreateConsumer("<consumer-name>",
   memphis.BatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds, has to be at least 1 ms
   memphis.MaxAckTime(<time.Duration>), // defaults to 30 sec
   memphis.MaxMsgDeliveries(<int>), // defaults to 10
-  memphis.ConsumerGenUniqueSuffix(),
   memphis.ConsumerErrorHandler(func(*Consumer, error){})
   memphis.StartConsumeFromSeq(<uint64>)// start consuming from a specific sequence. defaults to 1
   memphis.LastMessages(<int64>)// consume the last N messages, defaults to -1 (all messages in the station)
@@ -348,7 +357,6 @@ msgs, err := conn.FetchMessages("<station-name>", "<consumer-name>",
   memphis.FetchBatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds, has to be at least 1 ms
   memphis.FetchMaxAckTime(<time.Duration>), // defaults to 30 sec
   memphis.FetchMaxMsgDeliveries(<int>), // defaults to 10
-  memphis.FetchConsumerGenUniqueSuffix(),
   memphis.FetchConsumerErrorHandler(func(*Consumer, error){})
   memphis.FetchStartConsumeFromSeq(<uint64>)// start consuming from a specific sequence. defaults to 1
   memphis.FetchLastMessages(<int64>)// consume the last N messages, defaults to -1 (all messages in the station))
