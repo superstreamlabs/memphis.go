@@ -136,6 +136,13 @@ func (c *Conn) setConsumersMap(consumersMap ConsumersMap) {
 	c.consumersMap = consumersMap
 }
 
+func DefaultErrHandler(nc *nats.Conn) {
+	err := memphisError(nc.LastError())
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
 // Conn - holds the connection with memphis.
 type Conn struct {
 	opts                Options
@@ -354,6 +361,7 @@ func (c *Conn) startConn() error {
 		Timeout:           opts.Timeout,
 		DisconnectedErrCB: disconnectedError,
 		Name:              c.ConnId + "::" + opts.Username,
+		ClosedCB:          DefaultErrHandler,
 	}
 
 	if opts.ConnectionToken != "" {
