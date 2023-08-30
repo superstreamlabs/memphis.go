@@ -346,12 +346,12 @@ func (s *Station) CreateConsumer(name string, opts ...ConsumerOpt) (*Consumer, e
 }
 
 func DefaultConsumerErrHandler(c *Consumer, err error) {
-	log.Printf("Consumer %v: %v", c.Name, err.Error())
+	log.Printf("Consumer %v: %v", c.Name, memphisError(err).Error())
 }
 
 func (c *Consumer) callErrHandler(err error) {
 	if c.errHandler != nil {
-		c.errHandler(c, memphisError(err))
+		c.errHandler(c, err)
 	}
 }
 
