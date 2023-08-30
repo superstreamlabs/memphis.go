@@ -33,7 +33,7 @@ const (
 	schemaUpdatesSubjectTemplate   = "$memphis_schema_updates_%s"
 	memphisNotificationsSubject    = "$memphis_notifications"
 	schemaVFailAlertType           = "schema_validation_fail_alert"
-	lastProducerCreationReqVersion = 2
+	lastProducerCreationReqVersion = 3
 	schemaVerseDlsSubject          = "$memphis_schemaverse_dls"
 	lastProducerDestroyReqVersion  = 1
 )
@@ -54,6 +54,7 @@ type createProducerReq struct {
 	ProducerType   string `json:"producer_type"`
 	RequestVersion int    `json:"req_version"`
 	Username       string `json:"username"`
+	AppId          string `json:"app_id"`
 }
 
 type createProducerResp struct {
@@ -249,6 +250,7 @@ func (p *Producer) getCreationReq() any {
 		ProducerType:   "application",
 		RequestVersion: lastProducerCreationReqVersion,
 		Username:       p.conn.username,
+		AppId:          applicationId,
 	}
 }
 

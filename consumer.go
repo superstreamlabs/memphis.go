@@ -32,7 +32,7 @@ const (
 	consumerDefaultPingInterval    = 30 * time.Second
 	dlsSubjPrefix                  = "$memphis_dls"
 	memphisPmAckSubject            = "$memphis_pm_acks"
-	lastConsumerCreationReqVersion = 2
+	lastConsumerCreationReqVersion = 3
 	lastConsumerDestroyReqVersion  = 1
 )
 
@@ -166,6 +166,7 @@ type createConsumerReq struct {
 	StartConsumeFromSequence uint64 `json:"start_consume_from_sequence"`
 	LastMessages             int64  `json:"last_messages"`
 	RequestVersion           int    `json:"req_version"`
+	AppId                    string `json:"app_id"`
 }
 
 type removeConsumerReq struct {
@@ -613,6 +614,7 @@ func (c *Consumer) getCreationReq() any {
 		StartConsumeFromSequence: c.StartConsumeFromSequence,
 		LastMessages:             c.LastMessages,
 		RequestVersion:           lastConsumerCreationReqVersion,
+		AppId:                    applicationId,
 	}
 }
 
