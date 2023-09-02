@@ -26,6 +26,9 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 const (
@@ -76,6 +79,7 @@ type Msg struct {
 	msg    *nats.Msg
 	conn   *Conn
 	cgName string
+	stationName string
 }
 
 type PMsgToAck struct {
@@ -86,6 +90,56 @@ type PMsgToAck struct {
 // Msg.Data - get message's data.
 func (m *Msg) Data() []byte {
 	return m.msg.Data
+}
+
+// Msg.DataDeserialized - get message's deserialized data.
+func (m *Msg) DataDeserialized() (any, error) {
+	var data map[string]interface{}
+	sn := getInternalName(m.stationName)
+
+	sd, err := m.conn.getSchemaDetails(sn)
+	if err != nil {
+		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
+	}
+
+	msgBytes := m.msg.Data
+
+	switch sd.schemaType {
+	case "protobuf":
+		pMsg := dynamicpb.NewMessage(sd.msgDescriptor)
+		err = proto.Unmarshal(msgBytes, pMsg)
+		if err != nil {
+			if strings.Contains(err.Error(), "cannot parse invalid wire-format data") {
+				err = errors.New("invalid message format, expecting protobuf")
+			}
+			return data, memphisError(err)
+		}
+		jsonBytes, err := protojson.Marshal(pMsg)
+		if err != nil {
+			panic(err)
+		}
+		if err := json.Unmarshal(jsonBytes, &data); err != nil {
+			err = errors.New("Bad JSON format - " + err.Error())
+			return data, memphisError(err)
+		}
+		return data, nil
+	case "json":
+		if err := json.Unmarshal(msgBytes, &data); err != nil {
+			err = errors.New("Bad JSON format - " + err.Error())
+			return data, memphisError(err)
+		}
+		return data, nil
+	case "graphql":
+		return string(msgBytes), nil
+	case "avro":
+		if err := json.Unmarshal(msgBytes, &data); err != nil {
+			err = errors.New("Bad JSON format - " + err.Error())
+			return data, memphisError(err)
+		}
+		return data, nil
+	default:
+		return msgBytes, nil
+	}
 }
 
 // Msg.GetSequenceNumber - get message's sequence number
@@ -194,6 +248,7 @@ type ConsumerOpts struct {
 }
 
 type createConsumerResp struct {
+	SchemaUpdateInit SchemaUpdateInit `json:"schema_update"`
 	PartitionsUpdate PartitionsUpdate `json:"partitions_update"`
 	Err              string           `json:"error"`
 }
@@ -285,6 +340,11 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	if consumer.BatchSize > maxBatchSize {
 		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize)))
+	}
+
+	err = c.listenToSchemaUpdates(opts.StationName)
+	if err != nil {
+		return nil, memphisError(err)
 	}
 
 	err = c.create(&consumer)
@@ -455,7 +515,7 @@ func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 		c.StopConsume()
 	}
 	for _, msg := range msgs {
-		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup})
+		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, stationName: c.stationName})
 	}
 	return wrappedMsgs, nil
 }
@@ -631,6 +691,12 @@ func (c *Consumer) handleCreationResp(resp []byte) error {
 	if cr.Err != "" {
 		return memphisError(errors.New(cr.Err))
 	}
+
+	c.conn.stationUpdatesMu.Lock()
+	sd := &c.conn.stationUpdatesSubs[sn].schemaDetails
+	sd.handleSchemaUpdateInit(cr.SchemaUpdateInit)
+	c.conn.stationUpdatesMu.Unlock()
+
 	c.conn.stationPartitions[sn] = &cr.PartitionsUpdate
 	if len(cr.PartitionsUpdate.PartitionsList) > 0 {
 		c.PartitionGenerator = newRoundRobinGenerator(cr.PartitionsUpdate.PartitionsList)
@@ -645,6 +711,10 @@ func (c *Consumer) getDestructionSubject() string {
 
 func (c *Consumer) getDestructionReq() any {
 	return removeConsumerReq{Name: c.Name, StationName: c.stationName, Username: c.conn.username, ConnectionId: c.conn.ConnId, RequestVersion: lastConsumerDestroyReqVersion}
+}
+
+func (c *Consumer) getSchemaDetails() (schemaDetails, error) {
+	return c.conn.getSchemaDetails(c.stationName)
 }
 
 // ConsumerGroup - consumer group name, default is "".
