@@ -130,6 +130,9 @@ func (m *Msg) Ack() error {
 func (m *Msg) GetHeaders() map[string]string {
 	headers := map[string]string{}
 	for key, value := range m.msg.Header {
+		if strings.HasPrefix(key, "$memphis") {
+			continue
+		}
 		headers[key] = value[0]
 	}
 	return headers
