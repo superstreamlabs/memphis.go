@@ -32,12 +32,14 @@ import (
 
 	"github.com/gofrs/uuid"
 	"github.com/nats-io/nats.go"
+	"github.com/spaolacci/murmur3"
 )
 
 const (
 	sdkClientsUpdatesSubject = "$memphis_sdk_clients_updates"
 	maxBatchSize             = 5000
 	memphisGlobalAccountName = "$memphis"
+	SEED                     = 1234
 )
 
 var stationUpdatesSubsLock sync.Mutex
@@ -881,4 +883,15 @@ func init() {
 	} else {
 		applicationId = appId.String()
 	}
+}
+
+func (c *Conn) GetPartitionFromKey(key string, stationName string) (int, error) {
+	mur3 := murmur3.New32WithSeed(SEED)
+	_, err := mur3.Write([]byte(key))
+	if err != nil {
+		return -1, err
+	}
+	PartitionIndex := int(mur3.Sum32()) % len(c.stationPartitions[stationName].PartitionsList)
+	fmt.Println(c.stationPartitions[stationName].PartitionsList[PartitionIndex])
+	return c.stationPartitions[stationName].PartitionsList[PartitionIndex], nil
 }

@@ -194,6 +194,7 @@ type ConsumerOpts struct {
 	ErrHandler               ConsumerErrHandler
 	StartConsumeFromSequence uint64
 	LastMessages             int64
+	ConsumerPartitionKey     string
 }
 
 type createConsumerResp struct {
@@ -303,7 +304,26 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 	sn := getInternalName(consumer.stationName)
 
 	durable := getInternalName(consumer.ConsumerGroup)
-	if len(consumer.conn.stationPartitions[sn].PartitionsList) == 0 {
+
+	if opts.ConsumerPartitionKey != "" {
+		consumer.subscriptions = make(map[int]*nats.Subscription, 1)
+
+		partitionNumber, err := c.GetPartitionFromKey(opts.ConsumerPartitionKey, sn)
+		if err != nil {
+			return nil, memphisError(fmt.Errorf("failed to get partition from key"))
+		}
+
+		subj := fmt.Sprintf("%s$%s.final", sn, strconv.Itoa(partitionNumber))
+		sub, err := c.brokerPullSubscribe(subj,
+			durable,
+			nats.ManualAck(),
+			nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
+			nats.MaxDeliver(opts.MaxMsgDeliveries))
+		if err != nil {
+			return nil, memphisError(err)
+		}
+		consumer.subscriptions[1] = sub
+	} else if len(consumer.conn.stationPartitions[sn].PartitionsList) == 0 {
 		consumer.subscriptions = make(map[int]*nats.Subscription, 1)
 		subj := sn + ".final"
 		sub, err := c.brokerPullSubscribe(subj,
@@ -729,6 +749,13 @@ func StartConsumeFromSequence(startConsumeFromSequence uint64) ConsumerOpt {
 func LastMessages(lastMessages int64) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.LastMessages = lastMessages
+		return nil
+	}
+}
+
+func ConsumerPartitionKey(partitionKey string) ConsumerOpt {
+	return func(opts *ConsumerOpts) error {
+		opts.ConsumerPartitionKey = partitionKey
 		return nil
 	}
 }
