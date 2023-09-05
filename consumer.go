@@ -382,7 +382,7 @@ func (c *Consumer) pingConsumer() {
 				}(sub)
 			}
 			wg.Wait()
-			if strings.Contains(generalErr.Error(), "consumer not found") || strings.Contains(generalErr.Error(), "stream not found") {
+			if generalErr != nil && (strings.Contains(generalErr.Error(), "consumer not found") || strings.Contains(generalErr.Error(), "stream not found")) {
 				c.subscriptionActive = false
 				c.callErrHandler(ConsumerErrStationUnreachable)
 			}
