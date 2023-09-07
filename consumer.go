@@ -194,7 +194,6 @@ type ConsumerOpts struct {
 	ErrHandler               ConsumerErrHandler
 	StartConsumeFromSequence uint64
 	LastMessages             int64
-	ConsumerPartitionKey     string
 }
 
 type createConsumerResp struct {
@@ -305,25 +304,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 
 	durable := getInternalName(consumer.ConsumerGroup)
 
-	if opts.ConsumerPartitionKey != "" {
-		consumer.subscriptions = make(map[int]*nats.Subscription, 1)
-
-		partitionNumber, err := c.GetPartitionFromKey(opts.ConsumerPartitionKey, sn)
-		if err != nil {
-			return nil, memphisError(fmt.Errorf("failed to get partition from key"))
-		}
-
-		subj := fmt.Sprintf("%s$%s.final", sn, strconv.Itoa(partitionNumber))
-		sub, err := c.brokerPullSubscribe(subj,
-			durable,
-			nats.ManualAck(),
-			nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
-			nats.MaxDeliver(opts.MaxMsgDeliveries))
-		if err != nil {
-			return nil, memphisError(err)
-		}
-		consumer.subscriptions[1] = sub
-	} else if len(consumer.conn.stationPartitions[sn].PartitionsList) == 0 {
+	if len(consumer.conn.stationPartitions[sn].PartitionsList) == 0 {
 		consumer.subscriptions = make(map[int]*nats.Subscription, 1)
 		subj := sn + ".final"
 		sub, err := c.brokerPullSubscribe(subj,
@@ -402,9 +383,11 @@ func (c *Consumer) pingConsumer() {
 				}(sub)
 			}
 			wg.Wait()
-			if strings.Contains(generalErr.Error(), "consumer not found") || strings.Contains(generalErr.Error(), "stream not found") {
-				c.subscriptionActive = false
-				c.callErrHandler(ConsumerErrStationUnreachable)
+			if generalErr != nil {
+				if strings.Contains(generalErr.Error(), "consumer not found") || strings.Contains(generalErr.Error(), "stream not found") {
+					c.subscriptionActive = false
+					c.callErrHandler(ConsumerErrStationUnreachable)
+				}
 			}
 		case <-c.pingQuit:
 			ticker.Stop()
@@ -421,11 +404,42 @@ func (c *Consumer) SetContext(ctx context.Context) {
 // ConsumeHandler - handler for consumed messages
 type ConsumeHandler func([]*Msg, error, context.Context)
 
+type ConsumingOpts struct {
+	PartitionKey string
+}
+
+type ConsumingOpt func(*ConsumingOpts) error
+
+func PartitionKey(partitionKey string) ConsumingOpt {
+	return func(opts *ConsumingOpts) error {
+		opts.PartitionKey = partitionKey
+		return nil
+	}
+}
+
+func getDefaultConsumingOptions() ConsumingOpts {
+	return ConsumingOpts{
+		PartitionKey: "",
+	}
+}
+
 // Consumer.Consume - start consuming messages according to the interval configured in the consumer object.
 // When a batch is consumed the handlerFunc will be called.
-func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
-	go func(c *Consumer) {
-		msgs, err := c.fetchSubscription()
+func (c *Consumer) Consume(handlerFunc ConsumeHandler, opts ...ConsumingOpt) error {
+
+	defaultOpts := getDefaultConsumingOptions()
+
+	for _, opt := range opts {
+		if opt != nil {
+			if err := opt(&defaultOpts); err != nil {
+				return memphisError(err)
+			}
+		}
+	}
+
+	go func(c *Consumer, partitionKey string) {
+
+		msgs, err := c.fetchSubscription(partitionKey)
 		handlerFunc(msgs, memphisError(err), c.context)
 		c.dlsHandlerFunc = handlerFunc
 		ticker := time.NewTicker(c.PullInterval)
@@ -441,13 +455,13 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler) error {
 
 			select {
 			case <-ticker.C:
-				msgs, err := c.fetchSubscription()
+				msgs, err := c.fetchSubscription(partitionKey)
 				handlerFunc(msgs, memphisError(err), nil)
 			case <-c.consumeQuit:
 				return
 			}
 		}
-	}(c)
+	}(c, defaultOpts.PartitionKey)
 	c.consumeActive = true
 	return nil
 }
@@ -462,15 +476,24 @@ func (c *Consumer) StopConsume() {
 	c.consumeActive = false
 }
 
-func (c *Consumer) fetchSubscription() ([]*Msg, error) {
+func (c *Consumer) fetchSubscription(partitionKey string) ([]*Msg, error) {
+
 	if !c.subscriptionActive {
 		return nil, memphisError(errors.New("station unreachable"))
 	}
 	wrappedMsgs := make([]*Msg, 0, c.BatchSize)
 	partitionNumber := 1
-	if len(c.subscriptions) > 1 {
+
+	if partitionKey != "" {
+		partitionFromKey, err := c.conn.GetPartitionFromKey(partitionKey, c.stationName)
+		if err != nil {
+			return nil, memphisError(err)
+		}
+		partitionNumber = partitionFromKey
+	} else if len(c.subscriptions) > 1 {
 		partitionNumber = c.PartitionGenerator.Next()
 	}
+
 	msgs, err := c.subscriptions[partitionNumber].Fetch(c.BatchSize)
 	if err != nil && err != nats.ErrTimeout {
 		c.subscriptionActive = false
@@ -488,13 +511,14 @@ type fetchResult struct {
 	err  error
 }
 
-func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
+func (c *Consumer) fetchSubscriprionWithTimeout(partitionKey string) ([]*Msg, error) {
 	timeoutDuration := c.BatchMaxTimeToWait
 	out := make(chan fetchResult, 1)
-	go func() {
-		msgs, err := c.fetchSubscription()
+
+	go func(partitionKey string) {
+		msgs, err := c.fetchSubscription(partitionKey)
 		out <- fetchResult{msgs: msgs, err: memphisError(err)}
-	}()
+	}(partitionKey)
 	select {
 	case <-time.After(timeoutDuration):
 		return nil, memphisError(errors.New("fetch timed out"))
@@ -505,9 +529,19 @@ func (c *Consumer) fetchSubscriprionWithTimeout() ([]*Msg, error) {
 }
 
 // Fetch - immediately fetch a batch of messages.
-func (c *Consumer) Fetch(batchSize int, prefetch bool) ([]*Msg, error) {
+func (c *Consumer) Fetch(batchSize int, prefetch bool, opts ...ConsumingOpt) ([]*Msg, error) {
 	if batchSize > maxBatchSize {
 		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize)))
+	}
+
+	defaultOpts := getDefaultConsumingOptions()
+
+	for _, opt := range opts {
+		if opt != nil {
+			if err := opt(&defaultOpts); err != nil {
+				return nil, memphisError(err)
+			}
+		}
 	}
 
 	c.BatchSize = batchSize
@@ -543,15 +577,15 @@ func (c *Consumer) Fetch(batchSize int, prefetch bool) ([]*Msg, error) {
 	}
 	c.conn.prefetchedMsgs.lock.Unlock()
 	if prefetch {
-		go c.prefetchMsgs()
+		go c.prefetchMsgs(defaultOpts.PartitionKey)
 	}
 	if len(msgs) > 0 {
 		return msgs, nil
 	}
-	return c.fetchSubscriprionWithTimeout()
+	return c.fetchSubscriprionWithTimeout(defaultOpts.PartitionKey)
 }
 
-func (c *Consumer) prefetchMsgs() {
+func (c *Consumer) prefetchMsgs(partitionKey string) {
 	c.conn.prefetchedMsgs.lock.Lock()
 	defer c.conn.prefetchedMsgs.lock.Unlock()
 	lowerCaseStationName := getLowerCaseName(c.stationName)
@@ -561,7 +595,7 @@ func (c *Consumer) prefetchMsgs() {
 	if _, ok := c.conn.prefetchedMsgs.msgs[lowerCaseStationName][c.ConsumerGroup]; !ok {
 		c.conn.prefetchedMsgs.msgs[lowerCaseStationName][c.ConsumerGroup] = make([]*Msg, 0)
 	}
-	msgs, err := c.fetchSubscriprionWithTimeout()
+	msgs, err := c.fetchSubscriprionWithTimeout(partitionKey)
 	if err == nil {
 		c.conn.prefetchedMsgs.msgs[lowerCaseStationName][c.ConsumerGroup] = append(c.conn.prefetchedMsgs.msgs[lowerCaseStationName][c.ConsumerGroup], msgs...)
 	}
@@ -749,13 +783,6 @@ func StartConsumeFromSequence(startConsumeFromSequence uint64) ConsumerOpt {
 func LastMessages(lastMessages int64) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.LastMessages = lastMessages
-		return nil
-	}
-}
-
-func ConsumerPartitionKey(partitionKey string) ConsumerOpt {
-	return func(opts *ConsumerOpts) error {
-		opts.ConsumerPartitionKey = partitionKey
 		return nil
 	}
 }

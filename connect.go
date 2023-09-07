@@ -96,6 +96,7 @@ type FetchOpts struct {
 	StartConsumeFromSequence uint64
 	LastMessages             int64
 	Prefetch                 bool
+	FetchPartitionKey        string
 }
 
 // getDefaultConsumerOptions - returns default configuration options for consumers.
@@ -111,6 +112,7 @@ func getDefaultFetchOptions() FetchOpts {
 		StartConsumeFromSequence: 1,
 		LastMessages:             -1,
 		Prefetch:                 false,
+		FetchPartitionKey:        "",
 	}
 }
 
@@ -800,7 +802,7 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 	} else {
 		consumer = cons
 	}
-	msgs, err := consumer.Fetch(defaultOpts.BatchSize, defaultOpts.Prefetch)
+	msgs, err := consumer.Fetch(defaultOpts.BatchSize, defaultOpts.Prefetch, PartitionKey(defaultOpts.FetchPartitionKey))
 	if err != nil {
 		return nil, err
 	}
@@ -811,6 +813,14 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 func FetchConsumerGroup(cg string) FetchOpt {
 	return func(opts *FetchOpts) error {
 		opts.ConsumerGroup = cg
+		return nil
+	}
+}
+
+// PartitionKey - partition key to consume from.
+func FetchPartitionKey(partitionKey string) FetchOpt {
+	return func(opts *FetchOpts) error {
+		opts.FetchPartitionKey = partitionKey
 		return nil
 	}
 }
@@ -892,6 +902,5 @@ func (c *Conn) GetPartitionFromKey(key string, stationName string) (int, error) 
 		return -1, err
 	}
 	PartitionIndex := int(mur3.Sum32()) % len(c.stationPartitions[stationName].PartitionsList)
-	fmt.Println(c.stationPartitions[stationName].PartitionsList[PartitionIndex])
 	return c.stationPartitions[stationName].PartitionsList[PartitionIndex], nil
 }
