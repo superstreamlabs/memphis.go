@@ -32,12 +32,14 @@ import (
 
 	"github.com/gofrs/uuid"
 	"github.com/nats-io/nats.go"
+	"github.com/spaolacci/murmur3"
 )
 
 const (
 	sdkClientsUpdatesSubject = "$memphis_sdk_clients_updates"
 	maxBatchSize             = 5000
 	memphisGlobalAccountName = "$memphis"
+	SEED                     = 1234
 )
 
 var stationUpdatesSubsLock sync.Mutex
@@ -94,6 +96,7 @@ type FetchOpts struct {
 	StartConsumeFromSequence uint64
 	LastMessages             int64
 	Prefetch                 bool
+	FetchPartitionKey        string
 }
 
 // getDefaultConsumerOptions - returns default configuration options for consumers.
@@ -109,6 +112,7 @@ func getDefaultFetchOptions() FetchOpts {
 		StartConsumeFromSequence: 1,
 		LastMessages:             -1,
 		Prefetch:                 false,
+		FetchPartitionKey:        "",
 	}
 }
 
@@ -799,7 +803,7 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 	} else {
 		consumer = cons
 	}
-	msgs, err := consumer.Fetch(defaultOpts.BatchSize, defaultOpts.Prefetch)
+	msgs, err := consumer.Fetch(defaultOpts.BatchSize, defaultOpts.Prefetch, ConsumerPartitionKey(defaultOpts.FetchPartitionKey))
 	if err != nil {
 		return nil, err
 	}
@@ -810,6 +814,14 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 func FetchConsumerGroup(cg string) FetchOpt {
 	return func(opts *FetchOpts) error {
 		opts.ConsumerGroup = cg
+		return nil
+	}
+}
+
+// PartitionKey - partition key to consume from.
+func FetchPartitionKey(partitionKey string) FetchOpt {
+	return func(opts *FetchOpts) error {
+		opts.FetchPartitionKey = partitionKey
 		return nil
 	}
 }
@@ -882,4 +894,14 @@ func init() {
 	} else {
 		applicationId = appId.String()
 	}
+}
+
+func (c *Conn) GetPartitionFromKey(key string, stationName string) (int, error) {
+	mur3 := murmur3.New32WithSeed(SEED)
+	_, err := mur3.Write([]byte(key))
+	if err != nil {
+		return -1, err
+	}
+	PartitionIndex := int(mur3.Sum32()) % len(c.stationPartitions[stationName].PartitionsList)
+	return c.stationPartitions[stationName].PartitionsList[PartitionIndex], nil
 }

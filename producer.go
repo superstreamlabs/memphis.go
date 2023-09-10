@@ -316,10 +316,11 @@ type Headers struct {
 
 // ProduceOpts - configuration options for produce operations.
 type ProduceOpts struct {
-	Message      any
-	AckWaitSec   int
-	MsgHeaders   Headers
-	AsyncProduce bool
+	Message              any
+	AckWaitSec           int
+	MsgHeaders           Headers
+	AsyncProduce         bool
+	ProducerPartitionKey string
 }
 
 // ProduceOpt - a function on the options for produce operations.
@@ -380,11 +381,20 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 
 	var streamName string
 	sn := getInternalName(p.stationName)
+
 	if len(p.conn.stationPartitions[sn].PartitionsList) == 1 {
 		streamName = fmt.Sprintf("%v$%v", sn, p.conn.stationPartitions[sn].PartitionsList[0])
 	} else if len(p.conn.stationPartitions[sn].PartitionsList) > 1 {
-		partitionNumber := p.PartitionGenerator.Next()
-		streamName = fmt.Sprintf("%v$%v", sn, partitionNumber)
+		if opts.ProducerPartitionKey != "" {
+			partitionNumber, err := p.conn.GetPartitionFromKey(opts.ProducerPartitionKey, sn)
+			if err != nil {
+				return memphisError(fmt.Errorf("failed to get partition from key"))
+			}
+			streamName = fmt.Sprintf("%v$%v", sn, partitionNumber)
+		} else {
+			partitionNumber := p.PartitionGenerator.Next()
+			streamName = fmt.Sprintf("%v$%v", sn, partitionNumber)
+		}
 	} else {
 		streamName = sn
 	}
@@ -540,6 +550,14 @@ func ProducerGenUniqueSuffix() ProducerOpt {
 func AckWaitSec(ackWaitSec int) ProduceOpt {
 	return func(opts *ProduceOpts) error {
 		opts.AckWaitSec = ackWaitSec
+		return nil
+	}
+}
+
+// ProducerPartitionKey - set a partition key for a message
+func ProducerPartitionKey(partitionKey string) ProduceOpt {
+	return func(opts *ProduceOpts) error {
+		opts.ProducerPartitionKey = partitionKey
 		return nil
 	}
 }

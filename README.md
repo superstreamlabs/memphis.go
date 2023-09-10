@@ -296,6 +296,17 @@ p.Produce(
 )
 ```
 
+
+### Produce using partition key
+The partition key will be used to produce messages to a spacific partition.
+
+```go
+p.Produce(
+	"<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema) or []byte or map[string]interface{} or struct with avro tags(schema validated station - avro schema)>",
+    memphis.ProducerPartitionKey(<string>)
+)
+```
+
 ### Destroying a Producer
 
 ```go
@@ -346,7 +357,9 @@ func handler(msgs []*memphis.Msg, err error, ctx context.Context) {
 	}
 }
 
-consumer.Consume(handler)
+consumer.Consume(handler, 
+				memphis.ConsumerPartitionKey(<string>) // use the partition key to consume from a spacific partition (if not specified consume in a Round Robin fashion)
+)
 ```
 
 ### Fetch a single batch of messages
@@ -360,13 +373,17 @@ msgs, err := conn.FetchMessages("<station-name>", "<consumer-name>",
   memphis.FetchConsumerErrorHandler(func(*Consumer, error){})
   memphis.FetchStartConsumeFromSeq(<uint64>)// start consuming from a specific sequence. defaults to 1
   memphis.FetchLastMessages(<int64>)// consume the last N messages, defaults to -1 (all messages in the station))
+  memphis.FetchPartitionKey(<string>)// use the partition key to consume from a spacific partition (if not specified consume in a Round Robin fashion)
 ```
 
 ### Fetch a single batch of messages after creating a consumer
 `prefetch = true` will prefetch next batch of messages and save it in memory for future Fetch() request<br>
 Note: Use a higher MaxAckTime as the messages will sit in a local cache for some time before processing
 ```go
-msgs, err := consumer.Fetch(<batch-size> int, <prefetch> bool)
+msgs, err := consumer.Fetch(<batch-size> int,
+							<prefetch> bool,
+							memphis.ConsumerPartitionKey(<string>) // use the partition key to consume from a spacific partition (if not specified consume in a Round Robin fashion)
+							)
 ```
 
 ### Acknowledging a Message
