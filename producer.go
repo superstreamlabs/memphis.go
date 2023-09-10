@@ -321,7 +321,6 @@ type ProduceOpts struct {
 	MsgHeaders           Headers
 	AsyncProduce         bool
 	ProducerPartitionKey string
-	PartitionIndex       []int //ask asulin
 }
 
 // ProduceOpt - a function on the options for produce operations.
@@ -555,6 +554,7 @@ func AckWaitSec(ackWaitSec int) ProduceOpt {
 	}
 }
 
+// ProducerPartitionKey - set a partition key for a message
 func ProducerPartitionKey(partitionKey string) ProduceOpt {
 	return func(opts *ProduceOpts) error {
 		opts.ProducerPartitionKey = partitionKey

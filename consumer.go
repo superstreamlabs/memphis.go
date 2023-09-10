@@ -404,12 +404,14 @@ func (c *Consumer) SetContext(ctx context.Context) {
 // ConsumeHandler - handler for consumed messages
 type ConsumeHandler func([]*Msg, error, context.Context)
 
+// ConsumingOpts - configuration options for consuming messages
 type ConsumingOpts struct {
 	ConsumerPartitionKey string
 }
 
 type ConsumingOpt func(*ConsumingOpts) error
 
+// ConsumerPartitionKey - Partition key for the consumer to consume from
 func ConsumerPartitionKey(ConsumerPartitionKey string) ConsumingOpt {
 	return func(opts *ConsumingOpts) error {
 		opts.ConsumerPartitionKey = ConsumerPartitionKey
