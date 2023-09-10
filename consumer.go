@@ -484,14 +484,16 @@ func (c *Consumer) fetchSubscription(partitionKey string) ([]*Msg, error) {
 	wrappedMsgs := make([]*Msg, 0, c.BatchSize)
 	partitionNumber := 1
 
-	if partitionKey != "" {
-		partitionFromKey, err := c.conn.GetPartitionFromKey(partitionKey, c.stationName)
-		if err != nil {
-			return nil, memphisError(err)
+	if len(c.subscriptions) > 1 {
+		if partitionKey != "" {
+			partitionFromKey, err := c.conn.GetPartitionFromKey(partitionKey, c.stationName)
+			if err != nil {
+				return nil, memphisError(err)
+			}
+			partitionNumber = partitionFromKey
+		} else {
+			partitionNumber = c.PartitionGenerator.Next()
 		}
-		partitionNumber = partitionFromKey
-	} else if len(c.subscriptions) > 1 {
-		partitionNumber = c.PartitionGenerator.Next()
 	}
 
 	msgs, err := c.subscriptions[partitionNumber].Fetch(c.BatchSize)

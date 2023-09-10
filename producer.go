@@ -383,21 +383,21 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	var streamName string
 	sn := getInternalName(p.stationName)
 
-	if opts.ProducerPartitionKey != "" {
-		partitionNumber, err := p.conn.GetPartitionFromKey(opts.ProducerPartitionKey, sn)
-		if err != nil {
-			return memphisError(fmt.Errorf("failed to get partition from key"))
-		}
-		streamName = fmt.Sprintf("%v$%v", sn, partitionNumber)
-	} else {
-		if len(p.conn.stationPartitions[sn].PartitionsList) == 1 {
-			streamName = fmt.Sprintf("%v$%v", sn, p.conn.stationPartitions[sn].PartitionsList[0])
-		} else if len(p.conn.stationPartitions[sn].PartitionsList) > 1 {
-			partitionNumber := p.PartitionGenerator.Next()
+	if len(p.conn.stationPartitions[sn].PartitionsList) == 1 {
+		streamName = fmt.Sprintf("%v$%v", sn, p.conn.stationPartitions[sn].PartitionsList[0])
+	} else if len(p.conn.stationPartitions[sn].PartitionsList) > 1 {
+		if opts.ProducerPartitionKey != "" {
+			partitionNumber, err := p.conn.GetPartitionFromKey(opts.ProducerPartitionKey, sn)
+			if err != nil {
+				return memphisError(fmt.Errorf("failed to get partition from key"))
+			}
 			streamName = fmt.Sprintf("%v$%v", sn, partitionNumber)
 		} else {
-			streamName = sn
+			partitionNumber := p.PartitionGenerator.Next()
+			streamName = fmt.Sprintf("%v$%v", sn, partitionNumber)
 		}
+	} else {
+		streamName = sn
 	}
 
 	natsMessage := nats.Msg{
