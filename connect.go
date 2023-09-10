@@ -360,14 +360,15 @@ func (c *Conn) startConn() error {
 	var err error
 	url := opts.Host + ":" + strconv.Itoa(opts.Port)
 	natsOpts := nats.Options{
-		Url:               url,
-		AllowReconnect:    opts.Reconnect,
-		MaxReconnect:      opts.MaxReconnect,
-		ReconnectWait:     opts.ReconnectInterval,
-		Timeout:           opts.Timeout,
-		DisconnectedErrCB: disconnectedError,
-		Name:              c.ConnId + "::" + opts.Username,
-		ClosedCB:          DefaultErrHandler,
+		Url:                  url,
+		AllowReconnect:       opts.Reconnect,
+		MaxReconnect:         opts.MaxReconnect,
+		ReconnectWait:        opts.ReconnectInterval,
+		Timeout:              opts.Timeout,
+		DisconnectedErrCB:    disconnectedError,
+		Name:                 c.ConnId + "::" + opts.Username,
+		ClosedCB:             DefaultErrHandler,
+		RetryOnFailedConnect: false,
 	}
 
 	if opts.ConnectionToken != "" {
