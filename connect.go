@@ -802,7 +802,7 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 	} else {
 		consumer = cons
 	}
-	msgs, err := consumer.Fetch(defaultOpts.BatchSize, defaultOpts.Prefetch, PartitionKey(defaultOpts.FetchPartitionKey))
+	msgs, err := consumer.Fetch(defaultOpts.BatchSize, defaultOpts.Prefetch, ConsumerPartitionKey(defaultOpts.FetchPartitionKey))
 	if err != nil {
 		return nil, err
 	}

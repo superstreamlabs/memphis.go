@@ -405,21 +405,21 @@ func (c *Consumer) SetContext(ctx context.Context) {
 type ConsumeHandler func([]*Msg, error, context.Context)
 
 type ConsumingOpts struct {
-	PartitionKey string
+	ConsumerPartitionKey string
 }
 
 type ConsumingOpt func(*ConsumingOpts) error
 
-func PartitionKey(partitionKey string) ConsumingOpt {
+func ConsumerPartitionKey(ConsumerPartitionKey string) ConsumingOpt {
 	return func(opts *ConsumingOpts) error {
-		opts.PartitionKey = partitionKey
+		opts.ConsumerPartitionKey = ConsumerPartitionKey
 		return nil
 	}
 }
 
 func getDefaultConsumingOptions() ConsumingOpts {
 	return ConsumingOpts{
-		PartitionKey: "",
+		ConsumerPartitionKey: "",
 	}
 }
 
@@ -461,7 +461,7 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler, opts ...ConsumingOpt) err
 				return
 			}
 		}
-	}(c, defaultOpts.PartitionKey)
+	}(c, defaultOpts.ConsumerPartitionKey)
 	c.consumeActive = true
 	return nil
 }
@@ -579,12 +579,12 @@ func (c *Consumer) Fetch(batchSize int, prefetch bool, opts ...ConsumingOpt) ([]
 	}
 	c.conn.prefetchedMsgs.lock.Unlock()
 	if prefetch {
-		go c.prefetchMsgs(defaultOpts.PartitionKey)
+		go c.prefetchMsgs(defaultOpts.ConsumerPartitionKey)
 	}
 	if len(msgs) > 0 {
 		return msgs, nil
 	}
-	return c.fetchSubscriprionWithTimeout(defaultOpts.PartitionKey)
+	return c.fetchSubscriprionWithTimeout(defaultOpts.ConsumerPartitionKey)
 }
 
 func (c *Consumer) prefetchMsgs(partitionKey string) {
