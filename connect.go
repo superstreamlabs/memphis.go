@@ -39,7 +39,7 @@ const (
 	sdkClientsUpdatesSubject = "$memphis_sdk_clients_updates"
 	maxBatchSize             = 5000
 	memphisGlobalAccountName = "$memphis"
-	SEED                     = 1234
+	SEED                     = 31
 )
 
 var stationUpdatesSubsLock sync.Mutex
