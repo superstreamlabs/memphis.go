@@ -548,7 +548,7 @@ func (c *Conn) create(do directObj) error {
 		return memphisError(err)
 	}
 
-	msg, err := c.brokerConn.Request(subject, b, 5*time.Second)
+	msg, err := c.brokerConn.Request(subject, b, 20*time.Second)
 	if err != nil {
 		return memphisError(err)
 	}
@@ -576,7 +576,7 @@ func (c *Conn) EnforceSchema(name string, stationName string) error {
 		return memphisError(err)
 	}
 
-	msg, err := c.brokerConn.Request(subject, b, 5*time.Second)
+	msg, err := c.brokerConn.Request(subject, b, 20*time.Second)
 	if err != nil {
 		return memphisError(err)
 	}
@@ -599,7 +599,7 @@ func (c *Conn) DetachSchema(stationName string) error {
 		return memphisError(err)
 	}
 
-	msg, err := c.brokerConn.Request(subject, b, 5*time.Second)
+	msg, err := c.brokerConn.Request(subject, b, 20*time.Second)
 	if err != nil {
 		return memphisError(err)
 	}
@@ -618,7 +618,7 @@ func (c *Conn) destroy(o directObj) error {
 		return memphisError(err)
 	}
 
-	msg, err := c.brokerConn.Request(subject, b, 5*time.Second)
+	msg, err := c.brokerConn.Request(subject, b, 20*time.Second)
 	if err != nil {
 		return memphisError(err)
 	}
