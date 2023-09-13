@@ -479,7 +479,6 @@ func (c *Consumer) StopConsume() {
 }
 
 func (c *Consumer) fetchSubscription(partitionKey string) ([]*Msg, error) {
-
 	if !c.subscriptionActive {
 		return nil, memphisError(errors.New("station unreachable"))
 	}
@@ -525,10 +524,9 @@ func (c *Consumer) fetchSubscriprionWithTimeout(partitionKey string) ([]*Msg, er
 	}(partitionKey)
 	select {
 	case <-time.After(timeoutDuration):
-		return nil, memphisError(errors.New("fetch timed out"))
+		return []*Msg{}, nil
 	case fetchRes := <-out:
 		return fetchRes.msgs, memphisError(fetchRes.err)
-
 	}
 }
 
