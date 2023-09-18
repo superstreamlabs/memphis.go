@@ -324,7 +324,7 @@ func TieredStorageEnabled(tieredStorageEnabled bool) StationOpt {
 	}
 }
 
-// DlsStation - DLS station connected to this station
+// DlsStation - If selected DLS events will be sent to selected station as well
 func DlsStation(name string) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.DlsStation = name
