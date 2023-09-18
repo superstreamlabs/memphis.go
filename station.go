@@ -51,6 +51,7 @@ type Station struct {
 	DlsConfiguration     dlsConfiguration
 	TieredStorageEnabled bool
 	PartitionsNumber     int
+	DlsStation           string
 }
 
 // RetentionType - station's message retention type
@@ -91,6 +92,7 @@ type createStationReq struct {
 	Username                string           `json:"username"`
 	TieredStorageEnabled    bool             `json:"tiered_storage_enabled"`
 	PartitionsNumber        int              `json:"partitions_number"`
+	DlsStation              string           `json:"dls_station"`
 }
 
 type removeStationReq struct {
@@ -111,6 +113,7 @@ type StationOpts struct {
 	SendSchemaFailedMsgToDls bool
 	TieredStorageEnabled     bool
 	PartitionsNumber         int
+	DlsStation               string
 }
 
 type dlsConfiguration struct {
@@ -134,6 +137,7 @@ func GetStationDefaultOptions() StationOpts {
 		SendSchemaFailedMsgToDls: true,
 		TieredStorageEnabled:     false,
 		PartitionsNumber:         1,
+		DlsStation:               "",
 	}
 }
 
@@ -173,6 +177,7 @@ func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 		},
 		TieredStorageEnabled: opts.TieredStorageEnabled,
 		PartitionsNumber:     opts.PartitionsNumber,
+		DlsStation:           opts.DlsStation,
 	}
 
 	if s.PartitionsNumber == 0 {
@@ -216,6 +221,7 @@ func (s *Station) getCreationReq() any {
 		Username:                s.conn.username,
 		TieredStorageEnabled:    s.TieredStorageEnabled,
 		PartitionsNumber:        s.PartitionsNumber,
+		DlsStation:              s.DlsStation,
 	}
 }
 
@@ -314,6 +320,14 @@ func SendSchemaFailedMsgToDls(sendSchemaFailedMsgToDls bool) StationOpt {
 func TieredStorageEnabled(tieredStorageEnabled bool) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.TieredStorageEnabled = tieredStorageEnabled
+		return nil
+	}
+}
+
+// DlsStation - DLS station connected to this station
+func DlsStation(name string) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.DlsStation = name
 		return nil
 	}
 }
