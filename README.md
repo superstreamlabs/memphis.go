@@ -108,8 +108,9 @@ s1, err = c.CreateStation("<station-name>",
  memphis.SchemaName(<string>),
  memphis.SendPoisonMsgToDls(<bool>), // defaults to true
  memphis.SendSchemaFailedMsgToDls(<bool>), // defaults to true
- memphis.TieredStorageEnabled(<bool>) // defaults to false
- memphis.PartitionsNumber(<int>) // default is 1 partition
+ memphis.TieredStorageEnabled(<bool>), // defaults to false
+ memphis.PartitionsNumber(<int>), // default is 1 partition
+ memphis.DlsStation(<string>) // defaults to "" (no DLS station) - If selected DLS events will be sent to selected station as well
 )
 ```
 
