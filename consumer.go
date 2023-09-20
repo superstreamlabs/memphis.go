@@ -79,7 +79,7 @@ type Msg struct {
 	msg    *nats.Msg
 	conn   *Conn
 	cgName string
-	stationName string
+	internalStationName string
 }
 
 type PMsgToAck struct {
@@ -95,9 +95,8 @@ func (m *Msg) Data() []byte {
 // Msg.DataDeserialized - get message's deserialized data.
 func (m *Msg) DataDeserialized() (any, error) {
 	var data map[string]interface{}
-	sn := getInternalName(m.stationName)
 
-	sd, err := m.conn.getSchemaDetails(sn)
+	sd, err := m.conn.getSchemaDetails(m.internalStationName)
 	if err != nil {
 		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
 	}
@@ -514,8 +513,9 @@ func (c *Consumer) fetchSubscription() ([]*Msg, error) {
 		c.callErrHandler(ConsumerErrStationUnreachable)
 		c.StopConsume()
 	}
+	internalStationName := getInternalName(c.stationName)
 	for _, msg := range msgs {
-		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, stationName: c.stationName})
+		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, internalStationName: internalStationName})
 	}
 	return wrappedMsgs, nil
 }
@@ -618,15 +618,16 @@ func (c *Consumer) createDlsMsgHandler() nats.MsgHandler {
 			c.dlsHandlerFunc(dlsMsg, nil, nil)
 		} else {
 			// for fetch function
+			internalStationName := getInternalName(c.stationName)
 			c.dlsMsgsMutex.Lock()
 			if len(c.dlsMsgs) > 9999 {
 				indexToInsert := c.dlsCurrentIndex
 				if indexToInsert >= 10000 {
 					indexToInsert = indexToInsert % 10000
 				}
-				c.dlsMsgs[indexToInsert] = &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup}
+				c.dlsMsgs[indexToInsert] = &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, internalStationName: internalStationName}
 			} else {
-				c.dlsMsgs = append(c.dlsMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup})
+				c.dlsMsgs = append(c.dlsMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, internalStationName: internalStationName})
 			}
 			c.dlsCurrentIndex = c.dlsCurrentIndex + 1
 			c.dlsMsgsMutex.Unlock()
@@ -646,6 +647,9 @@ func (c *Consumer) getDlsQueueName() string {
 
 // Destroy - destroy this consumer.
 func (c *Consumer) Destroy() error {
+	if err := c.conn.removeSchemaUpdatesListener(c.stationName); err != nil {
+		return memphisError(err)
+	}
 	if c.consumeActive {
 		c.StopConsume()
 	}
