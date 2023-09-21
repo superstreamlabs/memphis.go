@@ -10,7 +10,7 @@ const (
 	accessTokenGenerationSubject = "$memphis_access_token_generation"
 )
 
-type AccessTokenResp struct {
+type AccessToken struct {
 	AccessKeyID string `json:"access_key_id"`
 	SecretKey   string `json:"secret_key"`
 }
@@ -36,7 +36,7 @@ type validateAccessTokenResp struct {
 	Err     string `json:"error"`
 }
 
-func (c *Conn) GenerateAccessToken(username, description string) (*AccessTokenResp, error) {
+func (c *Conn) GenerateAccessToken(username, description string) (*AccessToken, error) {
 	req := generateAccessTokenReq{
 		Username:    username,
 		Description: description,
@@ -62,7 +62,7 @@ func (c *Conn) GenerateAccessToken(username, description string) (*AccessTokenRe
 		return nil, defaultHandleCreationResp([]byte(ar.Err))
 	}
 
-	return &AccessTokenResp{
+	return &AccessToken{
 		AccessKeyID: ar.AccessKeyID,
 		SecretKey:   ar.SecretKey,
 	}, nil
