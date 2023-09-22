@@ -717,10 +717,6 @@ func (c *Consumer) getDestructionReq() any {
 	return removeConsumerReq{Name: c.Name, StationName: c.stationName, Username: c.conn.username, ConnectionId: c.conn.ConnId, RequestVersion: lastConsumerDestroyReqVersion}
 }
 
-func (c *Consumer) getSchemaDetails() (schemaDetails, error) {
-	return c.conn.getSchemaDetails(c.stationName)
-}
-
 // ConsumerGroup - consumer group name, default is "".
 func ConsumerGroup(cg string) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
