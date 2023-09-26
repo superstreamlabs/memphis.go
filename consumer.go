@@ -497,7 +497,7 @@ func (c *Consumer) fetchSubscription(partitionKey string) ([]*Msg, error) {
 		}
 	}
 
-	msgs, err := c.subscriptions[partitionNumber].Fetch(c.BatchSize)
+	msgs, err := c.subscriptions[partitionNumber].Fetch(c.BatchSize, nats.MaxWait(c.BatchMaxTimeToWait))
 	if err != nil && err != nats.ErrTimeout {
 		c.subscriptionActive = false
 		c.callErrHandler(ConsumerErrStationUnreachable)
