@@ -308,6 +308,16 @@ p.Produce(
 )
 ```
 
+### Produce using partition number
+The partition number will be used to produce messages to a spacific partition.
+
+```go
+p.Produce(
+	"<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema) or []byte or map[string]interface{} or struct with avro tags(schema validated station - avro schema)>",
+    memphis.ProducerPartitionNumber(<int>)
+)
+```
+
 ### Destroying a Producer
 
 ```go
