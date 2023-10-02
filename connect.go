@@ -905,3 +905,15 @@ func (c *Conn) GetPartitionFromKey(key string, stationName string) (int, error) 
 	PartitionIndex := int(mur3.Sum32()) % len(c.stationPartitions[stationName].PartitionsList)
 	return c.stationPartitions[stationName].PartitionsList[PartitionIndex], nil
 }
+
+func (c *Conn) ValidatePartitionNumber(partitionNumber int, stationName string) error {
+	if partitionNumber < 0 || partitionNumber >= len(c.stationPartitions[stationName].PartitionsList) {
+		return errors.New("Partition number is out of range")
+	}
+	for _, partition := range c.stationPartitions[stationName].PartitionsList {
+		if partition == partitionNumber {
+			return nil
+		}
+	}
+	return fmt.Errorf("Partition %v does not exist in station %v", partitionNumber, stationName)
+}

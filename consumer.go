@@ -465,7 +465,8 @@ type ConsumeHandler func([]*Msg, error, context.Context)
 
 // ConsumingOpts - configuration options for consuming messages
 type ConsumingOpts struct {
-	ConsumerPartitionKey string
+	ConsumerPartitionKey    string
+	ConsumerPartitionNumber int
 }
 
 type ConsumingOpt func(*ConsumingOpts) error
@@ -478,9 +479,18 @@ func ConsumerPartitionKey(ConsumerPartitionKey string) ConsumingOpt {
 	}
 }
 
+// ConsumerPartitionNumber - Partition number for the consumer to consume from
+func ConsumerPartitionNumber(ConsumerPartitionNumber int) ConsumingOpt {
+	return func(opts *ConsumingOpts) error {
+		opts.ConsumerPartitionNumber = ConsumerPartitionNumber
+		return nil
+	}
+}
+
 func getDefaultConsumingOptions() ConsumingOpts {
 	return ConsumingOpts{
-		ConsumerPartitionKey: "",
+		ConsumerPartitionKey:    "",
+		ConsumerPartitionNumber: -1,
 	}
 }
 
@@ -498,9 +508,9 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler, opts ...ConsumingOpt) err
 		}
 	}
 
-	go func(c *Consumer, partitionKey string) {
+	go func(c *Consumer, partitionKey string, partitionNumber int) {
 
-		msgs, err := c.fetchSubscription(partitionKey)
+		msgs, err := c.fetchSubscription(partitionKey, partitionNumber)
 		handlerFunc(msgs, memphisError(err), c.context)
 		c.dlsHandlerFunc = handlerFunc
 		ticker := time.NewTicker(c.PullInterval)
@@ -516,13 +526,13 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler, opts ...ConsumingOpt) err
 
 			select {
 			case <-ticker.C:
-				msgs, err := c.fetchSubscription(partitionKey)
+				msgs, err := c.fetchSubscription(partitionKey, partitionNumber)
 				handlerFunc(msgs, memphisError(err), nil)
 			case <-c.consumeQuit:
 				return
 			}
 		}
-	}(c, defaultOpts.ConsumerPartitionKey)
+	}(c, defaultOpts.ConsumerPartitionKey, defaultOpts.ConsumerPartitionNumber)
 	c.consumeActive = true
 	return nil
 }
@@ -537,7 +547,7 @@ func (c *Consumer) StopConsume() {
 	c.consumeActive = false
 }
 
-func (c *Consumer) fetchSubscription(partitionKey string) ([]*Msg, error) {
+func (c *Consumer) fetchSubscription(partitionKey string, partitionNum int) ([]*Msg, error) {
 	if !c.subscriptionActive {
 		return nil, memphisError(errors.New("station unreachable"))
 	}
@@ -545,12 +555,21 @@ func (c *Consumer) fetchSubscription(partitionKey string) ([]*Msg, error) {
 	partitionNumber := 1
 
 	if len(c.subscriptions) > 1 {
+		if partitionKey != "" && partitionNum > 0 {
+			return nil, memphisError(fmt.Errorf("Can not use both partition number and partition key"))
+		}
 		if partitionKey != "" {
 			partitionFromKey, err := c.conn.GetPartitionFromKey(partitionKey, c.stationName)
 			if err != nil {
 				return nil, memphisError(err)
 			}
 			partitionNumber = partitionFromKey
+		} else if partitionNum > 0 {
+			err := c.conn.ValidatePartitionNumber(partitionNum, c.stationName)
+			if err != nil {
+				return nil, memphisError(err)
+			}
+			partitionNumber = partitionNum
 		} else {
 			partitionNumber = c.PartitionGenerator.Next()
 		}
@@ -574,12 +593,12 @@ type fetchResult struct {
 	err  error
 }
 
-func (c *Consumer) fetchSubscriprionWithTimeout(partitionKey string) ([]*Msg, error) {
+func (c *Consumer) fetchSubscriprionWithTimeout(partitionKey string, partitionNumber int) ([]*Msg, error) {
 	timeoutDuration := c.BatchMaxTimeToWait
 	out := make(chan fetchResult, 1)
 
 	go func(partitionKey string) {
-		msgs, err := c.fetchSubscription(partitionKey)
+		msgs, err := c.fetchSubscription(partitionKey, partitionNumber)
 		out <- fetchResult{msgs: msgs, err: memphisError(err)}
 	}(partitionKey)
 	select {
@@ -639,15 +658,15 @@ func (c *Consumer) Fetch(batchSize int, prefetch bool, opts ...ConsumingOpt) ([]
 	}
 	c.conn.prefetchedMsgs.lock.Unlock()
 	if prefetch {
-		go c.prefetchMsgs(defaultOpts.ConsumerPartitionKey)
+		go c.prefetchMsgs(defaultOpts.ConsumerPartitionKey, defaultOpts.ConsumerPartitionNumber)
 	}
 	if len(msgs) > 0 {
 		return msgs, nil
 	}
-	return c.fetchSubscriprionWithTimeout(defaultOpts.ConsumerPartitionKey)
+	return c.fetchSubscriprionWithTimeout(defaultOpts.ConsumerPartitionKey, defaultOpts.ConsumerPartitionNumber)
 }
 
-func (c *Consumer) prefetchMsgs(partitionKey string) {
+func (c *Consumer) prefetchMsgs(partitionKey string, partitionNumber int) {
 	c.conn.prefetchedMsgs.lock.Lock()
 	defer c.conn.prefetchedMsgs.lock.Unlock()
 	lowerCaseStationName := getLowerCaseName(c.stationName)
@@ -657,7 +676,7 @@ func (c *Consumer) prefetchMsgs(partitionKey string) {
 	if _, ok := c.conn.prefetchedMsgs.msgs[lowerCaseStationName][c.ConsumerGroup]; !ok {
 		c.conn.prefetchedMsgs.msgs[lowerCaseStationName][c.ConsumerGroup] = make([]*Msg, 0)
 	}
-	msgs, err := c.fetchSubscriprionWithTimeout(partitionKey)
+	msgs, err := c.fetchSubscriprionWithTimeout(partitionKey, partitionNumber)
 	if err == nil {
 		c.conn.prefetchedMsgs.msgs[lowerCaseStationName][c.ConsumerGroup] = append(c.conn.prefetchedMsgs.msgs[lowerCaseStationName][c.ConsumerGroup], msgs...)
 	}

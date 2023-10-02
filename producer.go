@@ -316,11 +316,12 @@ type Headers struct {
 
 // ProduceOpts - configuration options for produce operations.
 type ProduceOpts struct {
-	Message              any
-	AckWaitSec           int
-	MsgHeaders           Headers
-	AsyncProduce         bool
-	ProducerPartitionKey string
+	Message                 any
+	AckWaitSec              int
+	MsgHeaders              Headers
+	AsyncProduce            bool
+	ProducerPartitionKey    string
+	ProducerPartitionNumber int
 }
 
 // ProduceOpt - a function on the options for produce operations.
@@ -329,7 +330,7 @@ type ProduceOpt func(*ProduceOpts) error
 // getDefaultProduceOpts - returns default configuration options for produce operations.
 func getDefaultProduceOpts() ProduceOpts {
 	msgHeaders := make(map[string][]string)
-	return ProduceOpts{AckWaitSec: 15, MsgHeaders: Headers{MsgHeaders: msgHeaders}, AsyncProduce: true}
+	return ProduceOpts{AckWaitSec: 15, MsgHeaders: Headers{MsgHeaders: msgHeaders}, AsyncProduce: true, ProducerPartitionKey: "", ProducerPartitionNumber: -1}
 }
 
 // Producer.Produce - produces a message into a station. message is of type []byte/protoreflect.ProtoMessage in case it is a schema validated station
@@ -385,12 +386,21 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	if len(p.conn.stationPartitions[sn].PartitionsList) == 1 {
 		streamName = fmt.Sprintf("%v$%v", sn, p.conn.stationPartitions[sn].PartitionsList[0])
 	} else if len(p.conn.stationPartitions[sn].PartitionsList) > 1 {
+		if opts.ProducerPartitionNumber > 0 && opts.ProducerPartitionKey != "" {
+			return memphisError(fmt.Errorf("Can not use both partition number and partition key"))
+		}
 		if opts.ProducerPartitionKey != "" {
 			partitionNumber, err := p.conn.GetPartitionFromKey(opts.ProducerPartitionKey, sn)
 			if err != nil {
 				return memphisError(fmt.Errorf("failed to get partition from key"))
 			}
 			streamName = fmt.Sprintf("%v$%v", sn, partitionNumber)
+		} else if opts.ProducerPartitionNumber > 0 {
+			err := p.conn.ValidatePartitionNumber(opts.ProducerPartitionNumber, sn)
+			if err != nil {
+				return memphisError(err)
+			}
+			streamName = fmt.Sprintf("%v$%v", sn, opts.ProducerPartitionNumber)
 		} else {
 			partitionNumber := p.PartitionGenerator.Next()
 			streamName = fmt.Sprintf("%v$%v", sn, partitionNumber)
@@ -558,6 +568,14 @@ func AckWaitSec(ackWaitSec int) ProduceOpt {
 func ProducerPartitionKey(partitionKey string) ProduceOpt {
 	return func(opts *ProduceOpts) error {
 		opts.ProducerPartitionKey = partitionKey
+		return nil
+	}
+}
+
+// ProducerPartitionNumber - set a specific partition number for a message
+func ProducerPartitionNumber(partitionNumber int) ProduceOpt {
+	return func(opts *ProduceOpts) error {
+		opts.ProducerPartitionNumber = partitionNumber
 		return nil
 	}
 }
