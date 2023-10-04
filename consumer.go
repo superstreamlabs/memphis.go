@@ -103,6 +103,11 @@ func (m *Msg) DataDeserialized() (any, error) {
 
 	msgBytes := m.msg.Data
 
+	_, err = sd.validateMsg(msgBytes)
+	if err != nil {
+		return nil, memphisError(errors.New("Deserialization has been failed since the message format does not align with the currently attached schema: " + err.Error()))
+	}
+
 	switch sd.schemaType {
 	case "protobuf":
 		pMsg := dynamicpb.NewMessage(sd.msgDescriptor)
