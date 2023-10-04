@@ -362,9 +362,13 @@ The consumer will try to fetch messages every ```pullInterval``` (that was given
 ```go
 func handler(msgs []*memphis.Msg, err error, ctx context.Context) {
 	if err != nil {
-		m := msgs[0]
-		fmt.Println(string(m.Data()))
-		m.Ack()
+		fmt.Printf("Fetch failed: %v", err)
+		return
+	}
+
+	for _, msg := range msgs {
+		fmt.Println(string(msg.Data()))
+		msg.Ack()
 	}
 }
 
@@ -372,6 +376,25 @@ consumer.Consume(handler,
 				memphis.ConsumerPartitionKey(<string>) // use the partition key to consume from a spacific partition (if not specified consume in a Round Robin fashion)
 )
 ```
+
+#### Consumer schema deserialization
+To get messages deserialized, use `msg.DataDeserialized()`.  
+
+```go
+func handler(msgs []*memphis.Msg, err error, ctx context.Context) {
+	if err != nil {
+		fmt.Printf("Fetch failed: %v", err)
+		return
+	}
+
+	for _, msg := range msgs {
+		fmt.Println(string(msg.DataDeserialized()))
+		msg.Ack()
+	}
+}
+```
+
+if you have ingested data into station in one format, afterwards you apply a schema on the station, the consumer won't deserialize the previously ingested data. For example, you have ingested string into the station and attached a protobuf schema on the station. In this case, consumer won't deserialize the string.
 
 ### Fetch a single batch of messages
 ```go
