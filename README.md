@@ -52,7 +52,10 @@ c, err := memphis.Connect("<memphis-host>",
 	memphis.Password("<password>")) // depends on how Memphis deployed - default is connection token-based authentication
 ```
 <br>
-It is possible to pass connection configuration parameters, as function-parameters.
+
+The connect function allows for the connection to Memphis. Connecting to Memphis (cloud or open-source) will be needed in order to use any of the other functionality of the Memphis class. Upon connection, all of Memphis' features are available.
+
+Configuring the connection to Memphis in the Go SDK can be done by passing in the different configuration functions to the Connect function.
 
 ```go
 // function params
@@ -71,60 +74,28 @@ c, err := memphis.Connect("<memphis-host>",
 	)
 ```
 
-TO:DO: **OR**:
+Here is an example of connecting to Memphis using a password (using the default user:root password:memphis login with Memphis open-source):
 
 ```go
-func Connect(host, username string, options ...Option) (*Conn, error)
-
-type Options struct {
-	Host              string
-	Port              int
-	Username          string
-	AccountId         int // Located on the profile page in the Memphis UI - Cloud only
-	ConnectionToken   string // Given on client application user creation
-	Reconnect         bool 
-	MaxReconnect      int
-	ReconnectInterval time.Duration
-	Timeout           time.Duration
-	TLSOpts           TLSOpts // For a TLS-based connection
-	Password          string
-}   
-
-func getDefaultOptions() Options {
-	return Options{
-		Port:              6666,
-		Reconnect:         true,
-		MaxReconnect:      10,
-		ReconnectInterval: 1 * time.Second,
-		Timeout:           2 * time.Second,
-		TLSOpts: TLSOpts{
-			TlsCert: "",
-			TlsKey:  "",
-			CaFile:  "",
-		},
-		ConnectionToken: "",
-		Password:        "",
-		AccountId:       1,
-	}
-}
-
+conn, err := memphis.Connect("localhost", "root", memphis.Password("memphis"))
 ```
 
-Once connected, all features offered by Memphis are available.<br>
+Connecting to Memphis cloud will require the account id and broker hostname. You may find these on the Overview page of the Memphis cloud UI at the top of the page. Here is an example of connecting to a cloud broker that is located in US East:
 
-A JWT (cloud default) token connection would look like this:
+```go
+conn, err := memphis.Connect("aws-us-east-1.cloud.memphis.dev", "my_client_username", memphis.Password("memphis"), memphis.AccountId(123456789))
+```
+
+It is possible to use a token-based connection to memphis as well, where multiple users can share the same token to connect to memphis. Here is an example of using memphis.connect with a token:
 
 ```go
 conn, err := memphis.Connect("localhost", "root", memphis.ConnectionToken("memphis"))
 ```
 
+The token will be made available when creating new users.
+
 Memphis open-source needs to be configured to use token based connection. See the [docs](https://docs.memphis.dev/memphis/memphis-broker/concepts/security) for help doing this.
 
-You could also connect with a password (using the default user:root password:memphis login with Memphis open-source):
-
-```go
-conn, err := memphis.Connect("localhost", "root", memphis.Password("memphis"))
-```
 To use a TLS based connection, the TLS function will need to be invoked:
 
 ```go
@@ -161,10 +132,13 @@ c.Close();
 ```
 
 ### Creating a Station
+
+Stations are distributed units that store messages. Producers add messages to stations and Consumers take messages from them. Each station stores messages until their retention policy causes them to either delete the messages or move them to [remote storage](https://docs.memphis.dev/memphis/integrations-center/storage/s3-compatible). 
+
 **A station will be automatically created for the user when a consumer or producer is used if no stations with the given station name exist.**<br><br>
-Stations can be created from Conn<br>
+Stations can be created from a memphis connection (Conn)<br>
 Passing optional parameters using functions<br>
-_If a station already exists nothing happens, the new configuration will not be applied_<br>
+_If the station trying to be created exists when this function is called, nothing will change with the exisitng station_
 
 ```go
 s0, err = c.CreateStation("<station-name>")
@@ -417,10 +391,19 @@ err := conn.DetachSchema("<station-name>")
 ```
 
 ### Produce and Consume Messages
-The most common client operations are producing messages and consuming messages.<br><br>
-Messages are published to a station and consumed from it<br>by creating a consumer and calling its Consume function with a message handler callback function.<br>Consumers are pull-based and consume all the messages in a station<br> unless you are using a consumers group,<br>in which case messages are spread across all members in this group.<br><br>
-Memphis messages are payload agnostic. Payloads are byte slices, i.e []byte.<br><br>
-In order to stop receiving messages, you have to call ```consumer.StopConsume()```.<br>The consumer will terminate regardless of whether there are messages in flight for the client.
+The most common client operations are producing messages and consuming messages.
+
+Messages are published to a station with a Producer and consumed from it by a Consumer by creating a consumer and calling its Consume function with a message handler callback function.
+
+Alternatively, consumers may call the Fetch function to only consume a specific number of messages.
+
+Consumers are pull-based and consume all the messages in a station unless you are using a consumers group, in which case messages are spread across all members in this group.
+
+Memphis messages are payload agnostic. Payloads are byte slices, i.e []byte.
+
+In order to stop receiving messages, you have to call ```consumer.StopConsume()```.
+
+The consumer will terminate even if there are messages currently being sent to the consumer.
 
 ### Creating a Producer
 
@@ -436,12 +419,17 @@ p1, err := s.CreateProducer("<producer-name>")
 ```
 
 ### Producing a message
-Without creating a producer (receiver function of the connection struct).
+
+Both producers and connections can use the produce function. To produce a message from a connection, simply call `connection.Produce`. This function will create a producer if none with the given name exists, otherwise it will pull the producer from a cache and use it to produce the message.
+
+Here is an example of producing from a connection: (receiver function of the connection struct).
 ```go
 c.Produce("station_name_c_produce", "producer_name_a", []byte("Hey There!"), []memphis.ProducerOpt{}, []memphis.ProduceOpt{})
 ```
 
-Creating a producer first (receiver function of the producer struct). Creating a producer and calling produce on it will increase the performance of producing messages as it reduces the latency of having to get a producer from the cache.
+Here is an example of producing from a producer (p) (receiver function of the producer struct). 
+
+Creating a producer and calling produce on it will increase the performance of producing messages as it reduces the latency of having to get a producer from the cache.
 ```go
 p.Produce("<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema) or []byte or map[string]interface{} or struct with avro tags(schema validated station - avro schema)>", memphis.AckWaitSec(15)) // defaults to 15 seconds
 ```
@@ -564,21 +552,8 @@ err = producer.Produce(
 // Handle err
 ```
 
-### Add headers
-
-```go
-hdrs := memphis.Headers{}
-hdrs.New()
-err := hdrs.Add("key", "value")
-p.Produce(
-	"<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema) or []byte or map[string]interface{} or struct with avro tags(schema validated station - avro schema)>",
-    memphis.AckWaitSec(15),
-	memphis.MsgHeaders(hdrs) // defaults to empty
-)
-```
-
 ### Async produce
-For better performance. The client won't block requests while waiting for an acknowledgment.
+For better performance. The client won't wait while waiting for an acknowledgment before sending more messages.
 
 ```go
 p.Produce(
@@ -589,7 +564,7 @@ p.Produce(
 ```
 
 ### Sync produce
-For better reliability. The client will block requests and will wait for an acknowledgment.
+For better reliability. The client will wait for an acknowledgement from the broker before sneding another message.
 
 ```go
 p.Produce(
@@ -630,10 +605,14 @@ consumer0, err = s.CreateConsumer("<consumer-name>",
   memphis.StartConsumeFromSeq(<uint64>)// start consuming from a specific sequence. defaults to 1
   memphis.LastMessages(<int64>)// consume the last N messages, defaults to -1 (all messages in the station)
 )
-  
+
 // creation from a Conn
 consumer1, err = c.CreateConsumer("<station-name>", "<consumer-name>", ...) 
 ```
+
+Consumers are used to pull messages from a station. Here is how to create a consumer with all of the default parameters:
+
+
 Note:
 When consuming from a station with more than one partition, the consumer will consume messages in Round Robin fashion from the different partitions.
 
@@ -669,9 +648,9 @@ consumer, err := conn.CreateConsumer(
 // Handle err
 ```
 
-Every time the consumer polls, the consumer will try to take BatchSize number of elements from the station. However, sometimes there are not enough messages in the station for the consumer to consume a full batch. In this case, the consumer will continue to wait until either BatchSize messages are gathered or the time in milliseconds specified by BatchMaxWaitTime is reached. 
+Every time the consumer pulls from the station, the consumer will try to take BatchSize number of elements from the station. However, sometimes there are not enough messages in the station for the consumer to consume a full batch. In this case, the consumer will continue to wait until either BatchSize messages are gathered or the time in milliseconds specified by BatchMaxWaitTime is reached. 
 
-Here is an example of a consumer that will try to poll 100 messages every 10 seconds while waiting up to 15 seconds for all messages to reach the consumer.
+Here is an example of a consumer that will try to pull 100 messages every 10 seconds while waiting up to 15 seconds for all messages to reach the consumer.
 
 ```go
 conn, err := memphis.Connect("localhost", "root", memphis.Password("memphis"))
@@ -757,9 +736,7 @@ func handler(msgs []*memphis.Msg, err error, ctx context.Context) {
 }
 ```
 
-TO:DO: same as the python comments
-
-if you have ingested data into station in one format, afterwards you apply a schema on the station, the consumer won't deserialize the previously ingested data. For example, you have ingested string into the station and attached a protobuf schema on the station. In this case, consumer won't deserialize the string.
+There may be some instances where you apply a schema *after* a station has received some messages. In order to consume those messages get_data_deserialized may be used to consume the messages without trying to apply the schema to them. As an example, if you produced a string to a station and then attached a protobuf schema, using get_data_deserialized will not try to deserialize the string as a protobuf-formatted message.
 
 ### Fetch a single batch of messages
 ```go
