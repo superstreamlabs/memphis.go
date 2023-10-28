@@ -22,7 +22,7 @@ type MemphisEvent struct {
 
 type UserFunction func([]byte) ([]byte, error)
 
-func create_function(userFunction UserFunction) func(context.Context, *MemphisEvent)(*MemphisEvent, error){
+func CreateFunction(userFunction UserFunction) func(context.Context, *MemphisEvent)(*MemphisEvent, error){
 	LambdaHandler := func(ctx context.Context, event *MemphisEvent) (*MemphisEvent, error) {
 		var processedEvent MemphisEvent
 		for _, msg := range event.Messages {	
