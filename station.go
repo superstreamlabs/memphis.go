@@ -341,6 +341,21 @@ type stationUpdateSub struct {
 	schemaDetails   schemaDetails
 }
 
+type stationFunctionSub struct {
+	FunctionsUpdateCh  chan FunctionsUpdate
+	FunctionsUpdateSub *nats.Subscription
+	FunctionsDetails   functionsDetails
+}
+
+type FunctionsUpdate struct {
+	UpdateType string
+	Functions  map[int]int
+}
+
+type functionsDetails struct {
+	PartitionsFunctions map[int]int `json:"partitions_functions"`
+}
+
 type schemaDetails struct {
 	name          string
 	schemaType    string
@@ -378,6 +393,34 @@ func (c *Conn) listenToSchemaUpdates(stationName string) error {
 	return nil
 }
 
+func (c *Conn) listenToFunctionsUpdates(stationName string, initialFunctionsMap map[int]int) error {
+	sn := getInternalName(stationName)
+	stationFunctionsSubsLock.Lock()
+	defer stationFunctionsSubsLock.Unlock()
+	_, ok := c.stationFunctionSubs[sn]
+	if !ok {
+		c.stationFunctionSubs[sn] = &stationFunctionSub{
+			FunctionsUpdateCh: make(chan FunctionsUpdate),
+			FunctionsDetails: functionsDetails{
+				PartitionsFunctions: initialFunctionsMap,
+			},
+		}
+		sfs := c.stationFunctionSubs[sn]
+		functionsUpdatesSubject := fmt.Sprintf(functionsUpdatesSubjectTemplate, sn)
+		go sfs.functionsUpdatesHandler(&c.stationFunctionsMu)
+		var err error
+		sfs.FunctionsUpdateSub, err = c.brokerConn.Subscribe(functionsUpdatesSubject, sfs.createMsgHandler())
+		if err != nil {
+			close(sfs.FunctionsUpdateCh)
+			return memphisError(err)
+		}
+
+		return nil
+	}
+
+	return nil
+}
+
 func (sus *stationUpdateSub) createMsgHandler() nats.MsgHandler {
 	return func(msg *nats.Msg) {
 		var update SchemaUpdate
@@ -387,6 +430,18 @@ func (sus *stationUpdateSub) createMsgHandler() nats.MsgHandler {
 			return
 		}
 		sus.schemaUpdateCh <- update
+	}
+}
+
+func (sfs *stationFunctionSub) createMsgHandler() nats.MsgHandler {
+	return func(msg *nats.Msg) {
+		var update FunctionsUpdate
+		err := json.Unmarshal(msg.Data, &update)
+		if err != nil {
+			log.Printf("functions update unmarshal error: %v\n", memphisError(err))
+			return
+		}
+		sfs.FunctionsUpdateCh <- update
 	}
 }
 
@@ -442,6 +497,27 @@ func (sus *stationUpdateSub) schemaUpdatesHandler(lock *sync.RWMutex) {
 			sd.handleSchemaUpdateInit(update.Init)
 		case SchemaUpdateTypeDrop:
 			sd.handleSchemaUpdateDrop()
+		}
+		lock.Unlock()
+	}
+}
+
+func (sfs *stationFunctionSub) functionsUpdatesHandler(lock *sync.RWMutex) {
+	for {
+		update, ok := <-sfs.FunctionsUpdateCh
+		if !ok {
+			return
+		}
+
+		lock.Lock()
+		if update.UpdateType == "modify" {
+			for partition, funcID := range update.Functions {
+				sfs.FunctionsDetails.PartitionsFunctions[partition] = funcID
+			}
+		} else if update.UpdateType == "drop" {
+			for partition := range update.Functions {
+				delete(sfs.FunctionsDetails.PartitionsFunctions, partition)
+			}
 		}
 		lock.Unlock()
 	}

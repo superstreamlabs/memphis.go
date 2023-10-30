@@ -43,6 +43,7 @@ const (
 )
 
 var stationUpdatesSubsLock sync.Mutex
+var stationFunctionsSubsLock sync.Mutex
 var lockProducersMap sync.Mutex
 
 var applicationId string
@@ -158,7 +159,9 @@ type Conn struct {
 	brokerConn          *nats.Conn
 	js                  nats.JetStreamContext
 	stationUpdatesMu    sync.RWMutex
+	stationFunctionsMu  sync.RWMutex
 	stationUpdatesSubs  map[string]*stationUpdateSub
+	stationFunctionSubs map[string]*stationFunctionSub
 	stationPartitions   map[string]*PartitionsUpdate
 	sdkClientsUpdatesMu sync.RWMutex
 	clientsUpdatesSub   sdkClientsUpdateSub
@@ -306,6 +309,10 @@ func (opts Options) connect() (*Conn, error) {
 	stationUpdatesSubsLock.Lock()
 	defer stationUpdatesSubsLock.Unlock()
 	c.stationUpdatesSubs = make(map[string]*stationUpdateSub)
+
+	stationFunctionsSubsLock.Lock()
+	defer stationFunctionsSubsLock.Unlock()
+	c.stationFunctionSubs = make(map[string]*stationFunctionSub)
 	c.stationPartitions = make(map[string]*PartitionsUpdate)
 
 	return &c, nil
