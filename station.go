@@ -349,8 +349,8 @@ type stationFunctionSub struct {
 }
 
 type FunctionsUpdate struct {
-	UpdateType string
-	Functions  map[int]int
+	UpdateType string      `json:"update_type"`
+	Functions  map[int]int `json:"functions"`
 }
 
 type functionsDetails struct {
