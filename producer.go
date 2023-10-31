@@ -60,13 +60,13 @@ type createProducerReq struct {
 }
 
 type createProducerResp struct {
-	SchemaUpdateInit        SchemaUpdateInit `json:"schema_update"`
-	PartitionsUpdate        PartitionsUpdate `json:"partitions_update"`
-	SchemaVerseToDls        bool             `json:"schemaverse_to_dls"`
-	ClusterSendNotification bool             `json:"send_notification"`
-	StationVersion          int              `json:"station_version"`
-	StationFirstFunctions   map[int]int      `json:"station_first_functions"`
-	Err                     string           `json:"error"`
+	SchemaUpdateInit                SchemaUpdateInit `json:"schema_update"`
+	PartitionsUpdate                PartitionsUpdate `json:"partitions_update"`
+	SchemaVerseToDls                bool             `json:"schemaverse_to_dls"`
+	ClusterSendNotification         bool             `json:"send_notification"`
+	StationVersion                  int              `json:"station_version"`
+	StationPartitionsFirstFunctions map[int]int      `json:"station_partitions_first_functions"`
+	Err                             string           `json:"error"`
 }
 
 type SchemaUpdateType int
@@ -284,7 +284,7 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 	}
 
 	if cr.StationVersion > 0 {
-		err = p.conn.listenToFunctionsUpdates(p.stationName, cr.StationFirstFunctions)
+		err = p.conn.listenToFunctionsUpdates(p.stationName, cr.StationPartitionsFirstFunctions)
 		if err != nil {
 			return memphisError(err)
 		}
@@ -421,16 +421,21 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	}
 
 	var fullSubjectName string
-	if _, ok := p.conn.stationFunctionSubs[sn]; ok {
+	if functionsMap, ok := p.conn.stationFunctionSubs[sn]; ok {
 		partitionNumber, err := strconv.Atoi(strings.Split(streamName, "$")[1])
+
+		functionsMap.StationFunctionsMu.RLock()
+
 		if err != nil {
 			return memphisError(err)
 		}
-		if funcID, ok := p.conn.stationFunctionSubs[sn].FunctionsDetails.PartitionsFunctions[partitionNumber]; ok {
-			fullSubjectName = fmt.Sprintf("%v.%v", streamName, funcID)
+		if funcID, ok := functionsMap.FunctionsDetails.PartitionsFunctions[partitionNumber]; ok {
+			fullSubjectName = fmt.Sprintf("%v.functions.%v", streamName, funcID)
 		} else {
 			fullSubjectName = streamName + ".final"
 		}
+
+		functionsMap.StationFunctionsMu.RUnlock()
 	} else {
 		fullSubjectName = streamName + ".final"
 	}

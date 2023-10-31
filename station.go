@@ -344,6 +344,7 @@ type stationUpdateSub struct {
 type stationFunctionSub struct {
 	FunctionsUpdateCh  chan FunctionsUpdate
 	FunctionsUpdateSub *nats.Subscription
+	StationFunctionsMu sync.RWMutex
 	FunctionsDetails   functionsDetails
 }
 
@@ -407,7 +408,7 @@ func (c *Conn) listenToFunctionsUpdates(stationName string, initialFunctionsMap 
 		}
 		sfs := c.stationFunctionSubs[sn]
 		functionsUpdatesSubject := fmt.Sprintf(functionsUpdatesSubjectTemplate, sn)
-		go sfs.functionsUpdatesHandler(&c.stationFunctionsMu)
+		go sfs.functionsUpdatesHandler()
 		var err error
 		sfs.FunctionsUpdateSub, err = c.brokerConn.Subscribe(functionsUpdatesSubject, sfs.createMsgHandler())
 		if err != nil {
@@ -502,14 +503,15 @@ func (sus *stationUpdateSub) schemaUpdatesHandler(lock *sync.RWMutex) {
 	}
 }
 
-func (sfs *stationFunctionSub) functionsUpdatesHandler(lock *sync.RWMutex) {
+func (sfs *stationFunctionSub) functionsUpdatesHandler() {
 	for {
 		update, ok := <-sfs.FunctionsUpdateCh
 		if !ok {
 			return
 		}
 
-		lock.Lock()
+		sfs.StationFunctionsMu.Lock()
+
 		if update.UpdateType == "modify" {
 			for partition, funcID := range update.Functions {
 				sfs.FunctionsDetails.PartitionsFunctions[partition] = funcID
@@ -519,7 +521,8 @@ func (sfs *stationFunctionSub) functionsUpdatesHandler(lock *sync.RWMutex) {
 				delete(sfs.FunctionsDetails.PartitionsFunctions, partition)
 			}
 		}
-		lock.Unlock()
+
+		sfs.StationFunctionsMu.Unlock()
 	}
 }
 

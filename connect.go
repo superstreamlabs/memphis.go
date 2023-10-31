@@ -159,7 +159,6 @@ type Conn struct {
 	brokerConn          *nats.Conn
 	js                  nats.JetStreamContext
 	stationUpdatesMu    sync.RWMutex
-	stationFunctionsMu  sync.RWMutex
 	stationUpdatesSubs  map[string]*stationUpdateSub
 	stationFunctionSubs map[string]*stationFunctionSub
 	stationPartitions   map[string]*PartitionsUpdate
