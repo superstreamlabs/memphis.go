@@ -1,4 +1,4 @@
-<a href="![Github (2)](https://github.com/memphisdev/memphis.go/assets/107035359/dadd7f6c-d057-4054-9443-6e941ed910c2)">![Github (2)](https://github.com/memphisdev/memphis.go/assets/107035359/168ad4f5-c166-453e-94ec-9a7543c38ad0)</a>
+<a href="![Github (4)](https://github.com/memphisdev/memphis-terraform/assets/107035359/a5fe5d0f-22e1-4445-957d-5ce4464e61b1)">![Github (4)](https://github.com/memphisdev/memphis-terraform/assets/107035359/a5fe5d0f-22e1-4445-957d-5ce4464e61b1)</a>
 <p align="center">
 <a href="https://memphis.dev/discord"><img src="https://img.shields.io/discord/963333392844328961?color=6557ff&label=discord" alt="Discord"></a>
 <a href="https://github.com/memphisdev/memphis/issues?q=is%3Aissue+is%3Aclosed"><img src="https://img.shields.io/github/issues-closed/memphisdev/memphis?color=6557ff"></a> 
