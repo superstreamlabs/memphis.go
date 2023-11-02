@@ -106,7 +106,7 @@ func getDefaultFetchOptions() FetchOpts {
 		ConsumerGroup:            "",
 		BatchMaxTimeToWait:       5 * time.Second,
 		MaxAckTime:               30 * time.Second,
-		MaxMsgDeliveries:         10,
+		MaxMsgDeliveries:         2,
 		GenUniqueSuffix:          false,
 		ErrHandler:               DefaultConsumerErrHandler,
 		StartConsumeFromSequence: 1,
@@ -853,7 +853,7 @@ func FetchMaxAckTime(maxAckTime time.Duration) FetchOpt {
 	}
 }
 
-// MaxMsgDeliveries - max number of message deliveries, by default is 10.
+// MaxMsgDeliveries - max number of message deliveries, by default is 2.
 func FetchMaxMsgDeliveries(maxMsgDeliveries int) FetchOpt {
 	return func(opts *FetchOpts) error {
 		opts.MaxMsgDeliveries = maxMsgDeliveries

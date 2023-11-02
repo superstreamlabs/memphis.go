@@ -324,7 +324,7 @@ consumer0, err = s.CreateConsumer("<consumer-name>",
   memphis.BatchSize(<batch-size> int), // defaults to 10
   memphis.BatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds, has to be at least 1 ms
   memphis.MaxAckTime(<time.Duration>), // defaults to 30 sec
-  memphis.MaxMsgDeliveries(<int>), // defaults to 10
+  memphis.MaxMsgDeliveries(<int>), // defaults to 2
   memphis.ConsumerErrorHandler(func(*Consumer, error){})
   memphis.StartConsumeFromSeq(<uint64>)// start consuming from a specific sequence. defaults to 1
   memphis.LastMessages(<int64>)// consume the last N messages, defaults to -1 (all messages in the station)
@@ -393,7 +393,7 @@ msgs, err := conn.FetchMessages("<station-name>", "<consumer-name>",
   memphis.FetchConsumerGroup("<consumer-group>"), // defaults to consumer name
   memphis.FetchBatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds, has to be at least 1 ms
   memphis.FetchMaxAckTime(<time.Duration>), // defaults to 30 sec
-  memphis.FetchMaxMsgDeliveries(<int>), // defaults to 10
+  memphis.FetchMaxMsgDeliveries(<int>), // defaults to 2
   memphis.FetchConsumerErrorHandler(func(*Consumer, error){})
   memphis.FetchStartConsumeFromSeq(<uint64>)// start consuming from a specific sequence. defaults to 1
   memphis.FetchLastMessages(<int64>)// consume the last N messages, defaults to -1 (all messages in the station))
