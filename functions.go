@@ -17,14 +17,18 @@ type MemphisMsgWithError struct{
 
 type MemphisEvent struct {
 	Messages []MemphisMsg `json:"messages"`
+}
+
+type MemphisOutput struct {
+	Messages []MemphisMsg `json:"messages"`
 	FailedMessages []MemphisMsgWithError `json:"failedMessages"`
 }
 
 type UserFunction func([]byte) ([]byte, error)
 
-func CreateFunction(userFunction UserFunction) func(context.Context, *MemphisEvent)(*MemphisEvent, error){
-	LambdaHandler := func(ctx context.Context, event *MemphisEvent) (*MemphisEvent, error) {
-		var processedEvent MemphisEvent
+func CreateFunction(userFunction UserFunction) func(context.Context, *MemphisEvent)(*MemphisOutput, error){
+	LambdaHandler := func(ctx context.Context, event *MemphisEvent) (*MemphisOutput, error) {
+		var processedEvent MemphisOutput
 		for _, msg := range event.Messages {	
 			modifiedPayload, err := userFunction(msg.Payload)
 	

@@ -14,6 +14,7 @@ require (
 )
 
 require (
+	github.com/aws/aws-lambda-go v1.41.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/hamba/avro/v2 v2.13.0 // indirect
 	github.com/jhump/protoreflect v1.13.0 // indirect
