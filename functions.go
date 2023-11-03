@@ -2,6 +2,7 @@ package memphis
 
 import (
 	"context"
+	"github.com/aws/aws-lambda-go/lambda"
 )
 
 type MemphisMsg struct {
@@ -26,7 +27,7 @@ type MemphisOutput struct {
 
 type UserFunction func(string) (string, error)
 
-func CreateFunction(userFunction UserFunction) func(context.Context, *MemphisEvent)(*MemphisOutput, error){
+func CreateFunction(userFunction UserFunction){
 	LambdaHandler := func(ctx context.Context, event *MemphisEvent) (*MemphisOutput, error) {
 		var processedEvent MemphisOutput
 		for _, msg := range event.Messages {	
@@ -51,6 +52,6 @@ func CreateFunction(userFunction UserFunction) func(context.Context, *MemphisEve
 		return &processedEvent, nil
 	}
 
-	return LambdaHandler
+	lambda.Start(LambdaHandler)
 }
 
