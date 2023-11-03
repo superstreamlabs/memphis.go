@@ -6,12 +6,12 @@ import (
 
 type MemphisMsg struct {
 	Headers map[string]string `json:"headers"`
-	Payload []byte            `json:"payload"`
+	Payload string            `json:"payload"`
 }
 
 type MemphisMsgWithError struct{
 	Headers map[string]string `json:"headers"`
-	Payload []byte            `json:"payload"`
+	Payload string            `json:"payload"`
 	Error string			  `json:"error"`
 }
 
@@ -24,7 +24,7 @@ type MemphisOutput struct {
 	FailedMessages []MemphisMsgWithError `json:"failedMessages"`
 }
 
-type UserFunction func([]byte) ([]byte, error)
+type UserFunction func(string) (string, error)
 
 func CreateFunction(userFunction UserFunction) func(context.Context, *MemphisEvent)(*MemphisOutput, error){
 	LambdaHandler := func(ctx context.Context, event *MemphisEvent) (*MemphisOutput, error) {
