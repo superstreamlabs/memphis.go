@@ -703,6 +703,7 @@ func (cus *sdkClientsUpdateSub) sdkClientUpdatesHandler(c *Conn) {
 			cm := c.getConsumersMap()
 			cm.unsetStationConsumers(update.StationName)
 			c.removeSchemaUpdatesListener(update.StationName)
+			c.removeFunctionsUpdatesListener(update.StationName)
 		}
 		lock.Unlock()
 	}

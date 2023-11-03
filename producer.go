@@ -312,6 +312,11 @@ func (p *Producer) Destroy() error {
 	if err := p.conn.removeSchemaUpdatesListener(p.stationName); err != nil {
 		return memphisError(err)
 	}
+
+	if err := p.conn.removeFunctionsUpdatesListener(p.stationName); err != nil {
+		return memphisError(err)
+	}
+
 	err := p.conn.destroy(p)
 	if err != nil {
 		return err

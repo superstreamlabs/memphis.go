@@ -342,6 +342,7 @@ type stationUpdateSub struct {
 }
 
 type stationFunctionSub struct {
+	RefCount           int
 	FunctionsUpdateCh  chan FunctionsUpdate
 	FunctionsUpdateSub *nats.Subscription
 	StationFunctionsMu sync.RWMutex
@@ -398,9 +399,10 @@ func (c *Conn) listenToFunctionsUpdates(stationName string, initialFunctionsMap 
 	sn := getInternalName(stationName)
 	stationFunctionsSubsLock.Lock()
 	defer stationFunctionsSubsLock.Unlock()
-	_, ok := c.stationFunctionSubs[sn]
+	sfs, ok := c.stationFunctionSubs[sn]
 	if !ok {
 		c.stationFunctionSubs[sn] = &stationFunctionSub{
+			RefCount:          1,
 			FunctionsUpdateCh: make(chan FunctionsUpdate),
 			FunctionsDetails: functionsDetails{
 				PartitionsFunctions: initialFunctionsMap,
@@ -415,10 +417,10 @@ func (c *Conn) listenToFunctionsUpdates(stationName string, initialFunctionsMap 
 			close(sfs.FunctionsUpdateCh)
 			return memphisError(err)
 		}
-
 		return nil
 	}
 
+	sfs.RefCount++
 	return nil
 }
 
@@ -444,6 +446,28 @@ func (sfs *stationFunctionSub) createMsgHandler() nats.MsgHandler {
 		}
 		sfs.FunctionsUpdateCh <- update
 	}
+}
+
+func (c *Conn) removeFunctionsUpdatesListener(stationName string) error {
+	sn := getInternalName(stationName)
+
+	sfs, ok := c.stationFunctionSubs[sn]
+	if !ok {
+		return memphisError(errors.New("functions listener doesn't exist"))
+	}
+
+	sfs.StationFunctionsMu.Lock()
+	sfs.RefCount--
+	if sfs.RefCount <= 0 {
+		close(sfs.FunctionsUpdateCh)
+		if err := sfs.FunctionsUpdateSub.Unsubscribe(); err != nil {
+			return memphisError(err)
+		}
+		sfs.StationFunctionsMu.Unlock()
+		delete(c.stationFunctionSubs, sn)
+	}
+
+	return nil
 }
 
 func (c *Conn) removeSchemaUpdatesListener(stationName string) error {
