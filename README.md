@@ -1,4 +1,4 @@
-<a href="![Github (2)](https://github.com/memphisdev/memphis.go/assets/107035359/dadd7f6c-d057-4054-9443-6e941ed910c2)">![Github (2)](https://github.com/memphisdev/memphis.go/assets/107035359/168ad4f5-c166-453e-94ec-9a7543c38ad0)</a>
+<a href="![Github (4)](https://github.com/memphisdev/memphis-terraform/assets/107035359/a5fe5d0f-22e1-4445-957d-5ce4464e61b1)">![Github (4)](https://github.com/memphisdev/memphis-terraform/assets/107035359/a5fe5d0f-22e1-4445-957d-5ce4464e61b1)</a>
 <p align="center">
 <a href="https://memphis.dev/discord"><img src="https://img.shields.io/discord/963333392844328961?color=6557ff&label=discord" alt="Discord"></a>
 <a href="https://github.com/memphisdev/memphis/issues?q=is%3Aissue+is%3Aclosed"><img src="https://img.shields.io/github/issues-closed/memphisdev/memphis?color=6557ff"></a> 
@@ -324,7 +324,7 @@ consumer0, err = s.CreateConsumer("<consumer-name>",
   memphis.BatchSize(<batch-size> int), // defaults to 10
   memphis.BatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds, has to be at least 1 ms
   memphis.MaxAckTime(<time.Duration>), // defaults to 30 sec
-  memphis.MaxMsgDeliveries(<int>), // defaults to 10
+  memphis.MaxMsgDeliveries(<int>), // defaults to 2
   memphis.ConsumerErrorHandler(func(*Consumer, error){})
   memphis.StartConsumeFromSeq(<uint64>)// start consuming from a specific sequence. defaults to 1
   memphis.LastMessages(<int64>)// consume the last N messages, defaults to -1 (all messages in the station)
@@ -393,7 +393,7 @@ msgs, err := conn.FetchMessages("<station-name>", "<consumer-name>",
   memphis.FetchConsumerGroup("<consumer-group>"), // defaults to consumer name
   memphis.FetchBatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds, has to be at least 1 ms
   memphis.FetchMaxAckTime(<time.Duration>), // defaults to 30 sec
-  memphis.FetchMaxMsgDeliveries(<int>), // defaults to 10
+  memphis.FetchMaxMsgDeliveries(<int>), // defaults to 2
   memphis.FetchConsumerErrorHandler(func(*Consumer, error){})
   memphis.FetchStartConsumeFromSeq(<uint64>)// start consuming from a specific sequence. defaults to 1
   memphis.FetchLastMessages(<int64>)// consume the last N messages, defaults to -1 (all messages in the station))

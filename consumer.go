@@ -267,7 +267,7 @@ func getDefaultConsumerOptions() ConsumerOpts {
 		BatchSize:                10,
 		BatchMaxTimeToWait:       5 * time.Second,
 		MaxAckTime:               30 * time.Second,
-		MaxMsgDeliveries:         10,
+		MaxMsgDeliveries:         2,
 		GenUniqueSuffix:          false,
 		ErrHandler:               DefaultConsumerErrHandler,
 		StartConsumeFromSequence: 1,
@@ -843,7 +843,7 @@ func MaxAckTime(maxAckTime time.Duration) ConsumerOpt {
 	}
 }
 
-// MaxMsgDeliveries - max number of message deliveries, by default is 10.
+// MaxMsgDeliveries - max number of message deliveries, by default is 2.
 func MaxMsgDeliveries(maxMsgDeliveries int) ConsumerOpt {
 	return func(opts *ConsumerOpts) error {
 		opts.MaxMsgDeliveries = maxMsgDeliveries
