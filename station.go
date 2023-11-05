@@ -350,8 +350,7 @@ type stationFunctionSub struct {
 }
 
 type FunctionsUpdate struct {
-	UpdateType string      `json:"update_type"`
-	Functions  map[int]int `json:"functions"`
+	Functions map[int]int `json:"functions"`
 }
 
 type functionsDetails struct {
@@ -535,17 +534,7 @@ func (sfs *stationFunctionSub) functionsUpdatesHandler() {
 		}
 
 		sfs.StationFunctionsMu.Lock()
-
-		if update.UpdateType == "modify" {
-			for partition, funcID := range update.Functions {
-				sfs.FunctionsDetails.PartitionsFunctions[partition] = funcID
-			}
-		} else if update.UpdateType == "drop" {
-			for partition := range update.Functions {
-				delete(sfs.FunctionsDetails.PartitionsFunctions, partition)
-			}
-		}
-
+		sfs.FunctionsDetails.PartitionsFunctions = update.Functions
 		sfs.StationFunctionsMu.Unlock()
 	}
 }
