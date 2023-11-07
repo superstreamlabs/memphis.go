@@ -341,6 +341,22 @@ type stationUpdateSub struct {
 	schemaDetails   schemaDetails
 }
 
+type stationFunctionSub struct {
+	RefCount           int
+	FunctionsUpdateCh  chan FunctionsUpdate
+	FunctionsUpdateSub *nats.Subscription
+	StationFunctionsMu sync.RWMutex
+	FunctionsDetails   functionsDetails
+}
+
+type FunctionsUpdate struct {
+	Functions map[int]int `json:"functions"`
+}
+
+type functionsDetails struct {
+	PartitionsFunctions map[int]int `json:"partitions_functions"`
+}
+
 type schemaDetails struct {
 	name          string
 	schemaType    string
@@ -378,6 +394,35 @@ func (c *Conn) listenToSchemaUpdates(stationName string) error {
 	return nil
 }
 
+func (c *Conn) listenToFunctionsUpdates(stationName string, initialFunctionsMap map[int]int) error {
+	sn := getInternalName(stationName)
+	stationFunctionsSubsLock.Lock()
+	defer stationFunctionsSubsLock.Unlock()
+	sfs, ok := c.stationFunctionSubs[sn]
+	if !ok {
+		c.stationFunctionSubs[sn] = &stationFunctionSub{
+			RefCount:          1,
+			FunctionsUpdateCh: make(chan FunctionsUpdate),
+			FunctionsDetails: functionsDetails{
+				PartitionsFunctions: initialFunctionsMap,
+			},
+		}
+		sfs := c.stationFunctionSubs[sn]
+		functionsUpdatesSubject := fmt.Sprintf(functionsUpdatesSubjectTemplate, sn)
+		go sfs.functionsUpdatesHandler()
+		var err error
+		sfs.FunctionsUpdateSub, err = c.brokerConn.Subscribe(functionsUpdatesSubject, sfs.createMsgHandler())
+		if err != nil {
+			close(sfs.FunctionsUpdateCh)
+			return memphisError(err)
+		}
+		return nil
+	}
+
+	sfs.RefCount++
+	return nil
+}
+
 func (sus *stationUpdateSub) createMsgHandler() nats.MsgHandler {
 	return func(msg *nats.Msg) {
 		var update SchemaUpdate
@@ -388,6 +433,40 @@ func (sus *stationUpdateSub) createMsgHandler() nats.MsgHandler {
 		}
 		sus.schemaUpdateCh <- update
 	}
+}
+
+func (sfs *stationFunctionSub) createMsgHandler() nats.MsgHandler {
+	return func(msg *nats.Msg) {
+		var update FunctionsUpdate
+		err := json.Unmarshal(msg.Data, &update)
+		if err != nil {
+			log.Printf("functions update unmarshal error: %v\n", memphisError(err))
+			return
+		}
+		sfs.FunctionsUpdateCh <- update
+	}
+}
+
+func (c *Conn) removeFunctionsUpdatesListener(stationName string) error {
+	sn := getInternalName(stationName)
+
+	sfs, ok := c.stationFunctionSubs[sn]
+	if !ok {
+		return memphisError(errors.New("functions listener doesn't exist"))
+	}
+
+	sfs.StationFunctionsMu.Lock()
+	sfs.RefCount--
+	if sfs.RefCount <= 0 {
+		close(sfs.FunctionsUpdateCh)
+		if err := sfs.FunctionsUpdateSub.Unsubscribe(); err != nil {
+			return memphisError(err)
+		}
+		sfs.StationFunctionsMu.Unlock()
+		delete(c.stationFunctionSubs, sn)
+	}
+
+	return nil
 }
 
 func (c *Conn) removeSchemaUpdatesListener(stationName string) error {
@@ -444,6 +523,19 @@ func (sus *stationUpdateSub) schemaUpdatesHandler(lock *sync.RWMutex) {
 			sd.handleSchemaUpdateDrop()
 		}
 		lock.Unlock()
+	}
+}
+
+func (sfs *stationFunctionSub) functionsUpdatesHandler() {
+	for {
+		update, ok := <-sfs.FunctionsUpdateCh
+		if !ok {
+			return
+		}
+
+		sfs.StationFunctionsMu.Lock()
+		sfs.FunctionsDetails.PartitionsFunctions = update.Functions
+		sfs.StationFunctionsMu.Unlock()
 	}
 }
 

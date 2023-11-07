@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,12 +31,13 @@ import (
 )
 
 const (
-	schemaUpdatesSubjectTemplate   = "$memphis_schema_updates_%s"
-	memphisNotificationsSubject    = "$memphis_notifications"
-	schemaVFailAlertType           = "schema_validation_fail_alert"
-	lastProducerCreationReqVersion = 3
-	schemaVerseDlsSubject          = "$memphis_schemaverse_dls"
-	lastProducerDestroyReqVersion  = 1
+	schemaUpdatesSubjectTemplate    = "$memphis_schema_updates_%s"
+	functionsUpdatesSubjectTemplate = "$memphis_functions_updates_%s"
+	memphisNotificationsSubject     = "$memphis_notifications"
+	schemaVFailAlertType            = "schema_validation_fail_alert"
+	lastProducerCreationReqVersion  = 3
+	schemaVerseDlsSubject           = "$memphis_schemaverse_dls"
+	lastProducerDestroyReqVersion   = 1
 )
 
 // Producer - memphis producer object.
@@ -58,11 +60,13 @@ type createProducerReq struct {
 }
 
 type createProducerResp struct {
-	SchemaUpdateInit        SchemaUpdateInit `json:"schema_update"`
-	PartitionsUpdate        PartitionsUpdate `json:"partitions_update"`
-	SchemaVerseToDls        bool             `json:"schemaverse_to_dls"`
-	ClusterSendNotification bool             `json:"send_notification"`
-	Err                     string           `json:"error"`
+	SchemaUpdateInit                SchemaUpdateInit `json:"schema_update"`
+	PartitionsUpdate                PartitionsUpdate `json:"partitions_update"`
+	SchemaVerseToDls                bool             `json:"schemaverse_to_dls"`
+	ClusterSendNotification         bool             `json:"send_notification"`
+	StationVersion                  int              `json:"station_version"`
+	StationPartitionsFirstFunctions map[int]int      `json:"station_partitions_first_functions"`
+	Err                             string           `json:"error"`
 }
 
 type SchemaUpdateType int
@@ -279,6 +283,13 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 		p.PartitionGenerator = pg
 	}
 
+	if cr.StationVersion > 0 {
+		err = p.conn.listenToFunctionsUpdates(p.stationName, cr.StationPartitionsFirstFunctions)
+		if err != nil {
+			return memphisError(err)
+		}
+	}
+
 	p.conn.sdkClientsUpdatesMu.Lock()
 	cu := &p.conn.clientsUpdatesSub
 	cu.ClusterConfigurations["send_notification"] = cr.ClusterSendNotification
@@ -301,6 +312,11 @@ func (p *Producer) Destroy() error {
 	if err := p.conn.removeSchemaUpdatesListener(p.stationName); err != nil {
 		return memphisError(err)
 	}
+
+	if err := p.conn.removeFunctionsUpdatesListener(p.stationName); err != nil {
+		return memphisError(err)
+	}
+
 	err := p.conn.destroy(p)
 	if err != nil {
 		return err
@@ -409,9 +425,29 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 		streamName = sn
 	}
 
+	var fullSubjectName string
+	if functionsMap, ok := p.conn.stationFunctionSubs[sn]; ok {
+		partitionNumber, err := strconv.Atoi(strings.Split(streamName, "$")[1])
+
+		functionsMap.StationFunctionsMu.RLock()
+
+		if err != nil {
+			return memphisError(err)
+		}
+		if funcID, ok := functionsMap.FunctionsDetails.PartitionsFunctions[partitionNumber]; ok {
+			fullSubjectName = fmt.Sprintf("%v.functions.%v", streamName, funcID)
+		} else {
+			fullSubjectName = streamName + ".final"
+		}
+
+		functionsMap.StationFunctionsMu.RUnlock()
+	} else {
+		fullSubjectName = streamName + ".final"
+	}
+
 	natsMessage := nats.Msg{
 		Header:  opts.MsgHeaders.MsgHeaders,
-		Subject: streamName + ".final",
+		Subject: fullSubjectName,
 		Data:    data,
 	}
 
