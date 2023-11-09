@@ -809,6 +809,7 @@ package main
 
 import (
 	"encoding/json"
+    "github.com/memphisdev/memphis.go"
 )
 
 type Event struct {
