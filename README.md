@@ -798,3 +798,32 @@ consumer.Destroy();
 ```go
 conn.IsConnected()
 ```
+
+### Creating a Memphis function
+Utility for creating Memphis functions.
+eventHandlerFunc gets the message payload as []byte and message headers as map[string]string and should return the modified payload and headers.<br>
+error should be returned if the message should be considered failed and go into the dead-letter station.<br>
+if all returned values are nil the message will be filtered out of the station.
+```go
+package main
+
+import (
+	"encoding/json"
+)
+
+type Event struct {
+	Field1 string `json:"field1"`
+	Field2 string `json:"field2"`
+}
+
+func main() {
+	eventHandlerFunc := func(msgPayload[]byte, msgHeaders[string]string) ([]byte, map[string]string, error) {
+		var event Event
+		json.Unmarshal(msgPayload, &event)
+		event.Field1 = "modified"
+		eventBytes, _ := json.Marshal(event)
+		return eventBytes, msgHeaders, nil
+	}
+	memphis.CreateFunction(eventHandlerFunc);
+}
+```
