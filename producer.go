@@ -283,7 +283,7 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 		p.PartitionGenerator = pg
 	}
 
-	if cr.StationVersion > 0 {
+	if cr.StationVersion >= 2 {
 		err = p.conn.listenToFunctionsUpdates(p.stationName, cr.StationPartitionsFirstFunctions)
 		if err != nil {
 			return memphisError(err)
