@@ -803,7 +803,7 @@ conn.IsConnected()
 Utility for creating Memphis functions.
 eventHandlerFunc gets the message payload as []byte and message headers as map[string]string and should return the modified payload and headers.<br>
 error should be returned if the message should be considered failed and go into the dead-letter station.<br>
-if all returned values are nil the message will be filtered out of the station.
+if all returned values are nil the message will be filtered out from the station.
 ```go
 package main
 

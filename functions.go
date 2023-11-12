@@ -32,10 +32,10 @@ type MemphisOutput struct {
 // if all returned values are nil the message will be filtered out of the station.
 type EventHandlerFunction func([]byte, map[string]string) ([]byte, map[string]string, error)
 
-// CreateFunction creates a Memphis function
+// This function creates a Memphis function and processes events with the passed-in eventHandler function.
 // eventHandlerFunction gets the message payload as []byte and message headers as map[string]string and should return the modified payload and headers.
 // error should be returned if the message should be considered failed and go into the dead-letter station.
-// if all returned values are nil the message will be filtered out of the station.
+// if all returned values are nil the message will be filtered out from the station.
 func CreateFunction(eventHandler EventHandlerFunction) {
 	LambdaHandler := func(ctx context.Context, event *MemphisEvent) (*MemphisOutput, error) {
 		var processedEvent MemphisOutput
