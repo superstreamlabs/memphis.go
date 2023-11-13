@@ -60,7 +60,7 @@ func CreateFunction(eventHandler EventHandlerFunction) {
 				continue
 			}
 
-			if modifiedPayload != nil || modifiedHeaders != nil {
+			if modifiedPayload != nil && modifiedHeaders != nil {
 				modifiedPayloadStr := base64.StdEncoding.EncodeToString(modifiedPayload)
 				processedEvent.Messages = append(processedEvent.Messages, MemphisMsg{
 					Headers: modifiedHeaders,
