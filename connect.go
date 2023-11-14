@@ -545,6 +545,20 @@ func defaultHandleCreationResp(resp []byte) error {
 	return nil
 }
 
+func (c *Conn) request(subj string, data []byte, timeout time.Duration, timeoutRetry int) (*nats.Msg, error) {
+	msg, err := c.brokerConn.Request(subj, data, timeout)
+	if err != nil {
+		if strings.Contains(err.Error(), "timeout") {
+			if timeoutRetry > 0 {
+				return c.request(subj, data, timeout, timeoutRetry-1)
+			}
+			return nil, memphisError(err)
+		}
+		return nil, memphisError(err)
+	}
+	return msg, nil
+}
+
 func (c *Conn) create(do directObj) error {
 	subject := do.getCreationSubject()
 	req := do.getCreationReq()
@@ -554,7 +568,7 @@ func (c *Conn) create(do directObj) error {
 		return memphisError(err)
 	}
 
-	msg, err := c.brokerConn.Request(subject, b, 20*time.Second)
+	msg, err := c.request(subject, b, 20*time.Second, 5)
 	if err != nil {
 		return memphisError(err)
 	}
@@ -582,7 +596,7 @@ func (c *Conn) EnforceSchema(name string, stationName string) error {
 		return memphisError(err)
 	}
 
-	msg, err := c.brokerConn.Request(subject, b, 20*time.Second)
+	msg, err := c.request(subject, b, 20*time.Second, 5)
 	if err != nil {
 		return memphisError(err)
 	}
@@ -605,7 +619,7 @@ func (c *Conn) DetachSchema(stationName string) error {
 		return memphisError(err)
 	}
 
-	msg, err := c.brokerConn.Request(subject, b, 20*time.Second)
+	msg, err := c.request(subject, b, 20*time.Second, 5)
 	if err != nil {
 		return memphisError(err)
 	}
@@ -624,7 +638,7 @@ func (c *Conn) destroy(o directObj) error {
 		return memphisError(err)
 	}
 
-	msg, err := c.brokerConn.Request(subject, b, 20*time.Second)
+	msg, err := c.request(subject, b, 20*time.Second, 5)
 	if err != nil {
 		return memphisError(err)
 	}
