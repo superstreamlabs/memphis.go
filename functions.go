@@ -19,7 +19,8 @@ type MemphisMsgWithError struct {
 }
 
 type MemphisEvent struct {
-	Messages []MemphisMsg `json:"messages"`
+	Inputs   map[string]string `json:"inputs"`
+	Messages []MemphisMsg      `json:"messages"`
 }
 
 type MemphisOutput struct {
@@ -27,13 +28,13 @@ type MemphisOutput struct {
 	FailedMessages []MemphisMsgWithError `json:"failed_messages"`
 }
 
-// EventHandlerFunction gets the message payload as []byte and message headers as map[string]string and should return the modified payload and headers.
+// EventHandlerFunction gets the message payload as []byte, message headers as map[string]string and inputs as map[string]string and should return the modified payload and headers.
 // error should be returned if the message should be considered failed and go into the dead-letter station.
 // if all returned values are nil the message will be filtered out of the station.
-type EventHandlerFunction func([]byte, map[string]string) ([]byte, map[string]string, error)
+type EventHandlerFunction func([]byte, map[string]string, map[string]string) ([]byte, map[string]string, error)
 
 // This function creates a Memphis function and processes events with the passed-in eventHandler function.
-// eventHandlerFunction gets the message payload as []byte and message headers as map[string]string and should return the modified payload and headers.
+// eventHandlerFunction gets the message payload as []byte, message headers as map[string]string and inputs as map[string]string and should return the modified payload and headers.
 // error should be returned if the message should be considered failed and go into the dead-letter station.
 // if all returned values are nil the message will be filtered out from the station.
 func CreateFunction(eventHandler EventHandlerFunction) {
@@ -50,7 +51,7 @@ func CreateFunction(eventHandler EventHandlerFunction) {
 				continue
 			}
 
-			modifiedPayload, modifiedHeaders, err := eventHandler(payload, msg.Headers)
+			modifiedPayload, modifiedHeaders, err := eventHandler(payload, msg.Headers, event.Inputs)
 			if err != nil {
 				processedEvent.FailedMessages = append(processedEvent.FailedMessages, MemphisMsgWithError{
 					Headers: msg.Headers,

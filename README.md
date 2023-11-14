@@ -806,10 +806,10 @@ The user will write a function which will act as an event handler and will be ca
 
 The user created event handler must fulfill the following function signature:
 ```go
-type EventHandlerFunction func([]byte, map[string]string) ([]byte, map[string]string, error)
+type EventHandlerFunction func([]byte, map[string]string, map[string]string) ([]byte, map[string]string, error)
 ```
 
-The event handler will take in a `[]byte` representation of an event and also a `map[string]string` of headers that belong to that event.
+The event handler will take in a `[]byte` representation of an event, also a `map[string]string` of headers that belong to that event, and `map[string]string` representation of the function inputs.
 
 The event handler will then return a modified version of these fields.
 
@@ -828,7 +828,7 @@ type Event struct {
 	Field2 string `json:"field2"`
 }
 
-func eventHandlerFunc(msgPayload[]byte, msgHeaders[string]string) ([]byte, map[string]string, error){
+func eventHandlerFunc(msgPayload[]byte, msgHeaders[string]string, inputs[string]string) ([]byte, map[string]string, error){
     // Get data from msgPayload
     var event Event
     json.Unmarshal(msgPayload, &event)
@@ -863,7 +863,7 @@ type Event struct {
 	Field2 string `json:"field2"`
 }
 
-func eventHandlerFunc(msgPayload[]byte, msgHeaders[string]string) ([]byte, map[string]string, error){
+func eventHandlerFunc(msgPayload[]byte, msgHeaders[string]string, inputs[string]string) ([]byte, map[string]string, error){
     // Get data from msgPayload
     var event Event
     json.Unmarshal(msgPayload, &event)
@@ -899,7 +899,7 @@ type Event struct {
 	Field2 string `json:"field2"`
 }
 
-func eventHandlerFunc(msgPayload[]byte, msgHeaders[string]string) ([]byte, map[string]string, error){
+func eventHandlerFunc(msgPayload[]byte, msgHeaders[string]string, inputs[string]string) ([]byte, map[string]string, error){
     // Get data from msgPayload
     var event Event
     json.Unmarshal(msgPayload, &event)
@@ -941,7 +941,7 @@ import (
     "current_directory/user_message"
 )
 
-func eventHandlerFunc(msgPayload[]byte, msgHeaders[string]string) ([]byte, map[string]string, error){
+func eventHandlerFunc(msgPayload[]byte, msgHeaders[string]string, inputs[string]string) ([]byte, map[string]string, error){
     // Get data from msgPayload
     var my_message user_message.Message
     proto.Unmarshal(msgPayload, &user_message)
