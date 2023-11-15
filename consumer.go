@@ -26,8 +26,8 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
@@ -76,9 +76,9 @@ type Consumer struct {
 
 // Msg - a received message, can be acked.
 type Msg struct {
-	msg    *nats.Msg
-	conn   *Conn
-	cgName string
+	msg                 *nats.Msg
+	conn                *Conn
+	cgName              string
 	internalStationName string
 }
 
@@ -252,6 +252,7 @@ type ConsumerOpts struct {
 	ErrHandler               ConsumerErrHandler
 	StartConsumeFromSequence uint64
 	LastMessages             int64
+	TimeoutRetry             int
 }
 
 type createConsumerResp struct {
@@ -272,6 +273,7 @@ func getDefaultConsumerOptions() ConsumerOpts {
 		ErrHandler:               DefaultConsumerErrHandler,
 		StartConsumeFromSequence: 1,
 		LastMessages:             -1,
+		TimeoutRetry:             5,
 	}
 }
 
@@ -294,7 +296,7 @@ func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...Consumer
 	if defaultOpts.ConsumerGroup == "" {
 		defaultOpts.ConsumerGroup = consumerName
 	}
-	consumer, err := defaultOpts.createConsumer(c)
+	consumer, err := defaultOpts.createConsumer(c, TimeoutRetry(defaultOpts.TimeoutRetry))
 	if err != nil {
 		return nil, memphisError(err)
 	}
@@ -304,7 +306,7 @@ func (c *Conn) CreateConsumer(stationName, consumerName string, opts ...Consumer
 }
 
 // ConsumerOpts.createConsumer - creates a consumer using a configuration struct.
-func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
+func (opts *ConsumerOpts) createConsumer(c *Conn, options ...RequestOpt) (*Consumer, error) {
 	var err error
 	name := strings.ToLower(opts.Name)
 	nameWithoutSuffix := name
@@ -354,7 +356,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn) (*Consumer, error) {
 		return nil, memphisError(err)
 	}
 
-	err = c.create(&consumer)
+	err = c.create(&consumer, options...)
 	if err != nil {
 		return nil, memphisError(err)
 	}
@@ -729,7 +731,7 @@ func (c *Consumer) getDlsQueueName() string {
 }
 
 // Destroy - destroy this consumer.
-func (c *Consumer) Destroy() error {
+func (c *Consumer) Destroy(options ...RequestOpt) error {
 	if err := c.conn.removeSchemaUpdatesListener(c.stationName); err != nil {
 		return memphisError(err)
 	}
@@ -741,7 +743,7 @@ func (c *Consumer) Destroy() error {
 	}
 
 	c.conn.unCacheConsumer(c)
-	return c.conn.destroy(c)
+	return c.conn.destroy(c, options...)
 }
 
 func (c *Consumer) getCreationSubject() string {

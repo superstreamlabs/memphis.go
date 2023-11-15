@@ -100,6 +100,10 @@ type FetchOpts struct {
 	FetchPartitionKey        string
 }
 
+type RequestOpts struct {
+	TimeoutRetries int
+}
+
 // getDefaultConsumerOptions - returns default configuration options for consumers.
 func getDefaultFetchOptions() FetchOpts {
 	return FetchOpts{
@@ -119,6 +123,9 @@ func getDefaultFetchOptions() FetchOpts {
 
 // FetchOpt  - a function on the options fetch.
 type FetchOpt func(*FetchOpts) error
+
+// RequestOpt - a function on the options request.
+type RequestOpt func(*RequestOpts) error
 
 // IsConnected - check if connected to broker - returns boolean
 func (c *Conn) IsConnected() bool {
@@ -530,6 +537,14 @@ func AccountId(accountId int) Option {
 	}
 }
 
+// TimeoutRetry - number of retries in case of timeout. default is 5.
+func TimeoutRetry(retries int) RequestOpt {
+	return func(opts *RequestOpts) error {
+		opts.TimeoutRetries = retries
+		return nil
+	}
+}
+
 type directObj interface {
 	getCreationSubject() string
 	getCreationReq() any
@@ -545,21 +560,45 @@ func defaultHandleCreationResp(resp []byte) error {
 	return nil
 }
 
-func (c *Conn) request(subj string, data []byte, timeout time.Duration, timeoutRetry int) (*nats.Msg, error) {
-	msg, err := c.brokerConn.Request(subj, data, timeout)
-	if err != nil {
-		if strings.Contains(err.Error(), "timeout") {
-			if timeoutRetry > 0 {
-				return c.request(subj, data, timeout, timeoutRetry-1)
+func getDefaultRequestOptions() RequestOpts {
+	return RequestOpts{
+		TimeoutRetries: 5,
+	}
+}
+
+func (c *Conn) request(subj string, data []byte, timeout time.Duration, options ...RequestOpt) (*nats.Msg, error) {
+	requestOpts := getDefaultRequestOptions()
+
+	for _, opt := range options {
+		if opt != nil {
+			if err := opt(&requestOpts); err != nil {
+				return nil, memphisError(err)
 			}
+		}
+	}
+
+	msg, err := c.brokerConn.Request(subj, data, timeout)
+	if err != nil && strings.Contains(err.Error(), "timeout") {
+		retryCounter := 0
+		for retryCounter < requestOpts.TimeoutRetries {
+			msg, err = c.brokerConn.Request(subj, data, timeout)
+			if err != nil {
+				if strings.Contains(err.Error(), "timeout") {
+					retryCounter++
+					continue
+				}
+				return nil, memphisError(err)
+			}
+			return msg, nil
+		}
+		if err != nil {
 			return nil, memphisError(err)
 		}
-		return nil, memphisError(err)
 	}
 	return msg, nil
 }
 
-func (c *Conn) create(do directObj) error {
+func (c *Conn) create(do directObj, options ...RequestOpt) error {
 	subject := do.getCreationSubject()
 	req := do.getCreationReq()
 
@@ -568,7 +607,7 @@ func (c *Conn) create(do directObj) error {
 		return memphisError(err)
 	}
 
-	msg, err := c.request(subject, b, 20*time.Second, 5)
+	msg, err := c.request(subject, b, 20*time.Second, options...)
 	if err != nil {
 		return memphisError(err)
 	}
@@ -582,7 +621,7 @@ func (c *Conn) AttachSchema(name string, stationName string) error {
 }
 
 // EnforceSchema - -Enforcing a schema on a chosen station
-func (c *Conn) EnforceSchema(name string, stationName string) error {
+func (c *Conn) EnforceSchema(name string, stationName string, options ...RequestOpt) error {
 	subject := c.getSchemaEnforceSubject()
 
 	creationReq := &enforceSchemaReq{
@@ -596,7 +635,7 @@ func (c *Conn) EnforceSchema(name string, stationName string) error {
 		return memphisError(err)
 	}
 
-	msg, err := c.request(subject, b, 20*time.Second, 5)
+	msg, err := c.request(subject, b, 20*time.Second, options...)
 	if err != nil {
 		return memphisError(err)
 	}
@@ -606,7 +645,7 @@ func (c *Conn) EnforceSchema(name string, stationName string) error {
 	return nil
 }
 
-func (c *Conn) DetachSchema(stationName string) error {
+func (c *Conn) DetachSchema(stationName string, options ...RequestOpt) error {
 	subject := c.getSchemaDetachSubject()
 
 	req := &detachSchemaReq{
@@ -619,7 +658,7 @@ func (c *Conn) DetachSchema(stationName string) error {
 		return memphisError(err)
 	}
 
-	msg, err := c.request(subject, b, 20*time.Second, 5)
+	msg, err := c.request(subject, b, 20*time.Second, options...)
 	if err != nil {
 		return memphisError(err)
 	}
@@ -629,7 +668,7 @@ func (c *Conn) DetachSchema(stationName string) error {
 	return nil
 }
 
-func (c *Conn) destroy(o directObj) error {
+func (c *Conn) destroy(o directObj, option ...RequestOpt) error {
 	subject := o.getDestructionSubject()
 	destructionReq := o.getDestructionReq()
 
@@ -638,7 +677,7 @@ func (c *Conn) destroy(o directObj) error {
 		return memphisError(err)
 	}
 
-	msg, err := c.request(subject, b, 20*time.Second, 5)
+	msg, err := c.request(subject, b, 20*time.Second, option...)
 	if err != nil {
 		return memphisError(err)
 	}

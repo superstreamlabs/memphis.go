@@ -105,6 +105,7 @@ type removeProducerReq struct {
 // ProducerOpts - configuration options for producer creation.
 type ProducerOpts struct {
 	GenUniqueSuffix bool
+	TimeoutRetry    int
 }
 
 type Notification struct {
@@ -137,7 +138,10 @@ type ProducerOpt func(*ProducerOpts) error
 
 // getDefaultProducerOpts - returns default configuration options for producer creation.
 func getDefaultProducerOpts() ProducerOpts {
-	return ProducerOpts{GenUniqueSuffix: false}
+	return ProducerOpts{
+		GenUniqueSuffix: false,
+		TimeoutRetry:    5,
+	}
 }
 
 func extendNameWithRandSuffix(name string) (string, error) {
@@ -186,7 +190,7 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 		return nil, memphisError(err)
 	}
 
-	if err = c.create(&p); err != nil {
+	if err = c.create(&p, TimeoutRetry(defaultOpts.TimeoutRetry)); err != nil {
 		if err := c.removeSchemaUpdatesListener(stationName); err != nil {
 			return nil, memphisError(err)
 		}
@@ -308,7 +312,7 @@ func (p *Producer) getDestructionReq() any {
 }
 
 // Destroy - destoy this producer.
-func (p *Producer) Destroy() error {
+func (p *Producer) Destroy(options ...RequestOpt) error {
 	if err := p.conn.removeSchemaUpdatesListener(p.stationName); err != nil {
 		return memphisError(err)
 	}
@@ -317,7 +321,7 @@ func (p *Producer) Destroy() error {
 		return memphisError(err)
 	}
 
-	err := p.conn.destroy(p)
+	err := p.conn.destroy(p, options...)
 	if err != nil {
 		return err
 	}

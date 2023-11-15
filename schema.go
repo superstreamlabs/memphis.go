@@ -71,7 +71,7 @@ func (s *Schema) getDestructionReq() any {
 }
 
 // CreateSchema - validates and uploads a new schema to the Broker
-func (c *Conn) CreateSchema(name, schemaType, path string) error {
+func (c *Conn) CreateSchema(name, schemaType, path string, options ...RequestOpt) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return memphisError(err)
@@ -97,7 +97,7 @@ func (c *Conn) CreateSchema(name, schemaType, path string) error {
 		MessageStructName: "",
 	}
 
-	if err = c.create(&s); err != nil {
+	if err = c.create(&s, options...); err != nil {
 		return memphisError(err)
 	}
 
