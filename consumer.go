@@ -885,6 +885,14 @@ func LastMessages(lastMessages int64) ConsumerOpt {
 	}
 }
 
+// ConsumerTimeoutRetry - number of retries for consumer timeout. the default value is 5
+func ConsumerTimeoutRetry(timeoutRetry int) ConsumerOpt {
+	return func(opts *ConsumerOpts) error {
+		opts.TimeoutRetry = timeoutRetry
+		return nil
+	}
+}
+
 func (con *Conn) cacheConsumer(c *Consumer) {
 	cm := con.getConsumersMap()
 	cm.setConsumer(c)

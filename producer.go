@@ -654,3 +654,11 @@ func MsgId(id string) ProduceOpt {
 		return nil
 	}
 }
+
+// ProducerTimeoutRetry - set the number of retries for timeout requests
+func ProducerTimeoutRetry(timeoutRetry int) ProducerOpt {
+	return func(opts *ProducerOpts) error {
+		opts.TimeoutRetry = timeoutRetry
+		return nil
+	}
+}

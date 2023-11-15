@@ -334,6 +334,14 @@ func DlsStation(name string) StationOpt {
 	}
 }
 
+// TimeoutRetry - number of retries for timeout errors, default is 5
+func StationTimeoutRetry(timeoutRetry int) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.TimeoutRetry = timeoutRetry
+		return nil
+	}
+}
+
 // Station schema updates related
 
 type stationUpdateSub struct {
