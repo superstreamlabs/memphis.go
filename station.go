@@ -114,6 +114,7 @@ type StationOpts struct {
 	TieredStorageEnabled     bool
 	PartitionsNumber         int
 	DlsStation               string
+	TimeoutRetry             int
 }
 
 type dlsConfiguration struct {
@@ -138,6 +139,7 @@ func GetStationDefaultOptions() StationOpts {
 		TieredStorageEnabled:     false,
 		PartitionsNumber:         1,
 		DlsStation:               "",
+		TimeoutRetry:             5,
 	}
 }
 
@@ -184,14 +186,14 @@ func (opts *StationOpts) createStation(c *Conn) (*Station, error) {
 		s.PartitionsNumber = 1
 	}
 
-	return &s, s.conn.create(&s)
+	return &s, s.conn.create(&s, TimeoutRetry(opts.TimeoutRetry))
 
 }
 
 type StationName string
 
-func (s *Station) Destroy() error {
-	err := s.conn.destroy(s)
+func (s *Station) Destroy(options ...RequestOpt) error {
+	err := s.conn.destroy(s, options...)
 	if err != nil {
 		return err
 	}
@@ -328,6 +330,14 @@ func TieredStorageEnabled(tieredStorageEnabled bool) StationOpt {
 func DlsStation(name string) StationOpt {
 	return func(opts *StationOpts) error {
 		opts.DlsStation = name
+		return nil
+	}
+}
+
+// TimeoutRetry - number of retries for timeout errors, default is 5
+func StationTimeoutRetry(timeoutRetry int) StationOpt {
+	return func(opts *StationOpts) error {
+		opts.TimeoutRetry = timeoutRetry
 		return nil
 	}
 }
