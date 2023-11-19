@@ -771,7 +771,7 @@ func (pm *ProducersMap) getProducer(key string) *Producer {
 
 func (pm *ProducersMap) setProducer(p *Producer) {
 	lockProducersMap.Lock()
-	stationName := getInternalName(p.stationName)
+	stationName := getInternalName(p.stationName.(string))
 	pn := fmt.Sprintf("%s_%s", stationName, p.realName)
 
 	if pm.getProducer(pn) != nil {
@@ -791,7 +791,7 @@ func (pm *ProducersMap) unsetProducer(key string) {
 func (pm *ProducersMap) unsetStationProducers(stationName string) {
 	internalStationName := getInternalName(stationName)
 	for k, v := range *pm {
-		intetnalStationV := getInternalName(v.stationName)
+		intetnalStationV := getInternalName(v.stationName.(string))
 		if intetnalStationV == internalStationName {
 			pm.unsetProducer(k)
 		}
