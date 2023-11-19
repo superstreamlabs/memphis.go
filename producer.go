@@ -248,12 +248,9 @@ func (c *Conn) Produce(stationName interface{}, name string, message any, opts [
 }
 
 func (c *Conn) multiStationProduce(stationName []string, name string, message any, opts []ProducerOpt, pOpts []ProduceOpt) error {
-	p := &Producer{
-		Name:                   name,
-		stationName:            stationName,
-		conn:                   c,
-		realName:               name,
-		isMultiStationProducer: true,
+	p, err := c.CreateProducer(stationName, name, opts...)
+	if err != nil {
+		return memphisError(err)
 	}
 	return p.Produce(message, pOpts...)
 }
