@@ -23,7 +23,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -400,22 +399,17 @@ func (p *Producer) destroyMultiStationProducer(options ...RequestOpt) error {
 		producerKeys[i] = fmt.Sprintf("%s_%s", internalStationName, p.realName)
 	}
 	producerCacheMap := p.conn.getProducersMap()
-	var wg sync.WaitGroup
+
 	for _, producerKey := range producerKeys {
 		producer := producerCacheMap.getProducer(producerKey)
 		if producer != nil {
-			wg.Add(1)
-			go func(p *Producer, pk string, options ...RequestOpt) {
-				defer wg.Done()
-				err := p.Destroy(options...)
-				if err != nil {
-					log.Printf("Failed to destroy producer %s: %s", p.Name, err.Error())
-				}
-			}(producer, producerKey, options...)
+			err := p.Destroy(options...)
+			if err != nil {
+				return memphisError(err)
+			}
 		}
 	}
 
-	wg.Wait()
 	return nil
 }
 
@@ -452,18 +446,15 @@ func (p *Producer) Produce(message any, opts ...ProduceOpt) error {
 }
 
 func (p *Producer) produceToMultiStation(message any, opts ...ProduceOpt) error {
-	stations := p.stationName.([]string)
-	var wg sync.WaitGroup
+	stationNames := p.stationName.([]string)
 
-	for _, station := range stations {
-		wg.Add(1)
-		go func(sn string) {
-			defer wg.Done()
-			p.conn.Produce(sn, p.Name, message, nil, opts)
-		}(station)
+	for _, station := range stationNames {
+		err := p.conn.Produce(station, p.Name, message, nil, opts)
+		if err != nil {
+			return memphisError(err)
+		}
 	}
 
-	wg.Wait()
 	return nil
 }
 
