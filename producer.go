@@ -403,7 +403,7 @@ func (p *Producer) destroyMultiStationProducer(options ...RequestOpt) error {
 	for _, producerKey := range producerKeys {
 		producer := producerCacheMap.getProducer(producerKey)
 		if producer != nil {
-			err := p.Destroy(options...)
+			err := producer.Destroy(options...)
 			if err != nil {
 				return memphisError(err)
 			}
