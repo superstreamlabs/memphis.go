@@ -564,7 +564,7 @@ p.Produce(
 ```
 
 ### Sync produce
-For better reliability. The client will wait for an acknowledgement from the broker before sneding another message.
+For better reliability. The client will wait for an acknowledgement from the broker before sending another message.
 
 ```go
 p.Produce(
@@ -582,6 +582,36 @@ p.Produce(
 	"<message in []byte or map[string]interface{}/[]byte or protoreflect.ProtoMessage or map[string]interface{}(schema validated station - protobuf)/struct with json tags or map[string]interface{} or interface{}(schema validated station - json schema) or []byte/string (schema validated station - graphql schema) or []byte or map[string]interface{} or struct with avro tags(schema validated station - avro schema)>",
     memphis.ProducerPartitionNumber(<int>)
 )
+```
+
+### Produce to multiple stations
+
+Producing to multiple stations can be done by creating a producer with multiple stations and then calling produce on that producer.
+
+```go
+conn, err := memphis.Connect("localhost", "root", memphis.Password("memphis"))
+
+// Handle err
+
+producer, err := conn.CreateProducer(
+    []string{"station1", "station2", "station3"},
+    "MyNewProducer",
+)
+
+// Handle err
+
+err = producer.Produce(
+    []byte("My Message :)"),
+    memphis.AckWaitSec(30),
+)
+
+// Handle err
+```
+
+In this example, the producer sends a message to three different stations: `station1`, `station2`, and `station3`. Alternatively, it also possible to produce to multiple stations using the connection:
+    
+```go
+conn.Produce([]string{"station1", "station2", "station3"}, "producer_name_a", []byte("Hey There!"), []memphis.ProducerOpt{}, []memphis.ProduceOpt{})
 ```
 
 ### Destroying a Producer

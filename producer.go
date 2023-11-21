@@ -42,11 +42,12 @@ const (
 
 // Producer - memphis producer object.
 type Producer struct {
-	Name               string
-	stationName        string
-	conn               *Conn
-	realName           string
-	PartitionGenerator *RoundRobinProducerConsumerGenerator
+	Name                   string
+	stationName            interface{}
+	conn                   *Conn
+	realName               string
+	PartitionGenerator     *RoundRobinProducerConsumerGenerator
+	isMultiStationProducer bool
 }
 
 type createProducerReq struct {
@@ -153,7 +154,15 @@ func extendNameWithRandSuffix(name string) (string, error) {
 }
 
 // CreateProducer - creates a producer.
-func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*Producer, error) {
+func (c *Conn) CreateProducer(stationName interface{}, name string, opts ...ProducerOpt) (*Producer, error) {
+
+	switch stationName.(type) {
+	case string:
+	case []string:
+	default:
+		return nil, memphisError(errors.New("station name should be either string or []string"))
+	}
+
 	name = strings.ToLower(name)
 	defaultOpts := getDefaultProducerOpts()
 	var err error
@@ -169,13 +178,31 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 		if err != nil {
 			return nil, memphisError(err)
 		}
-	} else {
-		stationNameInner := getInternalName(stationName)
-		pn := fmt.Sprintf("%s_%s", stationNameInner, name)
+	}
 
-		if cp := c.producersMap.getProducer(pn); cp != nil {
-			return cp, nil
-		}
+	if singleStationName, ok := stationName.(string); ok {
+		return c.createSingleStationProducer(singleStationName, name, nameWithoutSuffix, defaultOpts)
+	} else {
+		return c.createMultiStationProducer(stationName.([]string), name, nameWithoutSuffix, defaultOpts)
+	}
+}
+
+func (c *Conn) createMultiStationProducer(stationNames []string, name, nameWithoutSuffix string, opts ProducerOpts) (*Producer, error) {
+	return &Producer{
+		Name:                   name,
+		stationName:            stationNames,
+		conn:                   c,
+		realName:               nameWithoutSuffix,
+		isMultiStationProducer: true,
+	}, nil
+}
+
+func (c *Conn) createSingleStationProducer(stationName, name, nameWithoutSuffix string, opts ProducerOpts) (*Producer, error) {
+	stationNameInner := getInternalName(stationName)
+	pn := fmt.Sprintf("%s_%s", stationNameInner, name)
+
+	if cp := c.producersMap.getProducer(pn); cp != nil {
+		return cp, nil
 	}
 
 	p := Producer{
@@ -185,12 +212,12 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 		realName:    nameWithoutSuffix,
 	}
 
-	err = c.listenToSchemaUpdates(stationName)
+	err := c.listenToSchemaUpdates(stationName)
 	if err != nil {
 		return nil, memphisError(err)
 	}
 
-	if err = c.create(&p, TimeoutRetry(defaultOpts.TimeoutRetry)); err != nil {
+	if err = c.create(&p, TimeoutRetry(opts.TimeoutRetry)); err != nil {
 		if err := c.removeSchemaUpdatesListener(stationName); err != nil {
 			return nil, memphisError(err)
 		}
@@ -204,7 +231,30 @@ func (c *Conn) CreateProducer(stationName, name string, opts ...ProducerOpt) (*P
 // Produce - produce a message without creating a new producer, using connection only,
 // in cases where extra performance is needed the recommended way is to create a producer first
 // and produce messages by using the produce receiver function of it
-func (c *Conn) Produce(stationName, name string, message any, opts []ProducerOpt, pOpts []ProduceOpt) error {
+func (c *Conn) Produce(stationName interface{}, name string, message any, opts []ProducerOpt, pOpts []ProduceOpt) error {
+	switch stationName.(type) {
+	case string:
+	case []string:
+	default:
+		return memphisError(errors.New("station name should be either string or []string"))
+	}
+
+	if singleStationName, ok := stationName.(string); ok {
+		return c.singleStationProduce(singleStationName, name, message, opts, pOpts)
+	} else {
+		return c.multiStationProduce(stationName.([]string), name, message, opts, pOpts)
+	}
+}
+
+func (c *Conn) multiStationProduce(stationName []string, name string, message any, opts []ProducerOpt, pOpts []ProduceOpt) error {
+	p, err := c.CreateProducer(stationName, name, opts...)
+	if err != nil {
+		return memphisError(err)
+	}
+	return p.Produce(message, pOpts...)
+}
+
+func (c *Conn) singleStationProduce(stationName, name string, message any, opts []ProducerOpt, pOpts []ProduceOpt) error {
 	if cp, err := c.getProducerFromCache(stationName, name); err == nil {
 		return cp.Produce(message, pOpts...)
 	}
@@ -253,7 +303,7 @@ func (p *Producer) getCreationSubject() string {
 func (p *Producer) getCreationReq() any {
 	return createProducerReq{
 		Name:           p.Name,
-		StationName:    p.stationName,
+		StationName:    p.stationName.(string),
 		ConnectionId:   p.conn.ConnId,
 		ProducerType:   "application",
 		RequestVersion: lastProducerCreationReqVersion,
@@ -274,7 +324,7 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 		return memphisError(errors.New(cr.Err))
 	}
 
-	sn := getInternalName(p.stationName)
+	sn := getInternalName(p.stationName.(string))
 
 	p.conn.stationUpdatesMu.Lock()
 	sd := &p.conn.stationUpdatesSubs[sn].schemaDetails
@@ -288,7 +338,7 @@ func (p *Producer) handleCreationResp(resp []byte) error {
 	}
 
 	if cr.StationVersion >= 2 {
-		err = p.conn.listenToFunctionsUpdates(p.stationName, cr.StationPartitionsFirstFunctions)
+		err = p.conn.listenToFunctionsUpdates(p.stationName.(string), cr.StationPartitionsFirstFunctions)
 		if err != nil {
 			return memphisError(err)
 		}
@@ -308,16 +358,24 @@ func (p *Producer) getDestructionSubject() string {
 }
 
 func (p *Producer) getDestructionReq() any {
-	return removeProducerReq{Name: p.Name, StationName: p.stationName, Username: p.conn.username, ConnectionId: p.conn.ConnId, RequestVersion: lastProducerDestroyReqVersion}
+	return removeProducerReq{Name: p.Name, StationName: p.stationName.(string), Username: p.conn.username, ConnectionId: p.conn.ConnId, RequestVersion: lastProducerDestroyReqVersion}
 }
 
 // Destroy - destoy this producer.
 func (p *Producer) Destroy(options ...RequestOpt) error {
-	if err := p.conn.removeSchemaUpdatesListener(p.stationName); err != nil {
+	if p.isMultiStationProducer {
+		return p.destroyMultiStationProducer(options...)
+	}
+
+	return p.destroySingleStationProducer(options...)
+}
+
+func (p *Producer) destroySingleStationProducer(options ...RequestOpt) error {
+	if err := p.conn.removeSchemaUpdatesListener(p.stationName.(string)); err != nil {
 		return memphisError(err)
 	}
 
-	if err := p.conn.removeFunctionsUpdatesListener(p.stationName); err != nil {
+	if err := p.conn.removeFunctionsUpdatesListener(p.stationName.(string)); err != nil {
 		return memphisError(err)
 	}
 
@@ -327,6 +385,31 @@ func (p *Producer) Destroy(options ...RequestOpt) error {
 	}
 
 	p.conn.unCacheProducer(p)
+	return nil
+}
+
+func (p *Producer) destroyMultiStationProducer(options ...RequestOpt) error {
+	stationNames := p.stationName.([]string)
+	internalStationNames := make([]string, len(stationNames))
+	for i, stationName := range stationNames {
+		internalStationNames[i] = getInternalName(stationName)
+	}
+	producerKeys := make([]string, len(internalStationNames))
+	for i, internalStationName := range internalStationNames {
+		producerKeys[i] = fmt.Sprintf("%s_%s", internalStationName, p.realName)
+	}
+	producerCacheMap := p.conn.getProducersMap()
+
+	for _, producerKey := range producerKeys {
+		producer := producerCacheMap.getProducer(producerKey)
+		if producer != nil {
+			err := producer.Destroy(options...)
+			if err != nil {
+				return memphisError(err)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -355,6 +438,27 @@ func getDefaultProduceOpts() ProduceOpts {
 
 // Producer.Produce - produces a message into a station. message is of type []byte/protoreflect.ProtoMessage in case it is a schema validated station
 func (p *Producer) Produce(message any, opts ...ProduceOpt) error {
+	if p.isMultiStationProducer {
+		return p.produceToMultiStation(message, opts...)
+	}
+
+	return p.produceToSingleStation(message, opts...)
+}
+
+func (p *Producer) produceToMultiStation(message any, opts ...ProduceOpt) error {
+	stationNames := p.stationName.([]string)
+
+	for _, station := range stationNames {
+		err := p.conn.Produce(station, p.Name, message, nil, opts)
+		if err != nil {
+			return memphisError(err)
+		}
+	}
+
+	return nil
+}
+
+func (p *Producer) produceToSingleStation(message any, opts ...ProduceOpt) error {
 	defaultOpts := getDefaultProduceOpts()
 	defaultOpts.Message = message
 
@@ -401,7 +505,7 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	}
 
 	var streamName string
-	sn := getInternalName(p.stationName)
+	sn := getInternalName(p.stationName.(string))
 
 	if len(p.conn.stationPartitions[sn].PartitionsList) == 1 {
 		streamName = fmt.Sprintf("%v$%v", sn, p.conn.stationPartitions[sn].PartitionsList[0])
@@ -498,7 +602,7 @@ func (p *Producer) msgToString(msg any) string {
 }
 
 func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error) {
-	internStation := getInternalName(p.stationName)
+	internStation := getInternalName(p.stationName.(string))
 	if p.conn.clientsUpdatesSub.StationSchemaverseToDlsMap[internStation] {
 		msgToSend := p.msgToString(msg)
 		headersForDls := make(map[string]string)
@@ -522,7 +626,7 @@ func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error)
 		_ = p.conn.brokerConn.Publish(schemaVerseDlsSubject, msgToPublish)
 
 		if p.conn.clientsUpdatesSub.ClusterConfigurations["send_notification"] {
-			p.sendNotification("Schema validation has failed", "Station: "+p.stationName+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend, schemaVFailAlertType)
+			p.sendNotification("Schema validation has failed", "Station: "+p.stationName.(string)+"\nProducer: "+p.Name+"\nError: "+err.Error(), msgToSend, schemaVFailAlertType)
 		}
 	}
 }
@@ -583,7 +687,7 @@ func (p *Producer) validateMsg(msg any, headers map[string][]string) ([]byte, er
 }
 
 func (p *Producer) getSchemaDetails() (schemaDetails, error) {
-	return p.conn.getSchemaDetails(p.stationName)
+	return p.conn.getSchemaDetails(p.stationName.(string))
 }
 
 // Deprecated: will be stopped to be supported after November 1'st, 2023.
