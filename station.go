@@ -462,7 +462,7 @@ func (c *Conn) removeFunctionsUpdatesListener(stationName string) error {
 
 	sfs, ok := c.stationFunctionSubs[sn]
 	if !ok {
-		return memphisError(errors.New("functions listener doesn't exist"))
+		return nil
 	}
 
 	sfs.StationFunctionsMu.Lock()
@@ -488,7 +488,7 @@ func (c *Conn) removeSchemaUpdatesListener(stationName string) error {
 	defer stationUpdatesSubsLock.Unlock()
 	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
-		return memphisError(errors.New("listener doesn't exist"))
+		return nil
 	}
 
 	sus.refCount--
@@ -511,7 +511,7 @@ func (c *Conn) getSchemaDetails(stationName string) (schemaDetails, error) {
 
 	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
-		return schemaDetails{}, memphisError(errors.New("station subscription doesn't exist"))
+		return schemaDetails{}, nil
 	}
 
 	return sus.schemaDetails, nil

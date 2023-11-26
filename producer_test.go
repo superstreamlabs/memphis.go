@@ -7,7 +7,7 @@ import (
 )
 
 func TestCreateProducer(t *testing.T) {
-	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", Password("memphis"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -25,17 +25,8 @@ func TestCreateProducer(t *testing.T) {
 	}
 
 	_, err = s.CreateProducer("producer_name_a")
-	if err == nil {
-		t.Error("Producer names has to be unique")
-	}
-
-	_, err = s.CreateProducer("producer_name_a", ProducerGenUniqueSuffix())
 	if err != nil {
-		t.Error(err)
-	}
-	_, err = s.CreateProducer("producer_name_a", ProducerGenUniqueSuffix())
-	if err != nil {
-		t.Error(err)
+		t.Error("Producer names have not to be unique")
 	}
 
 	_, err = c.CreateProducer("station_name_1", "producer_name_b")
@@ -44,8 +35,8 @@ func TestCreateProducer(t *testing.T) {
 	}
 
 	_, err = c.CreateProducer("station_name_1", "producer_name_b")
-	if err == nil {
-		t.Error("Producer names has to be unique")
+	if err != nil {
+		t.Error("Producer names have not to be unique")
 	}
 
 	//This will create a station
@@ -58,7 +49,7 @@ func TestCreateProducer(t *testing.T) {
 }
 
 func TestProduce(t *testing.T) {
-	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", Password("memphis"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -83,7 +74,7 @@ func TestProduce(t *testing.T) {
 }
 
 func TestRemoveProducer(t *testing.T) {
-	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", Password("memphis"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -108,7 +99,7 @@ func TestRemoveProducer(t *testing.T) {
 }
 
 func TestFetch(t *testing.T) {
-	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", Password("memphis"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -137,9 +128,12 @@ func TestFetch(t *testing.T) {
 		t.Error(err)
 	}
 
-	msgs, err := consumer.Fetch(consumer.BatchSize, true)
+	msgs, err := consumer.Fetch(1, true)
 	if err != nil {
 		t.Error(err)
+	}
+	if len(msgs) == 0 {
+		t.Error("Fetch did not receive any message")
 	}
 
 	res := string(msgs[0].Data())
@@ -153,9 +147,10 @@ func TestFetch(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	return
 }
 func TestConsume(t *testing.T) {
-	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", Password("memphis"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -201,7 +196,7 @@ func TestConsume(t *testing.T) {
 }
 
 func TestCreateConsumer(t *testing.T) {
-	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", Password("memphis"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -219,38 +214,28 @@ func TestCreateConsumer(t *testing.T) {
 	}
 
 	_, err = s.CreateConsumer("consumer_name_a", ConsumerGroup("consumer_group_3"), PullInterval(1*time.Second), BatchSize(10), BatchMaxWaitTime(5*time.Second), MaxAckTime(30*time.Second), MaxMsgDeliveries(10))
-	if err == nil {
+	if err != nil {
 		t.Error(err)
 	}
 
 	_, err = c.CreateConsumer("station_name_1", "consumer_name_b", ConsumerGroup("consumer_group_g"), PullInterval(1*time.Second), BatchSize(10), BatchMaxWaitTime(5*time.Second), MaxAckTime(30*time.Second), MaxMsgDeliveries(10))
 	if err != nil {
-		t.Error("Consumer names has to be unique")
-	}
-
-	_, err = s.CreateConsumer("consumer_name_a", ConsumerGenUniqueSuffix())
-	if err != nil {
-		t.Error(err)
-	}
-
-	_, err = s.CreateConsumer("consumer_name_a", ConsumerGenUniqueSuffix())
-	if err != nil {
 		t.Error(err)
 	}
 
 	_, err = c.CreateConsumer("station_name_1", "consumer_name_b")
-	if err == nil {
-		t.Error("Consumer names has to be unique")
+	if err != nil {
+		t.Error(err)
 	}
 
 	_, err = c.CreateConsumer("station_name_1", "consumer_name_a")
-	if err == nil {
-		t.Error("Consumer names has to be unique")
+	if err != nil {
+		t.Error(err)
 	}
 }
 
 func TestRemoveConsumer(t *testing.T) {
-	c, err := Connect("localhost", "root", ConnectionToken("memphis"))
+	c, err := Connect("localhost", "root", Password("memphis"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -288,7 +273,7 @@ func TestRemoveConsumer(t *testing.T) {
 }
 
 func TestFullFlow(t *testing.T) {
-	conn, err := Connect("127.0.0.1", "root", ConnectionToken("memphis"))
+	conn, err := Connect("127.0.0.1", "root", Password("memphis"))
 
 	if err != nil {
 		t.Errorf("Connection creation failed: %v\n", err)
@@ -338,22 +323,25 @@ func TestFullFlow(t *testing.T) {
 		t.Errorf("Consumer creation failed: %v\n", err)
 	}
 
-	handlerCh := make(chan struct{})
+	handlerCh := make(chan error)
 	handler := func(msgs []*Msg, err error, ctx context.Context) {
 		if err != nil {
-			t.Errorf("Fetch failed: %v\n", err)
-			handlerCh <- struct{}{}
+			handlerCh <- err
 			return
 		}
 
 		for _, msg := range msgs {
 			msg.Ack()
 		}
-		handlerCh <- struct{}{}
+		handlerCh <- nil
 	}
 
 	consumer.Consume(handler)
-	<-handlerCh
+	err = <-handlerCh
+	if err != nil {
+		t.Fatalf("Fetch failed with error %s", err.Error())
+	}
+
 	consumer.StopConsume()
 
 	err = consumer.Destroy()

@@ -1,6 +1,6 @@
 module github.com/memphisdev/memphis.go
 
-go 1.18
+go 1.19.13
 
 require (
 	github.com/graph-gophers/graphql-go v1.5.0
@@ -9,6 +9,7 @@ require (
 )
 
 require (
+	github.com/g41797/sputnik v0.0.21
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/hamba/avro/v2 v2.13.0
 	github.com/santhosh-tekuri/jsonschema/v5 v5.1.0
@@ -16,6 +17,10 @@ require (
 )
 
 require (
+	github.com/g41797/godotenv v1.5.3 // indirect
+	github.com/g41797/gonfig v1.0.1 // indirect
+	github.com/g41797/kissngoqueue v0.1.5 // indirect
+	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -28,4 +33,5 @@ require (
 	golang.org/x/crypto v0.6.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
