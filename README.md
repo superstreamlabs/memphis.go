@@ -828,6 +828,3 @@ consumer.Destroy();
 ```go
 conn.IsConnected()
 ```
-
-# Test status [![Test](https://github.com/memphisdev/memphis.go/actions/workflows/test.yml/badge.svg)](https://github.com/memphisdev/memphis.go/actions/workflows/test.yml)
-
