@@ -144,7 +144,7 @@ s0, err = c.CreateStation("<station-name>")
 
 s1, err = c.CreateStation("<station-name>", 
  memphis.RetentionTypeOpt(<Messages/MaxMessageAgeSeconds/Bytes/AckBased>), // AckBased - cloud only
- memphis.RetentionVal(<int>), 
+ memphis.RetentionVal(<int>), // defaults to 3600
  memphis.StorageTypeOpt(<Memory/Disk>), 
  memphis.Replicas(<int>), 
  memphis.IdempotencyWindow(<time.Duration>), // defaults to 2 minutes
