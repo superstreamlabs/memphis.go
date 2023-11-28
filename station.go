@@ -129,7 +129,7 @@ type StationOpt func(*StationOpts) error
 func GetStationDefaultOptions() StationOpts {
 	return StationOpts{
 		RetentionType:            MaxMessageAgeSeconds,
-		RetentionVal:             604800,
+		RetentionVal:             3600,
 		StorageType:              Disk,
 		Replicas:                 1,
 		IdempotencyWindow:        2 * time.Minute,
