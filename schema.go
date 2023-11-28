@@ -70,7 +70,7 @@ func (s *Schema) getDestructionReq() any {
 	return nil
 }
 
-// CreateSchema - validates and uploads a new schema to the Broker
+// CreateSchema - validates and uploads a new schema to the Broker. In case schema is already exist a new version will be created
 func (c *Conn) CreateSchema(name, schemaType, path string, options ...RequestOpt) error {
 	data, err := os.ReadFile(path)
 	if err != nil {

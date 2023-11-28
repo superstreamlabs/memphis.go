@@ -366,6 +366,7 @@ err := s.Destroy();
 ```
 
 ### Creating a new Schema
+In case schema is already exist a new version will be created
 
 ```go
 err := conn.CreateSchema("<schema-name>", "<schema-type>", "<schema-file-path>")
