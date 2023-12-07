@@ -70,7 +70,7 @@ type Options struct {
 	AccountId         int
 	ConnectionToken   string
 	Reconnect         bool
-	MaxReconnect      int
+	MaxReconnect      int // MaxReconnect is the maximum number of reconnection attempts. The default value is -1 which means reconnect indefinitely.
 	ReconnectInterval time.Duration
 	Timeout           time.Duration
 	TLSOpts           TLSOpts

@@ -65,7 +65,7 @@ c, err := memphis.Connect("<memphis-host>",
   	memphis.AccountId(<int>) // You can find it on the profile page in the Memphis UI. This field should be sent only on the cloud version of Memphis, otherwise it will be ignored
   	memphis.Port(<int>), // defaults to 6666       
 	memphis.Reconnect(<bool>), // defaults to true
-	memphis.MaxReconnect(<int>), // defaults to -1
+	memphis.MaxReconnect(<int>), // Set the maximum number of reconnection attempts. The default value is -1, which means unlimited reconnection attempts.
   	memphis.ReconnectInterval(<time.Duration>) // defaults to 1 second
   	memphis.Timeout(<time.Duration>) // defaults to 15 seconds
 	// for TLS connection:
