@@ -70,7 +70,7 @@ type Options struct {
 	AccountId         int
 	ConnectionToken   string
 	Reconnect         bool
-	MaxReconnect      int
+	MaxReconnect      int // MaxReconnect is the maximum number of reconnection attempts. The default value is -1 which means reconnect indefinitely.
 	ReconnectInterval time.Duration
 	Timeout           time.Duration
 	TLSOpts           TLSOpts
@@ -220,7 +220,7 @@ func getDefaultOptions() Options {
 	return Options{
 		Port:              6666,
 		Reconnect:         true,
-		MaxReconnect:      10,
+		MaxReconnect:      -1,
 		ReconnectInterval: 1 * time.Second,
 		Timeout:           2 * time.Second,
 		TLSOpts: TLSOpts{
