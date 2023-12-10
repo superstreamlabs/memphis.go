@@ -98,7 +98,7 @@ func (c *Conn) CreateSchema(name, schemaType, path string, options ...RequestOpt
 		MessageStructName: "",
 	}
 
-	if err = c.create(&s, options...); err != nil && !strings.Contains(err.Error(), "already exist") {
+	if err = c.create(&s, options...); err != nil && !strings.Contains(err.Error(), "already exists") {
 		return memphisError(err)
 	}
 
