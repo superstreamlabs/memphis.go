@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 )
 
 const (
@@ -97,7 +98,7 @@ func (c *Conn) CreateSchema(name, schemaType, path string, options ...RequestOpt
 		MessageStructName: "",
 	}
 
-	if err = c.create(&s, options...); err != nil {
+	if err = c.create(&s, options...); err != nil && !strings.Contains(err.Error(), "already exists") {
 		return memphisError(err)
 	}
 
