@@ -637,53 +637,53 @@ func (p *Producer) validateMsg(msg any, headers map[string][]string) ([]byte, er
 		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
 	}
 
+	var originalMsgBytes []byte
+	switch msg.(type) {
+	case []byte:
+		originalMsgBytes = msg.([]byte)
+	case map[string]interface{}:
+		originalMsgBytes, err = json.Marshal(msg)
+		if err != nil {
+			return nil, memphisError(err)
+		}
+	case protoreflect.ProtoMessage:
+		originalMsgBytes, err = proto.Marshal(msg.(protoreflect.ProtoMessage))
+		if err != nil {
+			return nil, memphisError(err)
+		}
+	case string:
+		originalMsgBytes, err = json.Marshal(msg)
+		if err != nil {
+			return nil, memphisError(err)
+		}
+	default:
+		msgType := reflect.TypeOf(msg).Kind()
+		if msgType == reflect.Struct {
+			originalMsgBytes, err = json.Marshal(msg)
+			if err != nil {
+				return nil, memphisError(err)
+			}
+		} else {
+			return nil, memphisError(errors.New("unsupported message type"))
+		}
+	}
+
 	// empty schema type means there is no schema and validation is not needed
-	// so we just verify the type is byte slice or map[string]interface{}
-	if sd.schemaType == "" {
-		switch msg.(type) {
-		case []byte:
-			return msg.([]byte), nil
-		case map[string]interface{}:
-			return json.Marshal(msg)
-		case protoreflect.ProtoMessage:
-			msgBytes, err := proto.Marshal(msg.(protoreflect.ProtoMessage))
-			if err != nil {
-				return nil, memphisError(err)
+	if sd.schemaType != "" {
+		msgBytes, err := sd.validateMsg(msg)
+		if err != nil {
+			msgToSend := originalMsgBytes
+			if msgBytes != nil {
+				msgToSend = msgBytes
 			}
-			return msgBytes, nil
-		case string:
-			msgBytes, err := json.Marshal(msg)
-			if err != nil {
-				return nil, memphisError(err)
-			}
-			return msgBytes, nil
-		default:
-			msgType := reflect.TypeOf(msg).Kind()
-			if msgType == reflect.Struct {
-				msgBytes, err := json.Marshal(msg)
-				if err != nil {
-					return nil, memphisError(err)
-				}
-				return msgBytes, nil
-			} else {
-				return nil, memphisError(errors.New("unsupported message type"))
-			}
-		}
 
+			p.sendMsgToDls(msgToSend, headers, err)
+			return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
+		}
+		originalMsgBytes = msgBytes
 	}
 
-	msgBytes, err := sd.validateMsg(msg)
-	if err != nil {
-		msgToSend := msg
-		if msgBytes != nil {
-			msgToSend = msgBytes
-		}
-
-		p.sendMsgToDls(msgToSend, headers, err)
-		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
-	}
-
-	return msgBytes, nil
+	return originalMsgBytes, nil
 }
 
 func (p *Producer) getSchemaDetails() (schemaDetails, error) {
