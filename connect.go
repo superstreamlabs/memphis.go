@@ -98,6 +98,7 @@ type FetchOpts struct {
 	LastMessages             int64
 	Prefetch                 bool
 	FetchPartitionKey        string
+	FetchPartitionNumber     int
 }
 
 type RequestOpts struct {
@@ -118,6 +119,7 @@ func getDefaultFetchOptions() FetchOpts {
 		LastMessages:             -1,
 		Prefetch:                 false,
 		FetchPartitionKey:        "",
+		FetchPartitionNumber:     -1,
 	}
 }
 
@@ -843,8 +845,8 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 			}
 		}
 	}
-	if defaultOpts.BatchSize > maxBatchSize {
-		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize)))
+	if defaultOpts.BatchSize > maxBatchSize || defaultOpts.BatchSize < 1 {
+		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize) + " or less than 1"))
 	}
 	if cons == nil {
 		if defaultOpts.GenUniqueSuffix {
@@ -863,7 +865,7 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 	} else {
 		consumer = cons
 	}
-	msgs, err := consumer.Fetch(defaultOpts.BatchSize, defaultOpts.Prefetch, ConsumerPartitionKey(defaultOpts.FetchPartitionKey))
+	msgs, err := consumer.Fetch(defaultOpts.BatchSize, defaultOpts.Prefetch, ConsumerPartitionKey(defaultOpts.FetchPartitionKey), ConsumerPartitionNumber(defaultOpts.FetchPartitionNumber))
 	if err != nil {
 		return nil, err
 	}
@@ -882,6 +884,14 @@ func FetchConsumerGroup(cg string) FetchOpt {
 func FetchPartitionKey(partitionKey string) FetchOpt {
 	return func(opts *FetchOpts) error {
 		opts.FetchPartitionKey = partitionKey
+		return nil
+	}
+}
+
+// PartitionNumber - partition number to consume from.
+func FetchPartitionNumber(partitionNumber int) FetchOpt {
+	return func(opts *FetchOpts) error {
+		opts.FetchPartitionNumber = partitionNumber
 		return nil
 	}
 }

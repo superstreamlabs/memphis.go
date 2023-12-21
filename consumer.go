@@ -347,8 +347,8 @@ func (opts *ConsumerOpts) createConsumer(c *Conn, options ...RequestOpt) (*Consu
 		return nil, memphisError(errors.New("Consumer creation options can't contain both startConsumeFromSequence and lastMessages"))
 	}
 
-	if consumer.BatchSize > maxBatchSize {
-		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize)))
+	if consumer.BatchSize > maxBatchSize || consumer.BatchSize < 1 {
+		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize) + " or less than 1"))
 	}
 
 	err = c.listenToSchemaUpdates(opts.StationName)
@@ -618,8 +618,8 @@ func (c *Consumer) fetchSubscriprionWithTimeout(partitionKey string, partitionNu
 
 // Fetch - immediately fetch a batch of messages.
 func (c *Consumer) Fetch(batchSize int, prefetch bool, opts ...ConsumingOpt) ([]*Msg, error) {
-	if batchSize > maxBatchSize {
-		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize)))
+	if batchSize > maxBatchSize || batchSize < 1 {
+		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize) + " or less than 1"))
 	}
 
 	defaultOpts := getDefaultConsumingOptions()
