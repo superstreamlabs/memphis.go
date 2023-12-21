@@ -845,8 +845,8 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 			}
 		}
 	}
-	if defaultOpts.BatchSize > maxBatchSize {
-		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize)))
+	if defaultOpts.BatchSize > maxBatchSize || defaultOpts.BatchSize < 1 {
+		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize) + " or less than 1"))
 	}
 	if cons == nil {
 		if defaultOpts.GenUniqueSuffix {
