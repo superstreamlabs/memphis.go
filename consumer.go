@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/dynamicpb"
@@ -56,7 +57,7 @@ type Consumer struct {
 	MaxMsgDeliveries         int
 	conn                     *Conn
 	stationName              string
-	subscriptions            map[int]*nats.Subscription
+	jsConsumers              map[int]jetstream.Consumer
 	pingInterval             time.Duration
 	subscriptionActive       bool
 	consumeActive            bool
@@ -76,7 +77,7 @@ type Consumer struct {
 
 // Msg - a received message, can be acked.
 type Msg struct {
-	msg                 *nats.Msg
+	msg                 any
 	conn                *Conn
 	cgName              string
 	internalStationName string
@@ -89,7 +90,14 @@ type PMsgToAck struct {
 
 // Msg.Data - get message's data.
 func (m *Msg) Data() []byte {
-	return m.msg.Data
+	if msg, ok := m.msg.(*nats.Msg); ok {
+		return msg.Data
+	} else {
+		if jsMsg, ok := m.msg.(jetstream.Msg); ok {
+			return jsMsg.Data()
+		}
+	}
+	return nil
 }
 
 // Msg.DataDeserialized - get message's deserialized data.
@@ -100,8 +108,15 @@ func (m *Msg) DataDeserialized() (any, error) {
 	if err != nil {
 		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
 	}
+	var msgBytes []byte
 
-	msgBytes := m.msg.Data
+	if msg, ok := m.msg.(*nats.Msg); ok {
+		msgBytes = msg.Data
+	} else if jsMsg, ok := m.msg.(jetstream.Msg); ok {
+		msgBytes = jsMsg.Data()
+	} else {
+		return nil, errors.New("Message format is not supported")
+	}
 
 	_, err = sd.validateMsg(msgBytes)
 	if err != nil {
@@ -148,16 +163,40 @@ func (m *Msg) DataDeserialized() (any, error) {
 
 // Msg.GetSequenceNumber - get message's sequence number
 func (m *Msg) GetSequenceNumber() (uint64, error) {
-	meta, err := m.msg.Metadata()
-	if err != nil {
-		return 0, nil
+	var seq uint64
+
+	if msg, ok := m.msg.(*nats.Msg); ok {
+		meta, err := msg.Metadata()
+		if err != nil {
+			return 0, nil
+		}
+		seq = meta.Sequence.Stream
+	} else if jsMsg, ok := m.msg.(jetstream.Msg); ok {
+		meta, err := jsMsg.Metadata()
+		if err != nil {
+			return 0, nil
+		}
+		seq = meta.Sequence.Stream
+	} else {
+		return 0, errors.New("Message format is not supported")
 	}
-	return meta.Sequence.Stream, nil
+	// meta, err := m.msg.Metadata()
+	// if err != nil {
+	// 	return 0, nil
+	// }
+	return seq, nil
 }
 
 // Msg.Ack - ack the message.
 func (m *Msg) Ack() error {
-	err := m.msg.Ack()
+	var err error
+	if msg, ok := m.msg.(*nats.Msg); ok {
+		err = msg.Ack()
+	} else if jsMsg, ok := m.msg.(jetstream.Msg); ok {
+		err = jsMsg.Ack()
+	} else {
+		return errors.New("Message format is not supported")
+	}
 	if err != nil {
 		headers := m.GetHeaders()
 		id, ok := headers["$memphis_pm_id"]
@@ -187,7 +226,15 @@ func (m *Msg) Ack() error {
 // Msg.GetHeaders - get headers per message
 func (m *Msg) GetHeaders() map[string]string {
 	headers := map[string]string{}
-	for key, value := range m.msg.Header {
+	var natsHeaders nats.Header
+	if msg, ok := m.msg.(*nats.Msg); ok {
+		natsHeaders = msg.Header
+	} else if jsMsg, ok := m.msg.(jetstream.Msg); ok {
+		natsHeaders = jsMsg.Headers()
+	} else {
+		return headers
+	}
+	for key, value := range natsHeaders {
 		if strings.HasPrefix(key, "$memphis") {
 			continue
 		}
@@ -199,17 +246,18 @@ func (m *Msg) GetHeaders() map[string]string {
 // Msg.Delay - Delay a message redelivery
 func (m *Msg) Delay(duration time.Duration) error {
 	headers := m.GetHeaders()
-	_, ok := headers["$memphis_pm_id"]
-	if !ok {
-		return m.msg.NakWithDelay(duration)
-	} else {
-		_, ok := headers["$memphis_pm_cg_name"]
-		if !ok {
-			return m.msg.NakWithDelay(duration)
+	_, pmOk := headers["$memphis_pm_id"]
+	_, cgOk := headers["$memphis_pm_cg_name"]
+	if !pmOk || !cgOk {
+		if msg, ok := m.msg.(*nats.Msg); ok {
+			return msg.NakWithDelay(duration)
+		} else if jsMsg, ok := m.msg.(jetstream.Msg); ok {
+			return jsMsg.NakWithDelay(duration)
 		} else {
-			return memphisError(ConsumerErrDelayDlsMsg)
+			return errors.New("Message format is not supported")
 		}
 	}
+	return memphisError(ConsumerErrDelayDlsMsg)
 }
 
 // ConsumerErrHandler is used to process asynchronous errors.
@@ -371,30 +419,51 @@ func (opts *ConsumerOpts) createConsumer(c *Conn, options ...RequestOpt) (*Consu
 	durable := getInternalName(consumer.ConsumerGroup)
 
 	if len(consumer.conn.stationPartitions[sn].PartitionsList) == 0 {
-		consumer.subscriptions = make(map[int]*nats.Subscription, 1)
+		consumer.jsConsumers = make(map[int]jetstream.Consumer, 1)
 		subj := sn + ".final"
-		sub, err := c.brokerPullSubscribe(subj,
-			durable,
-			nats.ManualAck(),
-			nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
-			nats.MaxDeliver(opts.MaxMsgDeliveries))
+		jsCons, err := c.jetstreamConsumer(subj, durable,
+			jetstream.ConsumerConfig{
+				Durable:   durable,
+				AckPolicy: jetstream.AckExplicitPolicy,
+				// DeliverPolicy: deliveryPolicy, //TODO: add delivery policy
+				AckWait:       opts.MaxAckTime,
+				MaxDeliver:    opts.MaxMsgDeliveries,
+				FilterSubject: subj,
+				ReplayPolicy:  jetstream.ReplayInstantPolicy,
+				MaxAckPending: -1,
+				HeadersOnly:   false,
+			})
+		// nats.ManualAck(),
+		// nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
+		// nats.MaxDeliver(opts.MaxMsgDeliveries))
 		if err != nil {
 			return nil, memphisError(err)
 		}
-		consumer.subscriptions[1] = sub
+		consumer.jsConsumers[1] = jsCons
 	} else {
-		consumer.subscriptions = make(map[int]*nats.Subscription, len(consumer.conn.stationPartitions[sn].PartitionsList))
+		consumer.jsConsumers = make(map[int]jetstream.Consumer, len(consumer.conn.stationPartitions[sn].PartitionsList))
 		for _, p := range consumer.conn.stationPartitions[sn].PartitionsList {
 			subj := fmt.Sprintf("%s$%s.final", sn, strconv.Itoa(p))
-			sub, err := c.brokerPullSubscribe(subj,
-				durable,
-				nats.ManualAck(),
-				nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
-				nats.MaxDeliver(opts.MaxMsgDeliveries))
+			jsCons, err := c.jetstreamConsumer(fmt.Sprintf("%s$%s", sn, strconv.Itoa(p)), durable,
+				// durable,
+				jetstream.ConsumerConfig{
+					Durable:   durable,
+					AckPolicy: jetstream.AckExplicitPolicy,
+					// DeliverPolicy: deliveryPolicy, //TODO: add delivery policy
+					AckWait:       opts.MaxAckTime,
+					MaxDeliver:    opts.MaxMsgDeliveries,
+					FilterSubject: subj,
+					ReplayPolicy:  jetstream.ReplayInstantPolicy,
+					MaxAckPending: -1,
+					HeadersOnly:   false,
+				})
+			// nats.ManualAck(),
+			// nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
+			// nats.MaxDeliver(opts.MaxMsgDeliveries))
 			if err != nil {
 				return nil, memphisError(err)
 			}
-			consumer.subscriptions[p] = sub
+			consumer.jsConsumers[p] = jsCons
 		}
 	}
 
@@ -436,17 +505,19 @@ func (c *Consumer) pingConsumer() {
 		case <-ticker.C:
 			var generalErr error
 			wg := sync.WaitGroup{}
-			wg.Add(len(c.subscriptions))
-			for _, sub := range c.subscriptions {
-				go func(sub *nats.Subscription) {
-					_, err := sub.ConsumerInfo()
+			wg.Add(len(c.jsConsumers))
+			for _, jscons := range c.jsConsumers {
+				go func(jscons jetstream.Consumer) {
+					ctx, cancelfunc := context.WithTimeout(context.Background(), JetstreamOperationTimeout*time.Second)
+					defer cancelfunc()
+					_, err := jscons.Info(ctx)
 					if err != nil {
 						generalErr = err
 						wg.Done()
 						return
 					}
 					wg.Done()
-				}(sub)
+				}(jscons)
 			}
 			wg.Wait()
 			if generalErr != nil {
@@ -561,7 +632,7 @@ func (c *Consumer) fetchSubscription(partitionKey string, partitionNum int) ([]*
 	wrappedMsgs := make([]*Msg, 0, c.BatchSize)
 	partitionNumber := 1
 
-	if len(c.subscriptions) > 1 {
+	if len(c.jsConsumers) > 1 {
 		if partitionKey != "" && partitionNum > 0 {
 			return nil, memphisError(fmt.Errorf("Can not use both partition number and partition key"))
 		}
@@ -582,14 +653,20 @@ func (c *Consumer) fetchSubscription(partitionKey string, partitionNum int) ([]*
 		}
 	}
 
-	msgs, err := c.subscriptions[partitionNumber].Fetch(c.BatchSize, nats.MaxWait(c.BatchMaxTimeToWait))
+	batch, err := c.jsConsumers[partitionNumber].Fetch(c.BatchSize, jetstream.FetchMaxWait(c.BatchMaxTimeToWait))
 	if err != nil && err != nats.ErrTimeout {
 		c.subscriptionActive = false
 		c.callErrHandler(ConsumerErrStationUnreachable)
 		c.StopConsume()
 	}
+	if batch.Error() != nil && batch.Error() != nats.ErrTimeout {
+		c.subscriptionActive = false
+		c.callErrHandler(ConsumerErrStationUnreachable)
+		c.StopConsume()
+	}
+	// msgs := batch.Messages()
 	internalStationName := getInternalName(c.stationName)
-	for _, msg := range msgs {
+	for msg := range batch.Messages() {
 		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, internalStationName: internalStationName})
 	}
 	return wrappedMsgs, nil
