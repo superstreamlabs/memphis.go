@@ -425,22 +425,7 @@ func (opts *ConsumerOpts) createConsumer(c *Conn, options ...RequestOpt) (*Consu
 
 	if len(consumer.conn.stationPartitions[sn].PartitionsList) == 0 {
 		consumer.jsConsumers = make(map[int]jetstream.Consumer, 1)
-		subj := sn + ".final"
-		jsCons, err := c.jetstreamConsumer(subj, durable,
-			jetstream.ConsumerConfig{
-				Durable:   durable,
-				AckPolicy: jetstream.AckExplicitPolicy,
-				// DeliverPolicy: deliveryPolicy, //TODO: add delivery policy
-				AckWait:       opts.MaxAckTime,
-				MaxDeliver:    opts.MaxMsgDeliveries,
-				FilterSubject: subj,
-				ReplayPolicy:  jetstream.ReplayInstantPolicy,
-				MaxAckPending: -1,
-				HeadersOnly:   false,
-			})
-		// nats.ManualAck(),
-		// nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
-		// nats.MaxDeliver(opts.MaxMsgDeliveries))
+		jsCons, err := c.jetstreamConsumer(sn, durable)
 		if err != nil {
 			return nil, memphisError(err)
 		}
@@ -448,23 +433,8 @@ func (opts *ConsumerOpts) createConsumer(c *Conn, options ...RequestOpt) (*Consu
 	} else {
 		consumer.jsConsumers = make(map[int]jetstream.Consumer, len(consumer.conn.stationPartitions[sn].PartitionsList))
 		for _, p := range consumer.conn.stationPartitions[sn].PartitionsList {
-			subj := fmt.Sprintf("%s$%s.final", sn, strconv.Itoa(p))
-			jsCons, err := c.jetstreamConsumer(fmt.Sprintf("%s$%s", sn, strconv.Itoa(p)), durable,
-				// durable,
-				jetstream.ConsumerConfig{
-					Durable:   durable,
-					AckPolicy: jetstream.AckExplicitPolicy,
-					// DeliverPolicy: deliveryPolicy, //TODO: add delivery policy
-					AckWait:       opts.MaxAckTime,
-					MaxDeliver:    opts.MaxMsgDeliveries,
-					FilterSubject: subj,
-					ReplayPolicy:  jetstream.ReplayInstantPolicy,
-					MaxAckPending: -1,
-					HeadersOnly:   false,
-				})
-			// nats.ManualAck(),
-			// nats.MaxRequestExpires(consumer.BatchMaxTimeToWait),
-			// nats.MaxDeliver(opts.MaxMsgDeliveries))
+			streamName := fmt.Sprintf("%s$%s", sn, strconv.Itoa(p))
+			jsCons, err := c.jetstreamConsumer(streamName, durable)
 			if err != nil {
 				return nil, memphisError(err)
 			}

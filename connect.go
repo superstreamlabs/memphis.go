@@ -450,7 +450,7 @@ func (c *Conn) brokerPublish(subject string, msg *nats.Msg, opts ...jetstream.Pu
 	return c.js.PublishMsgAsync(msg, opts...)
 }
 
-func (c *Conn) jetstreamConsumer(streamName, durable string, config jetstream.ConsumerConfig) (jetstream.Consumer, error) {
+func (c *Conn) jetstreamConsumer(streamName, durable string) (jetstream.Consumer, error) {
 	ctx, cancelfunc := context.WithTimeout(context.Background(), JetstreamOperationTimeout*time.Second)
 	defer cancelfunc()
 	return c.js.Consumer(ctx, streamName, durable)
