@@ -453,9 +453,7 @@ func (c *Conn) brokerPublish(subject string, msg *nats.Msg, opts ...jetstream.Pu
 func (c *Conn) jetstreamConsumer(streamName, durable string, config jetstream.ConsumerConfig) (jetstream.Consumer, error) {
 	ctx, cancelfunc := context.WithTimeout(context.Background(), JetstreamOperationTimeout*time.Second)
 	defer cancelfunc()
-	return c.js.CreateConsumer(ctx, streamName, config)
-	// return c.js.Consumer(ctx, subject, durable)
-	// PullSubscribe(subject, durable, opts...)
+	return c.js.Consumer(ctx, streamName, durable)
 }
 
 func (c *Conn) brokerQueueSubscribe(subj, queue string, cb nats.MsgHandler) (*nats.Subscription, error) {

@@ -198,12 +198,17 @@ func (m *Msg) Ack() error {
 		return errors.New("Message format is not supported")
 	}
 	if err != nil {
-		headers := m.GetHeaders()
+		var headers nats.Header
+		if msg, ok := m.msg.(*nats.Msg); ok {
+			headers = msg.Header
+		} else if jsMsg, ok := m.msg.(jetstream.Msg); ok {
+			headers = jsMsg.Headers()
+		}
 		id, ok := headers["$memphis_pm_id"]
 		if !ok {
 			return err
 		} else {
-			idNumber, err := strconv.Atoi(id)
+			idNumber, err := strconv.Atoi(id[0])
 			if err != nil {
 				return err
 			}
@@ -213,7 +218,7 @@ func (m *Msg) Ack() error {
 			} else {
 				msgToAck := PMsgToAck{
 					ID:     idNumber,
-					CgName: cgName,
+					CgName: cgName[0],
 				}
 				msgToPublish, _ := json.Marshal(msgToAck)
 				m.conn.brokerConn.Publish(memphisPmAckSubject, msgToPublish)
