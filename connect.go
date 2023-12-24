@@ -42,7 +42,7 @@ const (
 	maxBatchSize              = 5000
 	memphisGlobalAccountName  = "$memphis"
 	SEED                      = 31
-	JetstreamOperationTimeout = 10 // TODO: change this number?
+	JetstreamOperationTimeout = 30
 )
 
 var stationUpdatesSubsLock sync.Mutex
@@ -446,7 +446,7 @@ func (c *Conn) Close() {
 	c.setConsumersMap(nil)
 }
 
-func (c *Conn) brokerPublish(subject string, msg *nats.Msg, opts ...jetstream.PublishOpt) (jetstream.PubAckFuture, error) {
+func (c *Conn) brokerPublish(msg *nats.Msg, opts ...jetstream.PublishOpt) (jetstream.PubAckFuture, error) {
 	return c.js.PublishMsgAsync(msg, opts...)
 }
 

@@ -561,7 +561,7 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	}
 
 	stallWaitDuration := time.Second * time.Duration(opts.AckWaitSec)
-	paf, err := p.conn.brokerPublish(fullSubjectName, &natsMessage, jetstream.WithStallWait(stallWaitDuration))
+	paf, err := p.conn.brokerPublish(&natsMessage, jetstream.WithStallWait(stallWaitDuration))
 	if err != nil {
 		return memphisError(err)
 	}

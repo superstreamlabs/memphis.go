@@ -178,12 +178,9 @@ func (m *Msg) GetSequenceNumber() (uint64, error) {
 		}
 		seq = meta.Sequence.Stream
 	} else {
-		return 0, errors.New("Message format is not supported")
+		return 0, errors.New("message format is not supported")
 	}
-	// meta, err := m.msg.Metadata()
-	// if err != nil {
-	// 	return 0, nil
-	// }
+
 	return seq, nil
 }
 
