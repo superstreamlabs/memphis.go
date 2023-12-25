@@ -15,6 +15,7 @@
 package memphis
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -32,14 +33,16 @@ import (
 
 	"github.com/gofrs/uuid"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/spaolacci/murmur3"
 )
 
 const (
-	sdkClientsUpdatesSubject = "$memphis_sdk_clients_updates"
-	maxBatchSize             = 5000
-	memphisGlobalAccountName = "$memphis"
-	SEED                     = 31
+	sdkClientsUpdatesSubject  = "$memphis_sdk_clients_updates"
+	maxBatchSize              = 5000
+	memphisGlobalAccountName  = "$memphis"
+	SEED                      = 31
+	JetstreamOperationTimeout = 30
 )
 
 var stationUpdatesSubsLock sync.Mutex
@@ -166,7 +169,7 @@ type Conn struct {
 	username            string
 	accountId           int
 	brokerConn          *nats.Conn
-	js                  nats.JetStreamContext
+	js                  jetstream.JetStream
 	stationUpdatesMu    sync.RWMutex
 	stationUpdatesSubs  map[string]*stationUpdateSub
 	stationFunctionSubs map[string]*stationFunctionSub
@@ -427,7 +430,7 @@ func (c *Conn) startConn() error {
 	if err != nil {
 		return memphisError(err)
 	}
-	c.js, err = c.brokerConn.JetStream()
+	c.js, err = jetstream.New(c.brokerConn)
 
 	if err != nil {
 		c.brokerConn.Close()
@@ -443,12 +446,14 @@ func (c *Conn) Close() {
 	c.setConsumersMap(nil)
 }
 
-func (c *Conn) brokerPublish(msg *nats.Msg, opts ...nats.PubOpt) (nats.PubAckFuture, error) {
+func (c *Conn) brokerPublish(msg *nats.Msg, opts ...jetstream.PublishOpt) (jetstream.PubAckFuture, error) {
 	return c.js.PublishMsgAsync(msg, opts...)
 }
 
-func (c *Conn) brokerPullSubscribe(subject, durable string, opts ...nats.SubOpt) (*nats.Subscription, error) {
-	return c.js.PullSubscribe(subject, durable, opts...)
+func (c *Conn) jetstreamConsumer(streamName, durable string) (jetstream.Consumer, error) {
+	ctx, cancelfunc := context.WithTimeout(context.Background(), JetstreamOperationTimeout*time.Second)
+	defer cancelfunc()
+	return c.js.Consumer(ctx, streamName, durable)
 }
 
 func (c *Conn) brokerQueueSubscribe(subj, queue string, cb nats.MsgHandler) (*nats.Subscription, error) {

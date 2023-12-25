@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -560,7 +561,7 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 	}
 
 	stallWaitDuration := time.Second * time.Duration(opts.AckWaitSec)
-	paf, err := p.conn.brokerPublish(&natsMessage, nats.StallWait(stallWaitDuration))
+	paf, err := p.conn.brokerPublish(&natsMessage, jetstream.WithStallWait(stallWaitDuration))
 	if err != nil {
 		return memphisError(err)
 	}
