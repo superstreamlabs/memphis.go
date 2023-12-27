@@ -43,6 +43,76 @@ go get github.com/memphisdev/memphis.go
 import "github.com/memphisdev/memphis.go"
 ```
 
+### Quickstart - Producing and Consuming
+
+The most basic functionaly of memphis is the ability to produce messages to a station and to consume those messages. 
+
+First, a connection to Memphis must be made:
+
+```js
+const { memphis } = require('memphis-dev');
+
+// Connecting to the broker
+memphis = Memphis()
+
+let conn = await memphis.connect({
+        host: "aws-us-east-1.cloud.memphis.dev",
+        username: "test_user", // (root/application type user)
+        accountId: process.env.memphis_account_id, //You can find it on the profile page in the Memphis UI. This field should be sent only on the cloud version of Memphis, otherwise it will be ignored
+        password: process.env.memphis_pass
+});
+```
+
+Then, to produce a message, call the `memphis.produce` function or create a producer and call its `producer.produce` function:
+
+```go
+accountID, _ := strconv.Atoi(os.Getenv("memphis_account_id"))
+
+conn, err := memphis.Connect(
+    "aws-us-east-1.cloud.memphis.dev",
+    "test_user",
+    memphis.AccountId(accountID),
+    memphis.Password(os.Getenv("memphis_pass")),
+)
+
+if err != nil{
+    return
+}
+
+defer conn.Close()
+```
+
+Lastly, to consume this message, call the `memphis.fetch_messages` function or create a consumer and call its `consumer.fetch` function:
+
+```go
+messages, err := conn.FetchMessages(
+    "test_station",
+    "consumer",
+)	
+
+if err != nil{
+    fmt.Print(err)
+    return
+}
+
+var msg_map map[string]any
+for _, message := range messages{
+    err = json.Unmarshal(message.Data(), &msg_map)
+    if err != nil{
+        fmt.Print(err)
+        continue
+    }
+
+    // Do something with the message
+
+    err = message.Ack()
+    if err != nil{
+        fmt.Print(err)
+        continue
+    }
+}
+```
+
 ### Connecting to Memphis
 ```go
 c, err := memphis.Connect("<memphis-host>", 
