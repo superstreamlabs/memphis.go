@@ -36,7 +36,7 @@ const (
 	functionsUpdatesSubjectTemplate = "$memphis_functions_updates_%s"
 	memphisNotificationsSubject     = "$memphis_notifications"
 	schemaVFailAlertType            = "schema_validation_fail_alert"
-	lastProducerCreationReqVersion  = 3
+	lastProducerCreationReqVersion  = 4
 	schemaVerseDlsSubject           = "$memphis_schemaverse_dls"
 	lastProducerDestroyReqVersion   = 1
 )
@@ -59,6 +59,7 @@ type createProducerReq struct {
 	RequestVersion int    `json:"req_version"`
 	Username       string `json:"username"`
 	AppId          string `json:"app_id"`
+	SdkLang        string `json:"sdk_lang"`
 }
 
 type createProducerResp struct {
@@ -310,6 +311,7 @@ func (p *Producer) getCreationReq() any {
 		RequestVersion: lastProducerCreationReqVersion,
 		Username:       p.conn.username,
 		AppId:          applicationId,
+		SdkLang:        "go",
 	}
 }
 
