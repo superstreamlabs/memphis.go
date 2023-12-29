@@ -26,14 +26,9 @@ func main(){
 
 	defer conn.Close()
 
-	consumer, _ := conn.CreateConsumer("name", "name")
+	consumer, _ := conn.CreateConsumer("test_station", "consumer")
 
-	consumer.Fetch()
-
-	messages, err := conn.FetchMessages(
-		"test_station",
-		"consumer",
-	)	
+	messages, err := consumer.Fetch()
 
 	if err != nil{
 		fmt.Print(err)

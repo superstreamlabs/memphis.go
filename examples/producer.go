@@ -1,9 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strconv"
-	
+
 	"github.com/memphisdev/memphis.go"
 )
 
@@ -18,22 +19,24 @@ func main(){
 	)
 
 	if err != nil{
+		fmt.Print(err)
 		return
 	}
 
 	defer conn.Close()
 
+	producer, err := conn.CreateProducer("test_station", "producer")
+
+	if err != nil{
+		fmt.Print(err)
+		return
+	}
+
 	message := make(map[string]any)
 
 	message["Hello"] = "World"
 	for i := 0; i < 3; i++{
-		err = conn.Produce(
-			"test_station",
-			"producer",
-			message, 
-			[]memphis.ProducerOpt{}, 
-			[]memphis.ProduceOpt{},
-		)
+		err = producer.Produce(message)
 	}
 		
 	if err != nil{
