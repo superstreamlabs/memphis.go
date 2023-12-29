@@ -1,47 +1,59 @@
 package main
 
 import (
-	"context"
+	"encoding/json"
 	"fmt"
 	"os"
-	"time"
+	"strconv"
 
 	"github.com/memphisdev/memphis.go"
 )
 
-func main() {
-	conn, err := memphis.Connect("localhost", "root", memphis.ConnectionToken("<broker-token>"))
-	if err != nil {
-		fmt.Printf("Connection failed: %v", err)
-		os.Exit(1)
+func main(){
+	accountID, _ := strconv.Atoi(os.Getenv("memphis_account_id"))
+
+	conn, err := memphis.Connect(
+		"aws-us-east-1.cloud.memphis.dev",
+		"test_user",
+		memphis.AccountId(accountID),
+		memphis.Password(os.Getenv("memphis_pass")),
+	)
+
+	if err != nil{
+		fmt.Print(err)
+		return
 	}
+
 	defer conn.Close()
 
-	consumer, err := conn.CreateConsumer("<station-name>", "<consumer-name>", memphis.PullInterval(15*time.Second))
+	consumer, _ := conn.CreateConsumer("name", "name")
 
-	if err != nil {
-		fmt.Printf("Consumer creation failed: %v\n", err)
-		os.Exit(1)
+	consumer.Fetch()
+
+	messages, err := conn.FetchMessages(
+		"test_station",
+		"consumer",
+	)	
+
+	if err != nil{
+		fmt.Print(err)
+		return
 	}
 
-	handler := func(msgs []*memphis.Msg, err error, ctx context.Context) {
-		if err != nil {
-			fmt.Printf("Fetch failed: %v\n", err)
-			return
+	var msg_map map[string]any
+	for _, message := range messages{
+		err = json.Unmarshal(message.Data(), &msg_map)
+		if err != nil{
+			fmt.Print(err)
+			continue
 		}
 
-		for _, msg := range msgs {
-			fmt.Println(string(msg.Data()))
-			msg.Ack()
-			headers := msg.GetHeaders()
-			fmt.Println(headers)
+		// Do something with the message
+
+		err = message.Ack()
+		if err != nil{
+			fmt.Print(err)
+			continue
 		}
 	}
-
-	consumer.Consume(handler)
-
-	// The program will close the connection after 30 seconds,
-	// the message handler may be called after the connection closed
-	// so the handler may receive a timeout error
-	time.Sleep(30 * time.Second)
 }
