@@ -55,24 +55,11 @@ const { memphis } = require('memphis-dev');
 // Connecting to the broker
 memphis = Memphis()
 
-let conn = await memphis.connect({
-        host: "aws-us-east-1.cloud.memphis.dev",
-        username: "test_user", // (root/application type user)
-        accountId: process.env.memphis_account_id, //You can find it on the profile page in the Memphis UI. This field should be sent only on the cloud version of Memphis, otherwise it will be ignored
-        password: process.env.memphis_pass
-});
-```
-
-Then, to produce a message, call the `memphis.produce` function or create a producer and call its `producer.produce` function:
-
-```go
-accountID, _ := strconv.Atoi(os.Getenv("memphis_account_id"))
-
-conn, err := memphis.Connect(
-    "aws-us-east-1.cloud.memphis.dev",
-    "test_user",
-    memphis.AccountId(accountID),
-    memphis.Password(os.Getenv("memphis_pass")),
+let conn, err := memphis.Connect(
+    "<memphis-host>",
+    "<memphis-username>",
+    memphis.AccountId(<memphis-accountid>), //You can find it on the profile page in the Memphis UI. This field should be sent only on the cloud version of Memphis, otherwise it will be ignored
+    memphis.Password(<memphis-password>),
 )
 
 if err != nil{
@@ -81,18 +68,18 @@ if err != nil{
 
 defer conn.Close()
 
-if err != nil{
-    fmt.Print(err)
-    return
-}
+```
 
+Then, to produce a message, call the `memphis.produce` function or create a producer and call its `producer.produce` function:
+
+```go
 message := make(map[string]any)
 
 message["Hello"] = "World"
 
 err := conn.Produce(
-    "test_station", 
-    "producer",
+    "<station-name>", 
+    "<producer-name>",
     message,	
     []memphis.ProducerOpt{}, 
     []memphis.ProduceOpt{},
@@ -107,12 +94,11 @@ Lastly, to consume this message, call the `memphis.fetch_messages` function or c
 
 ```go
 messages, err := conn.FetchMessages(
-    "test_station",
-    "consumer",
+    "<station-name>",
+    "<consumer-name>",
 )	
 
 if err != nil{
-    fmt.Print(err)
     return
 }
 
@@ -120,7 +106,6 @@ var msg_map map[string]any
 for _, message := range messages{
     err = json.Unmarshal(message.Data(), &msg_map)
     if err != nil{
-        fmt.Print(err)
         continue
     }
 
@@ -128,7 +113,6 @@ for _, message := range messages{
 
     err = message.Ack()
     if err != nil{
-        fmt.Print(err)
         continue
     }
 }
