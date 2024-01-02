@@ -80,6 +80,27 @@ if err != nil{
 }
 
 defer conn.Close()
+
+if err != nil{
+    fmt.Print(err)
+    return
+}
+
+message := make(map[string]any)
+
+message["Hello"] = "World"
+
+err := conn.Produce(
+    "test_station", 
+    "producer",
+    message,	
+    []memphis.ProducerOpt{}, 
+    []memphis.ProduceOpt{},
+)
+    
+if err != nil{
+    return
+}
 ```
 
 Lastly, to consume this message, call the `memphis.fetch_messages` function or create a consumer and call its `consumer.fetch` function:
