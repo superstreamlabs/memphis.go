@@ -773,7 +773,7 @@ func (c *Consumer) createDlsMsgHandler() nats.MsgHandler {
 func (c *Consumer) getDlsSubjName() string {
 	stationName := getInternalName(c.stationName)
 	consumerGroup := getInternalName(c.ConsumerGroup)
-	return fmt.Sprintf("%v_%v_%v", dlsSubjPrefix, stationName, consumerGroup)
+	return fmt.Sprintf("%v_%v.%v", dlsSubjPrefix, stationName, consumerGroup)
 }
 
 func (c *Consumer) getDlsQueueName() string {
