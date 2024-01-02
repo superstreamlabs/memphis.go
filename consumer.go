@@ -36,7 +36,7 @@ const (
 	consumerDefaultPingInterval    = 30 * time.Second
 	dlsSubjPrefix                  = "$memphis_dls"
 	memphisPmAckSubject            = "$memphis_pm_acks"
-	lastConsumerCreationReqVersion = 3
+	lastConsumerCreationReqVersion = 4
 	lastConsumerDestroyReqVersion  = 1
 )
 
@@ -278,6 +278,7 @@ type createConsumerReq struct {
 	LastMessages             int64  `json:"last_messages"`
 	RequestVersion           int    `json:"req_version"`
 	AppId                    string `json:"app_id"`
+	SdkLang                  string `json:"sdk_lang"`
 }
 
 type removeConsumerReq struct {
@@ -772,7 +773,7 @@ func (c *Consumer) createDlsMsgHandler() nats.MsgHandler {
 func (c *Consumer) getDlsSubjName() string {
 	stationName := getInternalName(c.stationName)
 	consumerGroup := getInternalName(c.ConsumerGroup)
-	return fmt.Sprintf("%v_%v_%v", dlsSubjPrefix, stationName, consumerGroup)
+	return fmt.Sprintf("%v_%v.%v", dlsSubjPrefix, stationName, consumerGroup)
 }
 
 func (c *Consumer) getDlsQueueName() string {
@@ -813,6 +814,7 @@ func (c *Consumer) getCreationReq() any {
 		LastMessages:             c.LastMessages,
 		RequestVersion:           lastConsumerCreationReqVersion,
 		AppId:                    applicationId,
+		SdkLang:                  "go",
 	}
 }
 
