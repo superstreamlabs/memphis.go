@@ -30,7 +30,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-
+	
 	"github.com/gofrs/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -295,10 +295,10 @@ func (opts Options) connect() (*Conn, error) {
 	}
 
 	if opts.ConnectionToken != "" && opts.Password != "" {
-		return nil, memphisError(errors.New("you have to connect with one of the following methods: connection token / password"))
+		return nil, errInvalidConnectionType
 	}
 	if opts.ConnectionToken == "" && opts.Password == "" {
-		return nil, memphisError(errors.New("you have to connect with one of the following methods: connection token / password"))
+		return nil, errInvalidConnectionType
 	}
 
 	connId, err := uuid.NewV4()
@@ -398,21 +398,21 @@ func (c *Conn) startConn() error {
 
 	if (opts.TLSOpts.TlsCert != "") || (opts.TLSOpts.TlsKey != "") || (opts.TLSOpts.CaFile != "") {
 		if opts.TLSOpts.TlsCert == "" {
-			return memphisError(errors.New("must provide a TLS cert file"))
+			return errMissingTLSCertFile
 		}
 		if opts.TLSOpts.TlsKey == "" {
-			return memphisError(errors.New("must provide a TLS key file"))
+			return errMissingTLSKeyFile
 		}
 		if opts.TLSOpts.CaFile == "" {
-			return memphisError(errors.New("must provide a TLS ca file"))
+			return errMissingTLSCaFile
 		}
 		cert, err := tls.LoadX509KeyPair(opts.TLSOpts.TlsCert, opts.TLSOpts.TlsKey)
 		if err != nil {
-			return memphisError(errors.New("memphis: error loading client certificate: " + err.Error()))
+			return errLoadClientCertFailed(err)
 		}
 		cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 		if err != nil {
-			return memphisError(errors.New("memphis: error parsing client certificate: " + err.Error()))
+			return errLoadClientCertFailed(err)
 		}
 		TLSConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 		TLSConfig.Certificates = []tls.Certificate{cert}
@@ -420,7 +420,7 @@ func (c *Conn) startConn() error {
 
 		pemData, err := os.ReadFile(opts.TLSOpts.CaFile)
 		if err != nil {
-			return memphisError(errors.New("memphis: error loading ca file: " + err.Error()))
+			return errLoadClientCertFailed(err)
 		}
 		certs.AppendCertsFromPEM(pemData)
 		TLSConfig.RootCAs = certs
@@ -851,7 +851,7 @@ func (c *Conn) FetchMessages(stationName string, consumerName string, opts ...Fe
 		}
 	}
 	if defaultOpts.BatchSize > maxBatchSize || defaultOpts.BatchSize < 1 {
-		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize) + " or less than 1"))
+		return nil, errInvalidBatchSize(maxBatchSize)
 	}
 	if cons == nil {
 		if defaultOpts.GenUniqueSuffix {
@@ -983,12 +983,12 @@ func (c *Conn) GetPartitionFromKey(key string, stationName string) (int, error) 
 
 func (c *Conn) ValidatePartitionNumber(partitionNumber int, stationName string) error {
 	if partitionNumber < 0 || partitionNumber >= len(c.stationPartitions[stationName].PartitionsList) {
-		return errors.New("Partition number is out of range")
+		return errPartitionNumOutOfRange
 	}
 	for _, partition := range c.stationPartitions[stationName].PartitionsList {
 		if partition == partitionNumber {
 			return nil
 		}
 	}
-	return fmt.Errorf("Partition %v does not exist in station %v", partitionNumber, stationName)
+	return errPartitionNotInStation(partitionNumber, stationName)
 }
