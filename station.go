@@ -462,7 +462,7 @@ func (c *Conn) removeFunctionsUpdatesListener(stationName string) error {
 
 	sfs, ok := c.stationFunctionSubs[sn]
 	if !ok {
-		return memphisError(errors.New("functions listener doesn't exist"))
+		return errMissingFunctionsListener
 	}
 
 	sfs.StationFunctionsMu.Lock()
@@ -488,7 +488,7 @@ func (c *Conn) removeSchemaUpdatesListener(stationName string) error {
 	defer stationUpdatesSubsLock.Unlock()
 	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
-		return memphisError(errors.New("listener doesn't exist"))
+		return errMissingSchemaListener
 	}
 
 	sus.refCount--
@@ -511,7 +511,7 @@ func (c *Conn) getSchemaDetails(stationName string) (schemaDetails, error) {
 
 	sus, ok := c.stationUpdatesSubs[sn]
 	if !ok {
-		return schemaDetails{}, memphisError(errors.New("station subscription doesn't exist"))
+		return schemaDetails{}, errStationNotSubedToSchema
 	}
 
 	return sus.schemaDetails, nil
@@ -644,7 +644,7 @@ func (sd *schemaDetails) validateMsg(msg any) ([]byte, error) {
 	case "avro":
 		return sd.validAvroSchemaMsg(msg)
 	default:
-		return nil, memphisError(errors.New("invalid schema type"))
+		return nil, errInvalidSchmeaType
 	}
 }
 
@@ -676,14 +676,14 @@ func (sd *schemaDetails) validateProtoMsg(msg any) ([]byte, error) {
 			return nil, memphisError(err)
 		}
 	default:
-		return nil, memphisError(errors.New("unsupported message type"))
+		return nil, errUnsupportedMsgType
 	}
 
 	protoMsg := dynamicpb.NewMessage(sd.msgDescriptor)
 	err = proto.Unmarshal(msgBytes, protoMsg)
 	if err != nil {
 		if strings.Contains(err.Error(), "cannot parse invalid wire-format data") {
-			err = errors.New("invalid message format, expecting protobuf")
+			err = errExpectingProtobuf
 		}
 		return msgBytes, memphisError(err)
 	}
@@ -702,7 +702,7 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 	case []byte:
 		msgBytes = msg.([]byte)
 		if err := json.Unmarshal(msgBytes, &message); err != nil {
-			err = errors.New("Bad JSON format - " + err.Error())
+			err = errBadJSON(err)
 			return nil, memphisError(err)
 		}
 	case map[string]interface{}:
@@ -723,7 +723,7 @@ func (sd *schemaDetails) validJsonSchemaMsg(msg any) ([]byte, error) {
 				return nil, memphisError(err)
 			}
 		} else {
-			return nil, memphisError(errors.New("unsupported message type"))
+			return nil, errUnsupportedMsgType
 		}
 	}
 	if err = sd.jsonSchema.Validate(message); err != nil {
@@ -762,7 +762,7 @@ func (sd *schemaDetails) validateGraphQlMsg(msg any) ([]byte, error) {
 			validateErrorGql = strings.Join(validateErrors, resultErr)
 		}
 		if strings.Contains(validateErrorGql, "syntax error") {
-			return nil, memphisError(errors.New("invalid message format, expecting GraphQL"))
+			return nil, errExpectinGraphQL
 		}
 
 		return msgBytes, memphisError(errors.New(validateErrorGql))
@@ -785,7 +785,7 @@ func (sd *schemaDetails) validAvroSchemaMsg(msg any) ([]byte, error) {
 	case []byte:
 		msgBytes = msg.([]byte)
 		if err := json.Unmarshal(msgBytes, &message); err != nil {
-			err = errors.New("Bad Avro format - " + err.Error())
+			err = errInvalidAvroFormat(err)
 			return nil, memphisError(err)
 		}
 	case map[string]interface{}:
@@ -794,7 +794,7 @@ func (sd *schemaDetails) validAvroSchemaMsg(msg any) ([]byte, error) {
 			return nil, memphisError(err)
 		}
 		if err := json.Unmarshal(msgBytes, &message); err != nil {
-			err = errors.New("Bad Avro format - " + err.Error())
+			err = errInvalidAvroFormat(err)
 			return nil, memphisError(err)
 		}
 
@@ -814,7 +814,7 @@ func (sd *schemaDetails) validAvroSchemaMsg(msg any) ([]byte, error) {
 				return nil, memphisError(err)
 			}
 		} else {
-			return nil, memphisError(errors.New("unsupported message type"))
+			return nil, errUnsupportedMsgType
 		}
 	}
 

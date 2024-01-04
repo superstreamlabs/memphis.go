@@ -162,7 +162,7 @@ func (c *Conn) CreateProducer(stationName interface{}, name string, opts ...Prod
 	case string:
 	case []string:
 	default:
-		return nil, memphisError(errors.New("station name should be either string or []string"))
+		return nil, errInvalidStationName
 	}
 
 	name = strings.ToLower(name)
@@ -238,7 +238,7 @@ func (c *Conn) Produce(stationName interface{}, name string, message any, opts [
 	case string:
 	case []string:
 	default:
-		return memphisError(errors.New("station name should be either string or []string"))
+		return errInvalidStationName
 	}
 
 	if singleStationName, ok := stationName.(string); ok {
@@ -287,7 +287,7 @@ func (c *Conn) getProducerFromCache(stationName, name string) (*Producer, error)
 	pn := fmt.Sprintf("%s_%s", stationName, name)
 	pm := c.getProducersMap()
 	if pm.getProducer(pn) == nil {
-		return nil, fmt.Errorf("%s not exists on the map", pn)
+		return nil, errProducerNotInCache(pn) 
 	}
 
 	return pm.getProducer(pn), nil
@@ -478,7 +478,7 @@ func (p *Producer) produceToSingleStation(message any, opts ...ProduceOpt) error
 
 func (hdr *Headers) validateHeaderKey(key string) error {
 	if strings.HasPrefix(key, "$memphis") {
-		return memphisError(errors.New("keys in headers should not start with $memphis"))
+		return errInvalidHeaderKey
 	}
 	return nil
 }
@@ -514,12 +514,12 @@ func (opts *ProduceOpts) produce(p *Producer) error {
 		streamName = fmt.Sprintf("%v$%v", sn, p.conn.stationPartitions[sn].PartitionsList[0])
 	} else if len(p.conn.stationPartitions[sn].PartitionsList) > 1 {
 		if opts.ProducerPartitionNumber > 0 && opts.ProducerPartitionKey != "" {
-			return memphisError(fmt.Errorf("Can not use both partition number and partition key"))
+			return errBothPartitionNumAndKey
 		}
 		if opts.ProducerPartitionKey != "" {
 			partitionNumber, err := p.conn.GetPartitionFromKey(opts.ProducerPartitionKey, sn)
 			if err != nil {
-				return memphisError(fmt.Errorf("failed to get partition from key"))
+				return errPartitionNotInKey
 			}
 			streamName = fmt.Sprintf("%v$%v", sn, partitionNumber)
 		} else if opts.ProducerPartitionNumber > 0 {
@@ -637,7 +637,7 @@ func (p *Producer) sendMsgToDls(msg any, headers map[string][]string, err error)
 func (p *Producer) validateMsg(msg any, headers map[string][]string) ([]byte, error) {
 	sd, err := p.getSchemaDetails()
 	if err != nil {
-		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
+		return nil, errSchemaValidationFailed(err)
 	}
 
 	var originalMsgBytes []byte
@@ -667,7 +667,7 @@ func (p *Producer) validateMsg(msg any, headers map[string][]string) ([]byte, er
 				return nil, memphisError(err)
 			}
 		} else {
-			return nil, memphisError(errors.New("unsupported message type"))
+			return nil, errUnsupportedMsgType
 		}
 	}
 
@@ -681,7 +681,7 @@ func (p *Producer) validateMsg(msg any, headers map[string][]string) ([]byte, er
 			}
 
 			p.sendMsgToDls(msgToSend, headers, err)
-			return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
+			return nil, errSchemaValidationFailed(err)
 		}
 		originalMsgBytes = msgBytes
 	}
@@ -755,7 +755,7 @@ func SyncProduce() ProduceOpt {
 func MsgId(id string) ProduceOpt {
 	return func(opts *ProduceOpts) error {
 		if id == "" {
-			return errors.New("msg id can not be empty")
+			return errEmptyMsgId
 		}
 		opts.MsgHeaders.MsgHeaders["msg-id"] = []string{id}
 		return nil

@@ -22,7 +22,25 @@ var (
 	errLastMessagesNegative = memphisError(errors.New("min value for LastMessages is -1"))
 	errBothStartConsumeAndLastMessages = memphisError(errors.New("Consumer creation options can't contain both startConsumeFromSequence and lastMessages"))
 	errUnreachableStation = memphisError(errors.New("station unreachable"))
+	errInvalidStationName = memphisError(errors.New("station name should be either string or []string"))
+	errInvalidHeaderKey = memphisError(errors.New("keys in headers should not start with $memphis"))
+	errUnsupportedMsgType = memphisError(errors.New("unsupported message type"))
+	errEmptyMsgId = memphisError(errors.New("msg id can not be empty"))
+	errPartitionNotInKey = memphisError(errors.New("failed to get partition from key"))
+	errMissingFunctionsListener = memphisError(errors.New("functions listener doesn't exist"))
+	errMissingSchemaListener = memphisError(errors.New("schema listener doesn't exist"))
+	errStationNotSubedToSchema = memphisError(errors.New("station subscription doesn't exist"))
+	errInvalidSchmeaType = memphisError(errors.New("invalid schema type"))
+	errExpectinGraphQL = memphisError(errors.New("invalid message format, expecting GraphQL"))
 )
+
+func errInvalidAvroFormat(err error) error{
+	return memphisError(errors.New("Bad Avro format - " + err.Error()))
+}
+
+func errProducerNotInCache(producerName string) error{
+	return memphisError(fmt.Errorf("%s not exists on the map", producerName))
+}
 
 func errLoadClientCertFailed(err error) error{
 	return memphisError(errors.New("memphis: error loading client certificate: " + err.Error()))
