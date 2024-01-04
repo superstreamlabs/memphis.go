@@ -4,19 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/memphisdev/memphis.go"
 )
 
 func main(){
-	accountID, _ := strconv.Atoi(os.Getenv("memphis_account_id"))
-
 	conn, err := memphis.Connect(
-		"aws-us-east-1.cloud.memphis.dev",
-		"test_user",
-		memphis.AccountId(accountID),
-		memphis.Password(os.Getenv("memphis_pass")),
+		"<memphis-host>",
+		"<memphis-username>",
+		memphis.AccountId(<memphis-accountid>),
+		memphis.Password(<mempis-password>),
 	)
 
 	if err != nil{
@@ -26,7 +23,7 @@ func main(){
 
 	defer conn.Close()
 
-	consumer, _ := conn.CreateConsumer("test_station", "consumer")
+	consumer, _ := conn.CreateConsumer("<station-name>", "<consumer-name>")
 
 	messages, err := consumer.Fetch()
 

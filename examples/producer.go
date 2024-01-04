@@ -3,19 +3,16 @@ package main
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/memphisdev/memphis.go"
 )
 
 func main(){
-	accountID, _ := strconv.Atoi(os.Getenv("memphis_account_id"))
-
 	conn, err := memphis.Connect(
-		"aws-us-east-1.cloud.memphis.dev",
-		"test_user",
-		memphis.AccountId(accountID),
-		memphis.Password(os.Getenv("memphis_pass")),
+		"<memphis-host>",
+		"<memphis-username>",
+		memphis.AccountId(<memphis-accountID>),
+		memphis.Password(<memphis-password>),
 	)
 
 	if err != nil{
@@ -25,7 +22,7 @@ func main(){
 
 	defer conn.Close()
 
-	producer, err := conn.CreateProducer("test_station", "producer")
+	producer, err := conn.CreateProducer("<station-name>", "<producer-name>")
 
 	if err != nil{
 		fmt.Print(err)
