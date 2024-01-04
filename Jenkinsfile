@@ -13,8 +13,8 @@ node ("memphis-jenkins-small-fleet-agent") {
   
   try{
     stage ('Install GoLang') {
-      sh 'wget -q https://go.dev/dl/go1.18.4.linux-amd64.tar.gz'
-      sh 'sudo  tar -C /usr/local -xzf go1.18.4.linux-amd64.tar.gz'
+      sh 'wget -q https://go.dev/dl/go1.20.12.linux-amd64.tar.gz'
+      sh 'sudo  tar -C /usr/local -xzf go1.20.12.linux-amd64.tar.gz'
     }
     
     stage('Deploy GO SDK') {
