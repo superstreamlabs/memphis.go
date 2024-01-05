@@ -396,9 +396,14 @@ func (opts *ConsumerOpts) createConsumer(c *Conn, options ...RequestOpt) (*Consu
 		return nil, errInvalidBatchSize(maxBatchSize)
 	}
 
-	err = c.listenToSchemaUpdates(opts.StationName)
-	if err != nil {
-		return nil, memphisError(err)
+	sn := getInternalName(consumer.stationName)
+	_, ok := c.stationUpdatesSubs[sn]
+	if !ok {
+		c.stationUpdatesSubs[sn] = &stationUpdateSub{
+			refCount:       1,
+			schemaUpdateCh: make(chan SchemaUpdate),
+			schemaDetails:  schemaDetails{},
+		}
 	}
 
 	err = c.create(&consumer, options...)
@@ -411,7 +416,10 @@ func (opts *ConsumerOpts) createConsumer(c *Conn, options ...RequestOpt) (*Consu
 
 	consumer.pingInterval = consumerDefaultPingInterval
 
-	sn := getInternalName(consumer.stationName)
+	err = c.listenToSchemaUpdates(opts.StationName)
+	if err != nil {
+		return nil, memphisError(err)
+	}
 
 	durable := getInternalName(consumer.ConsumerGroup)
 

@@ -214,18 +214,28 @@ func (c *Conn) createSingleStationProducer(stationName, name, nameWithoutSuffix 
 		realName:    nameWithoutSuffix,
 	}
 
-	err := c.listenToSchemaUpdates(stationName)
-	if err != nil {
-		return nil, memphisError(err)
+	sn := getInternalName(stationName)
+	_, ok := c.stationUpdatesSubs[sn]
+	if !ok {
+		c.stationUpdatesSubs[sn] = &stationUpdateSub{
+			refCount:       1,
+			schemaUpdateCh: make(chan SchemaUpdate),
+			schemaDetails:  schemaDetails{},
+		}
 	}
 
-	if err = c.create(&p, TimeoutRetry(opts.TimeoutRetry)); err != nil {
+	if err := c.create(&p, TimeoutRetry(opts.TimeoutRetry)); err != nil {
 		if err := c.removeSchemaUpdatesListener(stationName); err != nil {
 			return nil, memphisError(err)
 		}
 		return nil, memphisError(err)
 	}
 	c.cacheProducer(&p)
+
+	err := c.listenToSchemaUpdates(stationName)
+	if err != nil {
+		return nil, memphisError(err)
+	}
 
 	return &p, nil
 }

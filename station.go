@@ -399,6 +399,17 @@ func (c *Conn) listenToSchemaUpdates(stationName string) error {
 		}
 
 		return nil
+	} else {
+		if sus.schemaUpdateSub == nil {
+			schemaUpdatesSubject := fmt.Sprintf(schemaUpdatesSubjectTemplate, sn)
+			go sus.schemaUpdatesHandler(&c.stationUpdatesMu)
+			var err error
+			sus.schemaUpdateSub, err = c.brokerConn.Subscribe(schemaUpdatesSubject, sus.createMsgHandler())
+			if err != nil {
+				close(sus.schemaUpdateCh)
+				return memphisError(err)
+			}
+		}
 	}
 	sus.refCount++
 	return nil
