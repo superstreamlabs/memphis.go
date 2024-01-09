@@ -25,27 +25,33 @@ func main(){
 
 	consumer, _ := conn.CreateConsumer("<station-name>", "<consumer-name>")
 
-	messages, err := consumer.Fetch()
+	for true {
+		messages, err := consumer.Fetch()
 
-	if err != nil{
-		fmt.Print(err)
-		return
-	}
-
-	var msg_map map[string]any
-	for _, message := range messages{
-		err = json.Unmarshal(message.Data(), &msg_map)
-		if err != nil{
-			fmt.Print(err)
+		if len(messages) == 0 {
 			continue
 		}
 
-		// Do something with the message
-
-		err = message.Ack()
 		if err != nil{
 			fmt.Print(err)
-			continue
+			return
+		}
+	
+		var msg_map map[string]any
+		for _, message := range messages{
+			err = json.Unmarshal(message.Data(), &msg_map)
+			if err != nil{
+				fmt.Print(err)
+				continue
+			}
+	
+			// Do something with the message
+	
+			err = message.Ack()
+			if err != nil{
+				fmt.Print(err)
+				continue
+			}
 		}
 	}
 }
