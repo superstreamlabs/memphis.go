@@ -184,6 +184,19 @@ func (m *Msg) GetSequenceNumber() (uint64, error) {
 	return seq, nil
 }
 
+// Msg.GetTimeSent - get message's time sent
+func (m *Msg) GetTimeSent() (time.Time, error) {
+	if jsMsg, ok := m.msg.(jetstream.Msg); ok {
+		md, err := jsMsg.Metadata()
+		if err != nil {
+			return time.Time{}, errors.New("message format is not supported")
+		}
+		return md.Timestamp, nil
+	} else {
+		return time.Time{}, errors.New("message format is not supported")
+	}
+}
+
 // Msg.Ack - ack the message.
 func (m *Msg) Ack() error {
 	var err error

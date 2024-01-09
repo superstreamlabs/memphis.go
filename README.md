@@ -807,16 +807,29 @@ message.Delay(<time.Duration>);
 ```
 
 ### Get headers 
+
 Get headers per message
+
 ```go
 headers := msg.GetHeaders()
 ```
 
 ### Get message sequence number
+
 Get message sequence number
+
 ```go
 sequenceNumber, err := msg.GetSequenceNumber()
 ```
+
+### Get message time sent
+
+Get message time sent
+
+```go
+timeSent, err := msg.GetTimeSent()
+```
+
 ### Destroying a Consumer
 
 ```go
