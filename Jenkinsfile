@@ -2,7 +2,7 @@ def gitBranch = env.BRANCH_NAME
 def gitURL = "git@github.com:Memphisdev/memphis.go.git"
 def repoUrlPrefix = "memphisos"
 
-node ("small-ec2-fleet") {
+node ("memphis-jenkins-small-fleet-agent") {
   git credentialsId: 'main-github', url: gitURL, branch: gitBranch
   if (env.BRANCH_NAME ==~ /(master)/) { 
     versionTag = readFile "./version-beta.conf"
@@ -13,8 +13,8 @@ node ("small-ec2-fleet") {
   
   try{
     stage ('Install GoLang') {
-      sh 'wget -q https://go.dev/dl/go1.18.4.linux-amd64.tar.gz'
-      sh 'sudo  tar -C /usr/local -xzf go1.18.4.linux-amd64.tar.gz'
+      sh 'wget -q https://go.dev/dl/go1.20.12.linux-amd64.tar.gz'
+      sh 'sudo  tar -C /usr/local -xzf go1.20.12.linux-amd64.tar.gz'
     }
     
     stage('Deploy GO SDK') {
