@@ -192,6 +192,8 @@ func (m *Msg) GetTimeSent() (time.Time, error) {
 			return time.Time{}, errors.New("message format is not supported")
 		}
 		return md.Timestamp, nil
+	} else if _, ok := m.msg.(*nats.Msg); ok {
+		return time.Now(), nil
 	} else {
 		return time.Time{}, errors.New("message format is not supported")
 	}
