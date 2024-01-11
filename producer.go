@@ -225,9 +225,6 @@ func (c *Conn) createSingleStationProducer(stationName, name, nameWithoutSuffix 
 	}
 
 	if err := c.create(&p, TimeoutRetry(opts.TimeoutRetry)); err != nil {
-		if err := c.removeSchemaUpdatesListener(stationName); err != nil {
-			return nil, memphisError(err)
-		}
 		return nil, memphisError(err)
 	}
 	c.cacheProducer(&p)

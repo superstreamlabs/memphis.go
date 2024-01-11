@@ -773,8 +773,8 @@ There may be some instances where you apply a schema *after* a station has recei
 msgs, err := conn.FetchMessages("<station-name>", "<consumer-name>",
   memphis.FetchBatchSize(<int>) // defaults to 10
   memphis.FetchConsumerGroup("<consumer-group>"), // defaults to consumer name
-  memphis.FetchBatchMaxWaitTime(<time.Duration>), // defaults to 5 seconds, has to be at least 1 ms
-  memphis.FetchMaxAckTime(<time.Duration>), // defaults to 30 sec
+  memphis.FetchBatchMaxWaitTime(<time.Duration>), // defaults to 100 millis, has to be at least 100 ms
+  memphis.FetchMaxAckTime(<time.Duration>), // defaults to 10 sec
   memphis.FetchMaxMsgDeliveries(<int>), // defaults to 2
   memphis.FetchConsumerErrorHandler(func(*Consumer, error){})
   memphis.FetchStartConsumeFromSeq(<uint64>)// start consuming from a specific sequence. defaults to 1
@@ -797,6 +797,21 @@ Acknowledging a message indicates to the Memphis server to not <br>re-send the s
 
 ```shell
 message.Ack();
+```
+
+### Nacking a Message
+Mark the message as not acknowledged - the broker will resend the message immediately to the same consumers group, instead of waiting to the max ack time configured.
+
+```shell
+message.Nack();
+```
+
+### Sending a message to the dead-letter
+Sending the message to the dead-letter station (DLS) - the broker won't resend the message again to the same consumers group and will place the message inside the dead-letter station (DLS) with the given reason.
+The message will still be available to other consumer groups
+
+```shell
+message.DeadLetter("reason");
 ```
 
 ### Delay the message after a given duration
