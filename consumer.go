@@ -36,6 +36,7 @@ const (
 	consumerDefaultPingInterval    = 30 * time.Second
 	dlsSubjPrefix                  = "$memphis_dls"
 	memphisPmAckSubject            = "$memphis_pm_acks"
+	nackedDlsSubject               = "$memphis_nacked_dls"
 	lastConsumerCreationReqVersion = 4
 	lastConsumerDestroyReqVersion  = 1
 )
@@ -81,11 +82,20 @@ type Msg struct {
 	conn                *Conn
 	cgName              string
 	internalStationName string
+	partition           int
 }
 
 type PMsgToAck struct {
 	ID     int    `json:"id"`
 	CgName string `json:"cg_name"`
+}
+
+type NackedDlsMessage struct {
+	StationName string `json:"station_name"`
+	Error       string `json:"error"`
+	Partition   int    `json:"partition"`
+	CgName      string `json:"cg_name"`
+	Seq         uint64 `json:"seq"`
 }
 
 // Msg.Data - get message's data.
@@ -192,7 +202,7 @@ func (m *Msg) Ack() error {
 	} else if jsMsg, ok := m.msg.(jetstream.Msg); ok {
 		err = jsMsg.Ack()
 	} else {
-		return errors.New("Message format is not supported")
+		return errors.New("message format is not supported")
 	}
 	if err != nil {
 		var headers nats.Header
@@ -221,6 +231,56 @@ func (m *Msg) Ack() error {
 				m.conn.brokerConn.Publish(memphisPmAckSubject, msgToPublish)
 			}
 		}
+	}
+	return nil
+}
+
+// Msg.Nack - not ack for a message, meaning that the message will be redelivered again to the same consumers group without waiting to its ack wait time.
+func (m *Msg) Nack() error {
+	var err error
+	if _, ok := m.msg.(*nats.Msg); ok {
+		return nil
+	} else if jsMsg, ok := m.msg.(jetstream.Msg); ok {
+		err = jsMsg.Nak()
+		if err != nil {
+			return err
+		}
+	} else {
+		return errors.New("message format is not supported")
+	}
+	return nil
+}
+
+// Msg.DeadLetter - Sending the message to the dead-letter station (DLS). the broker won't resend the message again to the same consumers group and will place the message inside the dead-letter station (DLS) with the given reason.
+// The message will still be available to other consumer groups
+func (m *Msg) DeadLetter(reason string) error {
+	var err error
+	if _, ok := m.msg.(*nats.Msg); ok {
+		return nil
+	} else if jsMsg, ok := m.msg.(jetstream.Msg); ok {
+		err = jsMsg.Term()
+		if err != nil {
+			return err
+		}
+
+		stationNameIntern := m.internalStationName
+		meta, err := jsMsg.Metadata()
+		if err != nil {
+			return err
+		}
+		msgSeq := meta.Sequence.Stream
+		cgName := m.cgName
+		nackedMsg := &NackedDlsMessage{
+			StationName: stationNameIntern,
+			Partition:   m.partition,
+			CgName:      cgName,
+			Error:       reason,
+			Seq:         msgSeq,
+		}
+		msgToPublish, _ := json.Marshal(nackedMsg)
+		_ = m.conn.brokerConn.Publish(nackedDlsSubject, msgToPublish)
+	} else {
+		return errors.New("message format is not supported")
 	}
 	return nil
 }
@@ -615,7 +675,7 @@ func (c *Consumer) fetchSubscription(partitionKey string, partitionNum int) ([]*
 
 	if len(c.jsConsumers) > 1 {
 		if partitionKey != "" && partitionNum > 0 {
-			return nil, memphisError(fmt.Errorf("Can not use both partition number and partition key"))
+			return nil, memphisError(fmt.Errorf("can not use both partition number and partition key"))
 		}
 		if partitionKey != "" {
 			partitionFromKey, err := c.conn.GetPartitionFromKey(partitionKey, c.stationName)
@@ -648,30 +708,54 @@ func (c *Consumer) fetchSubscription(partitionKey string, partitionNum int) ([]*
 	// msgs := batch.Messages()
 	internalStationName := getInternalName(c.stationName)
 	for msg := range batch.Messages() {
-		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, internalStationName: internalStationName})
+		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, internalStationName: internalStationName, partition: partitionNumber})
 	}
 	return wrappedMsgs, nil
 }
 
-type fetchResult struct {
-	msgs []*Msg
-	err  error
-}
-
-func (c *Consumer) fetchSubscriprionWithTimeout(partitionKey string, partitionNumber int) ([]*Msg, error) {
-	timeoutDuration := c.BatchMaxTimeToWait
-	out := make(chan fetchResult, 1)
-
-	go func(partitionKey string) {
-		msgs, err := c.fetchSubscription(partitionKey, partitionNumber)
-		out <- fetchResult{msgs: msgs, err: memphisError(err)}
-	}(partitionKey)
-	select {
-	case <-time.After(timeoutDuration):
-		return []*Msg{}, nil
-	case fetchRes := <-out:
-		return fetchRes.msgs, memphisError(fetchRes.err)
+func (c *Consumer) fetchSubscriprionWithTimeout(partitionKey string, partitionNum int) ([]*Msg, error) {
+	if !c.subscriptionActive {
+		return nil, memphisError(errors.New("station unreachable"))
 	}
+	wrappedMsgs := make([]*Msg, 0, c.BatchSize)
+	partitionNumber := 1
+
+	if len(c.jsConsumers) > 1 {
+		if partitionKey != "" && partitionNum > 0 {
+			return nil, memphisError(fmt.Errorf("can not use both partition number and partition key"))
+		}
+		if partitionKey != "" {
+			partitionFromKey, err := c.conn.GetPartitionFromKey(partitionKey, c.stationName)
+			if err != nil {
+				return nil, memphisError(err)
+			}
+			partitionNumber = partitionFromKey
+		} else if partitionNum > 0 {
+			err := c.conn.ValidatePartitionNumber(partitionNum, c.stationName)
+			if err != nil {
+				return nil, memphisError(err)
+			}
+			partitionNumber = partitionNum
+		} else {
+			partitionNumber = c.PartitionGenerator.Next()
+		}
+	}
+
+	batch, err := c.jsConsumers[partitionNumber].Fetch(c.BatchSize, jetstream.FetchMaxWait(c.BatchMaxTimeToWait))
+	if err != nil && err != nats.ErrTimeout {
+		c.callErrHandler(ConsumerErrStationUnreachable)
+		return []*Msg{}, nil
+	}
+	if batch.Error() != nil && batch.Error() != nats.ErrTimeout {
+		c.callErrHandler(ConsumerErrStationUnreachable)
+		return []*Msg{}, nil
+	}
+
+	internalStationName := getInternalName(c.stationName)
+	for msg := range batch.Messages() {
+		wrappedMsgs = append(wrappedMsgs, &Msg{msg: msg, conn: c.conn, cgName: c.ConsumerGroup, internalStationName: internalStationName, partition: partitionNumber})
+	}
+	return wrappedMsgs, nil
 }
 
 // Fetch - immediately fetch a batch of messages.
