@@ -1,6 +1,6 @@
 module github.com/memphisdev/memphis.go
 
-go 1.18
+go 1.20
 
 require (
 	github.com/graph-gophers/graphql-go v1.5.0

@@ -113,8 +113,8 @@ func getDefaultFetchOptions() FetchOpts {
 	return FetchOpts{
 		BatchSize:                10,
 		ConsumerGroup:            "",
-		BatchMaxTimeToWait:       5 * time.Second,
-		MaxAckTime:               30 * time.Second,
+		BatchMaxTimeToWait:       100 * time.Millisecond,
+		MaxAckTime:               10 * time.Second,
 		MaxMsgDeliveries:         2,
 		GenUniqueSuffix:          false,
 		ErrHandler:               DefaultConsumerErrHandler,
@@ -688,7 +688,8 @@ func (c *Conn) destroy(o directObj, option ...RequestOpt) error {
 	if err != nil {
 		return memphisError(err)
 	}
-	if len(msg.Data) > 0 && !strings.Contains(string(msg.Data), "not exist") {
+
+	if msg != nil && len(msg.Data) > 0 && !strings.Contains(string(msg.Data), "not exist") {
 		return memphisError(errors.New(string(msg.Data)))
 	}
 
@@ -912,8 +913,8 @@ func FetchBatchSize(batchSize int) FetchOpt {
 // BatchMaxWaitTime - max time to wait between pulls, defauls is 5 seconds.
 func FetchBatchMaxWaitTime(batchMaxWaitTime time.Duration) FetchOpt {
 	return func(opts *FetchOpts) error {
-		if batchMaxWaitTime < 1*time.Millisecond {
-			batchMaxWaitTime = 1 * time.Millisecond
+		if batchMaxWaitTime < 100*time.Millisecond {
+			batchMaxWaitTime = 100 * time.Millisecond
 		}
 		opts.BatchMaxTimeToWait = batchMaxWaitTime
 		return nil
