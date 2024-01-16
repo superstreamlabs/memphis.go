@@ -752,11 +752,11 @@ func (c *Consumer) fetchSubscriprionWithTimeout(partitionKey string, partitionNu
 
 	batch, err := c.jsConsumers[partitionNumber].Fetch(c.BatchSize, jetstream.FetchMaxWait(c.BatchMaxTimeToWait))
 	if err != nil && err != nats.ErrTimeout {
-		c.callErrHandler(ConsumerErrStationUnreachable)
+		c.callErrHandler(errConsumerErrStationUnreachable)
 		return []*Msg{}, nil
 	}
 	if batch.Error() != nil && batch.Error() != nats.ErrTimeout {
-		c.callErrHandler(ConsumerErrStationUnreachable)
+		c.callErrHandler(errConsumerErrStationUnreachable)
 		return []*Msg{}, nil
 	}
 

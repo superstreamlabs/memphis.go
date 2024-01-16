@@ -35,7 +35,7 @@ var (
 )
 
 func errInvalidAvroFormat(err error) error{
-	return memphisError(errors.New("Bad Avro format - " + err.Error()))
+	return memphisError(fmt.Errorf("Bad Avro format - %s", err.Error()))
 }
 
 func errProducerNotInCache(producerName string) error{
@@ -43,11 +43,11 @@ func errProducerNotInCache(producerName string) error{
 }
 
 func errLoadClientCertFailed(err error) error{
-	return memphisError(errors.New("memphis: error loading client certificate: " + err.Error()))
+	return memphisError(fmt.Errorf("memphis: error loading client certificate: %s", err.Error()))
 }
 
 func errInvalidBatchSize(maxBatchSize int) error{
-	return memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize) + " or less than 1"))
+	return memphisError(fmt.Errorf("Batch size can not be greater than %s or less than 1", strconv.Itoa(maxBatchSize)))
 }
 
 func errPartitionNotInStation(partitionNumber int, stationName string) error {
@@ -55,13 +55,13 @@ func errPartitionNotInStation(partitionNumber int, stationName string) error {
 }
 
 func errSchemaValidationFailed(err error) error {
-	return memphisError(errors.New("Schema validation has failed: " + err.Error()))
+	return memphisError(fmt.Errorf("Schema validation has failed: %s", err.Error()))
 }
 
 func errMessageMisalignedSchema(err error) error {
-	return memphisError(errors.New("Deserialization has been failed since the message format does not align with the currently attached schema: " + err.Error()))
+	return memphisError(fmt.Errorf("Deserialization has been failed since the message format does not align with the currently attached schema: %s", err.Error()))
 }
 
 func errBadJSON(err error) error {
-	return memphisError(errors.New("Bad JSON format - " + err.Error()))
+	return memphisError(fmt.Errorf("Bad JSON format - %s", err.Error()))
 }
