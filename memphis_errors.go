@@ -6,7 +6,7 @@ import (
 	"errors"
 )
 
-const (
+var (
 	errInvalidConnectionType = memphisError(errors.New("you have to connect with one of the following methods: connection token / password"))
 	errMissingTLSCertFile = memphisError(errors.New("must provide a TLS cert file"))
 	errMissingTLSKeyFile = memphisError(errors.New("must provide a TLS key file"))
