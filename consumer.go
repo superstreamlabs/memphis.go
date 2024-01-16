@@ -41,12 +41,6 @@ const (
 	lastConsumerDestroyReqVersion  = 1
 )
 
-var (
-	ConsumerErrStationUnreachable = errors.New("station unreachable")
-	ConsumerErrConsumeInactive    = errors.New("consumer is inactive")
-	ConsumerErrDelayDlsMsg        = errors.New("cannot delay DLS message")
-)
-
 // Consumer - memphis consumer object.
 type Consumer struct {
 	Name                     string
@@ -116,7 +110,7 @@ func (m *Msg) DataDeserialized() (any, error) {
 
 	sd, err := m.conn.getSchemaDetails(m.internalStationName)
 	if err != nil {
-		return nil, memphisError(errors.New("Schema validation has failed: " + err.Error()))
+		return nil, errSchemaValidationFailed(err)
 	}
 	var msgBytes []byte
 
@@ -125,12 +119,12 @@ func (m *Msg) DataDeserialized() (any, error) {
 	} else if jsMsg, ok := m.msg.(jetstream.Msg); ok {
 		msgBytes = jsMsg.Data()
 	} else {
-		return nil, errors.New("Message format is not supported")
+		return nil, errInvalidMessageFormat
 	}
 
 	_, err = sd.validateMsg(msgBytes)
 	if err != nil {
-		return nil, memphisError(errors.New("Deserialization has been failed since the message format does not align with the currently attached schema: " + err.Error()))
+		return nil, errMessageMisalignedSchema(err)
 	}
 
 	switch sd.schemaType {
@@ -139,7 +133,7 @@ func (m *Msg) DataDeserialized() (any, error) {
 		err = proto.Unmarshal(msgBytes, pMsg)
 		if err != nil {
 			if strings.Contains(err.Error(), "cannot parse invalid wire-format data") {
-				err = errors.New("invalid message format, expecting protobuf")
+				err = errExpectingProtobuf
 			}
 			return data, memphisError(err)
 		}
@@ -148,13 +142,13 @@ func (m *Msg) DataDeserialized() (any, error) {
 			panic(err)
 		}
 		if err := json.Unmarshal(jsonBytes, &data); err != nil {
-			err = errors.New("Bad JSON format - " + err.Error())
+			err = errBadJSON(err)
 			return data, memphisError(err)
 		}
 		return data, nil
 	case "json":
 		if err := json.Unmarshal(msgBytes, &data); err != nil {
-			err = errors.New("Bad JSON format - " + err.Error())
+			err = errBadJSON(err)
 			return data, memphisError(err)
 		}
 		return data, nil
@@ -162,7 +156,7 @@ func (m *Msg) DataDeserialized() (any, error) {
 		return string(msgBytes), nil
 	case "avro":
 		if err := json.Unmarshal(msgBytes, &data); err != nil {
-			err = errors.New("Bad JSON format - " + err.Error())
+			err = errBadJSON(err)
 			return data, memphisError(err)
 		}
 		return data, nil
@@ -188,7 +182,7 @@ func (m *Msg) GetSequenceNumber() (uint64, error) {
 		}
 		seq = meta.Sequence.Stream
 	} else {
-		return 0, errors.New("message format is not supported")
+		return 0, errInvalidMessageFormat
 	}
 
 	return seq, nil
@@ -217,7 +211,7 @@ func (m *Msg) Ack() error {
 	} else if jsMsg, ok := m.msg.(jetstream.Msg); ok {
 		err = jsMsg.Ack()
 	} else {
-		return errors.New("message format is not supported")
+		return errInvalidMessageFormat
 	}
 	if err != nil {
 		var headers nats.Header
@@ -331,10 +325,10 @@ func (m *Msg) Delay(duration time.Duration) error {
 		} else if jsMsg, ok := m.msg.(jetstream.Msg); ok {
 			return jsMsg.NakWithDelay(duration)
 		} else {
-			return errors.New("Message format is not supported")
+			return errInvalidMessageFormat
 		}
 	}
-	return memphisError(ConsumerErrDelayDlsMsg)
+	return errConsumerErrDelayDlsMsg
 }
 
 // ConsumerErrHandler is used to process asynchronous errors.
@@ -462,19 +456,19 @@ func (opts *ConsumerOpts) createConsumer(c *Conn, options ...RequestOpt) (*Consu
 	}
 
 	if consumer.StartConsumeFromSequence == 0 {
-		return nil, memphisError(errors.New("startConsumeFromSequence has to be a positive number"))
+		return nil, errStartConsumeNotPositive
 	}
 
 	if consumer.LastMessages < -1 {
-		return nil, memphisError(errors.New("min value for LastMessages is -1"))
+		return nil, errLastMessagesNegative
 	}
 
 	if consumer.StartConsumeFromSequence > 1 && consumer.LastMessages > -1 {
-		return nil, memphisError(errors.New("Consumer creation options can't contain both startConsumeFromSequence and lastMessages"))
+		return nil, errBothStartConsumeAndLastMessages
 	}
 
 	if consumer.BatchSize > maxBatchSize || consumer.BatchSize < 1 {
-		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize) + " or less than 1"))
+		return nil, errInvalidBatchSize(maxBatchSize)
 	}
 
 	sn := getInternalName(consumer.stationName)
@@ -579,7 +573,7 @@ func (c *Consumer) pingConsumer() {
 			if generalErr != nil {
 				if strings.Contains(generalErr.Error(), "consumer not found") || strings.Contains(generalErr.Error(), "stream not found") {
 					c.subscriptionActive = false
-					c.callErrHandler(ConsumerErrStationUnreachable)
+					c.callErrHandler(errConsumerErrStationUnreachable)
 				}
 			}
 		case <-c.pingQuit:
@@ -674,7 +668,7 @@ func (c *Consumer) Consume(handlerFunc ConsumeHandler, opts ...ConsumingOpt) err
 // StopConsume - stops the continuous consume operation.
 func (c *Consumer) StopConsume() {
 	if !c.consumeActive {
-		c.callErrHandler(ConsumerErrConsumeInactive)
+		c.callErrHandler(errConsumerErrConsumeInactive)
 		return
 	}
 	c.consumeQuit <- struct{}{}
@@ -683,14 +677,14 @@ func (c *Consumer) StopConsume() {
 
 func (c *Consumer) fetchSubscription(partitionKey string, partitionNum int) ([]*Msg, error) {
 	if !c.subscriptionActive {
-		return nil, memphisError(errors.New("station unreachable"))
+		return nil, errUnreachableStation
 	}
 	wrappedMsgs := make([]*Msg, 0, c.BatchSize)
 	partitionNumber := 1
 
 	if len(c.jsConsumers) > 1 {
 		if partitionKey != "" && partitionNum > 0 {
-			return nil, memphisError(fmt.Errorf("can not use both partition number and partition key"))
+			return nil, errBothPartitionNumAndKey
 		}
 		if partitionKey != "" {
 			partitionFromKey, err := c.conn.GetPartitionFromKey(partitionKey, c.stationName)
@@ -712,12 +706,12 @@ func (c *Consumer) fetchSubscription(partitionKey string, partitionNum int) ([]*
 	batch, err := c.jsConsumers[partitionNumber].Fetch(c.BatchSize, jetstream.FetchMaxWait(c.BatchMaxTimeToWait))
 	if err != nil && err != nats.ErrTimeout {
 		c.subscriptionActive = false
-		c.callErrHandler(ConsumerErrStationUnreachable)
+		c.callErrHandler(errConsumerErrStationUnreachable)
 		c.StopConsume()
 	}
 	if batch.Error() != nil && batch.Error() != nats.ErrTimeout {
 		c.subscriptionActive = false
-		c.callErrHandler(ConsumerErrStationUnreachable)
+		c.callErrHandler(errConsumerErrStationUnreachable)
 		c.StopConsume()
 	}
 	// msgs := batch.Messages()
@@ -758,11 +752,11 @@ func (c *Consumer) fetchSubscriprionWithTimeout(partitionKey string, partitionNu
 
 	batch, err := c.jsConsumers[partitionNumber].Fetch(c.BatchSize, jetstream.FetchMaxWait(c.BatchMaxTimeToWait))
 	if err != nil && err != nats.ErrTimeout {
-		c.callErrHandler(ConsumerErrStationUnreachable)
+		c.callErrHandler(errConsumerErrStationUnreachable)
 		return []*Msg{}, nil
 	}
 	if batch.Error() != nil && batch.Error() != nats.ErrTimeout {
-		c.callErrHandler(ConsumerErrStationUnreachable)
+		c.callErrHandler(errConsumerErrStationUnreachable)
 		return []*Msg{}, nil
 	}
 
@@ -776,7 +770,7 @@ func (c *Consumer) fetchSubscriprionWithTimeout(partitionKey string, partitionNu
 // Fetch - immediately fetch a batch of messages.
 func (c *Consumer) Fetch(batchSize int, prefetch bool, opts ...ConsumingOpt) ([]*Msg, error) {
 	if batchSize > maxBatchSize || batchSize < 1 {
-		return nil, memphisError(errors.New("Batch size can not be greater than " + strconv.Itoa(maxBatchSize) + " or less than 1"))
+		return nil, errInvalidBatchSize(maxBatchSize)
 	}
 
 	defaultOpts := getDefaultConsumingOptions()
