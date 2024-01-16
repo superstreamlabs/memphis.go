@@ -23,7 +23,12 @@ func main(){
 
 	defer conn.Close()
 
-	consumer, _ := conn.CreateConsumer("<station-name>", "<consumer-name>")
+	consumer, err := conn.CreateConsumer("<station-name>", "<consumer-name>")
+
+	if err != nil{
+		fmt.Println(err)
+		return
+	}
 
 	for true {
 		messages, err := consumer.Fetch()
