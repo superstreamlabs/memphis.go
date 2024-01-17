@@ -983,7 +983,7 @@ func (c *Conn) GetPartitionFromKey(key string, stationName string) (int, error) 
 }
 
 func (c *Conn) ValidatePartitionNumber(partitionNumber int, stationName string) error {
-	if partitionNumber < 0 || partitionNumber >= len(c.stationPartitions[stationName].PartitionsList) {
+	if partitionNumber < 0 || partitionNumber > len(c.stationPartitions[stationName].PartitionsList) {
 		return errors.New("Partition number is out of range")
 	}
 	for _, partition := range c.stationPartitions[stationName].PartitionsList {

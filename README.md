@@ -747,6 +747,10 @@ func handler(msgs []*memphis.Msg, err error, ctx context.Context) {
 consumer.Consume(handler, 
 				memphis.ConsumerPartitionKey(<string>) // use the partition key to consume from a spacific partition (if not specified consume in a Round Robin fashion)
 )
+
+consumer.Consume(handler, 
+				memphis.ConsumerPartitionNumber(<string>) 
+)
 ```
 
 #### Consumer schema deserialization
@@ -780,6 +784,7 @@ msgs, err := conn.FetchMessages("<station-name>", "<consumer-name>",
   memphis.FetchStartConsumeFromSeq(<uint64>)// start consuming from a specific sequence. defaults to 1
   memphis.FetchLastMessages(<int64>)// consume the last N messages, defaults to -1 (all messages in the station))
   memphis.FetchPartitionKey(<string>)// use the partition key to consume from a spacific partition (if not specified consume in a Round Robin fashion)
+)
 ```
 
 ### Fetch a single batch of messages after creating a consumer
